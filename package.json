@@ -1,0 +1,20 @@
+{
+  "name": "rememly-root",
+  "version": "1.0.0",
+  "description": "Family photo journal PWA",
+  "private": true,
+  "scripts": {
+    "install:all": "cd frontend && npm install",
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "preview": "cd frontend && npm run preview"
+  },
+  "keywords": [
+    "pwa",
+    "photo",
+    "journal",
+    "family"
+  ],
+  "author": "",
+  "license": "MIT"
+}

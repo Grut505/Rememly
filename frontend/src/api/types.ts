@@ -1,0 +1,57 @@
+export interface Article {
+  id: string
+  date_creation: string
+  date_modification: string
+  auteur: string
+  texte: string
+  image_url: string
+  image_file_id: string
+  year: number
+  assembly_state?: AssemblyState
+  full_page?: boolean
+}
+
+export interface AssemblyState {
+  template: string
+  zones: ZoneState[]
+}
+
+export interface ZoneState {
+  photoIndex: number
+  zoom: number
+  x: number
+  y: number
+}
+
+export interface PdfJob {
+  job_id: string
+  status: 'PENDING' | 'RUNNING' | 'DONE' | 'ERROR'
+  progress: number
+  pdf_file_id?: string
+  pdf_url?: string
+  error_message?: string
+}
+
+export interface ApiResponse<T> {
+  ok: boolean
+  data?: T
+  error?: {
+    code: string
+    message: string
+  }
+}
+
+export interface ListArticlesResponse {
+  items: Article[]
+  next_cursor: string | null
+}
+
+export interface AuthUser {
+  email: string
+  name: string
+}
+
+export interface AuthCheckResponse {
+  user: AuthUser
+  timezone: string
+}

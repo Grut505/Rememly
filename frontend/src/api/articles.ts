@@ -25,7 +25,7 @@ export interface UpdateArticlePayload {
   full_page?: boolean
 }
 
-export interface ListArticlesFilters {
+export interface ListArticlesFilters extends Record<string, string> {
   year?: string
   month?: string
   from?: string

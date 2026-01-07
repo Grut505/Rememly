@@ -38,3 +38,15 @@ export function toISOString(date: Date): string {
 export function now(): string {
   return new Date().toISOString()
 }
+
+export function getMonthYear(isoString: string): string {
+  const date = new Date(isoString)
+  const month = MONTHS_FR[date.getMonth()]
+  const year = date.getFullYear()
+  return `${month} ${year}`
+}
+
+export function getMonthYearKey(isoString: string): string {
+  const date = new Date(isoString)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}

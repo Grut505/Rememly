@@ -7,8 +7,9 @@ import { LoadingScreen, Spinner } from '../../ui/Spinner'
 import { ErrorMessage } from '../../ui/ErrorMessage'
 import { ArticleCard } from './ArticleCard'
 import { EmptyState } from './EmptyState'
+import { MonthSeparator } from './MonthSeparator'
 import { useAuth } from '../../auth/AuthContext'
-import { getCurrentYear } from '../../utils/date'
+import { getCurrentYear, getMonthYear, getMonthYearKey } from '../../utils/date'
 
 export function Timeline() {
   const navigate = useNavigate()
@@ -117,17 +118,26 @@ export function Timeline() {
           <EmptyState />
         ) : (
           <>
-            {articles.map((article, index) => (
-              <div
-                key={article.id}
-                ref={index === articles.length - 1 ? lastArticleRef : undefined}
-              >
-                <ArticleCard
-                  article={article}
-                  onClick={() => navigate(`/editor/${article.id}`)}
-                />
-              </div>
-            ))}
+            {articles.map((article, index) => {
+              const currentMonthKey = getMonthYearKey(article.date_modification)
+              const previousMonthKey =
+                index > 0 ? getMonthYearKey(articles[index - 1].date_modification) : null
+              const showMonthSeparator = currentMonthKey !== previousMonthKey
+
+              return (
+                <div key={article.id}>
+                  {showMonthSeparator && (
+                    <MonthSeparator monthYear={getMonthYear(article.date_modification)} />
+                  )}
+                  <div ref={index === articles.length - 1 ? lastArticleRef : undefined}>
+                    <ArticleCard
+                      article={article}
+                      onClick={() => navigate(`/editor/${article.id}`)}
+                    />
+                  </div>
+                </div>
+              )
+            })}
             {isLoading && (
               <div className="flex justify-center py-4">
                 <Spinner />

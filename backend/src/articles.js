@@ -80,7 +80,8 @@ function handleArticleCreate(body) {
 
   const id = generateId();
   const dateNow = now();
-  const year = getYear(dateNow);
+  const dateModification = body.date_modification || dateNow;
+  const year = getYear(dateModification);
 
   // Upload image to Drive
   const fileName = `${formatTimestamp()}_${id}_assembled.jpg`;
@@ -90,7 +91,7 @@ function handleArticleCreate(body) {
   const row = [
     id,
     dateNow,
-    dateNow,
+    dateModification,
     body.auteur,
     body.texte || '',
     imageData.url,
@@ -106,7 +107,7 @@ function handleArticleCreate(body) {
   const article = {
     id,
     date_creation: dateNow,
-    date_modification: dateNow,
+    date_modification: dateModification,
     auteur: body.auteur,
     texte: body.texte || '',
     image_url: imageData.url,
@@ -136,8 +137,8 @@ function handleArticleUpdate(body) {
   const row = sheet.getRange(rowIndex, 1, 1, 11).getValues()[0];
   const dateNow = now();
 
-  // Update date_modification
-  row[2] = dateNow;
+  // Update date_modification (use provided date or current time)
+  row[2] = body.date_modification || dateNow;
 
   // Update texte if provided
   if (body.texte !== undefined) {

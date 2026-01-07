@@ -7,6 +7,7 @@ class ArticlesService {
     auteur: string,
     texte: string,
     imageFile: File,
+    dateModification?: string,
     assemblyState?: object,
     fullPage?: boolean
   ): Promise<Article> {
@@ -16,6 +17,7 @@ class ArticlesService {
       auteur,
       texte,
       image: imageData,
+      date_modification: dateModification,
       assembly_state: assemblyState || null,
       full_page: fullPage || false,
     }
@@ -27,12 +29,14 @@ class ArticlesService {
     id: string,
     texte?: string,
     imageFile?: File,
+    dateModification?: string,
     assemblyState?: object,
     fullPage?: boolean
   ): Promise<Article> {
     const payload: UpdateArticlePayload = {
       id,
       texte,
+      date_modification: dateModification,
       assembly_state: assemblyState,
       full_page: fullPage,
     }

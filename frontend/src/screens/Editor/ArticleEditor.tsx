@@ -11,6 +11,7 @@ import { LoadingScreen } from '../../ui/Spinner'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { PhotoPicker } from './PhotoPicker'
 import { TextInput } from './TextInput'
+import { DateTimeInput } from './DateTimeInput'
 
 export function ArticleEditor() {
   const { id } = useParams()
@@ -20,6 +21,7 @@ export function ArticleEditor() {
   const { showToast } = useUiStore()
 
   const [texte, setTexte] = useState('')
+  const [dateModification, setDateModification] = useState(new Date().toISOString())
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
@@ -41,6 +43,7 @@ export function ArticleEditor() {
     try {
       const article = await articlesApi.get(id)
       setTexte(article.texte)
+      setDateModification(article.date_modification)
       setPreviewUrl(article.image_url)
     } catch (error) {
       showToast('Failed to load article', 'error')
@@ -71,12 +74,18 @@ export function ArticleEditor() {
         const updated = await articlesService.updateArticle(
           id,
           texte,
-          photoFile || undefined
+          photoFile || undefined,
+          dateModification
         )
         updateArticleInStore(updated)
         showToast('Article updated', 'success')
       } else if (photoFile) {
-        await articlesService.createArticle(user.name, texte, photoFile)
+        await articlesService.createArticle(
+          user.name,
+          texte,
+          photoFile,
+          dateModification
+        )
         showToast('Article created', 'success')
       }
 
@@ -153,6 +162,8 @@ export function ArticleEditor() {
         />
 
         <TextInput value={texte} onChange={setTexte} />
+
+        <DateTimeInput value={dateModification} onChange={setDateModification} />
       </div>
 
       {/* Actions */}
@@ -166,7 +177,7 @@ export function ArticleEditor() {
         </Button>
         <Button
           variant="secondary"
-          onClick={() => navigate('/photo-assembly', { state: { editMode: isEditMode, articleId: id, texte } })}
+          onClick={() => navigate('/photo-assembly', { state: { editMode: isEditMode, articleId: id, texte, dateModification } })}
           disabled={isSaving}
           fullWidth
         >

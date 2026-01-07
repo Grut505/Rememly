@@ -16,6 +16,7 @@ export function PhotoAssemblyScreen() {
   const editMode = location.state?.editMode || false
   const articleId = location.state?.articleId
   const texte = location.state?.texte || ''
+  const dateModification = location.state?.dateModification || new Date().toISOString()
 
   const handleComplete = async (imageBase64: string, assemblyState: object) => {
     if (!user) return
@@ -33,13 +34,20 @@ export function PhotoAssemblyScreen() {
           articleId,
           texte,
           file,
+          dateModification,
           assemblyState
         )
         updateArticleInStore(updated)
         showToast('Article updated', 'success')
       } else {
         // Create new article
-        await articlesService.createArticle(user.name, texte, file, assemblyState)
+        await articlesService.createArticle(
+          user.name,
+          texte,
+          file,
+          dateModification,
+          assemblyState
+        )
         showToast('Article created', 'success')
       }
 

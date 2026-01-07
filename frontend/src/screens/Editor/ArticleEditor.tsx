@@ -16,7 +16,7 @@ export function ArticleEditor() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { updateArticle: updateArticleInStore } = useArticlesStore()
+  const { updateArticle: updateArticleInStore, deleteArticle: deleteArticleFromStore } = useArticlesStore()
   const { showToast } = useUiStore()
 
   const [texte, setTexte] = useState('')
@@ -107,6 +107,7 @@ export function ArticleEditor() {
     setIsSaving(true)
     try {
       await articlesService.deleteArticle(id)
+      deleteArticleFromStore(id)
       showToast('Article deleted', 'success')
       navigate('/')
     } catch (error) {

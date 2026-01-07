@@ -10,6 +10,7 @@ interface ArticlesState {
   setArticles: (articles: Article[]) => void
   addArticles: (articles: Article[], cursor: string | null) => void
   updateArticle: (article: Article) => void
+  deleteArticle: (id: string) => void
   setLoading: (isLoading: boolean) => void
   setError: (error: string | null) => void
   reset: () => void
@@ -37,6 +38,11 @@ export const useArticlesStore = create<ArticlesState>((set) => ({
       articles: state.articles.map((a) =>
         a.id === article.id ? article : a
       ),
+    })),
+
+  deleteArticle: (id) =>
+    set((state) => ({
+      articles: state.articles.filter((a) => a.id !== id),
     })),
 
   setLoading: (isLoading) => set({ isLoading }),

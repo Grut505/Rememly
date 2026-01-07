@@ -141,6 +141,14 @@ export function ArticleEditor() {
         </Button>
         <Button
           variant="secondary"
+          onClick={() => navigate('/photo-assembly', { state: { editMode: isEditMode, articleId: id, texte } })}
+          disabled={isSaving}
+          fullWidth
+        >
+          Use Photo Assembly
+        </Button>
+        <Button
+          variant="secondary"
           onClick={handleCancel}
           disabled={isSaving}
           fullWidth

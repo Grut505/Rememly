@@ -183,3 +183,25 @@ function handleArticleUpdate(body) {
     data: article,
   });
 }
+
+function handleArticleDelete(id) {
+  const sheet = getArticlesSheet();
+  const rowIndex = findRowById(sheet, id);
+
+  if (rowIndex === -1) {
+    return createResponse({
+      ok: false,
+      error: { code: 'NOT_FOUND', message: 'Article not found' },
+    });
+  }
+
+  // Soft delete: mark as DELETED
+  const row = sheet.getRange(rowIndex, 1, 1, 11).getValues()[0];
+  row[10] = 'DELETED'; // status column
+  sheet.getRange(rowIndex, 1, 1, 11).setValues([row]);
+
+  return createResponse({
+    ok: true,
+    data: { id, deleted: true },
+  });
+}

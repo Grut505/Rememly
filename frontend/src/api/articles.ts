@@ -46,4 +46,7 @@ export const articlesApi = {
 
   update: (payload: UpdateArticlePayload) =>
     apiClient.post<Article>('articles/update', payload),
+
+  delete: (id: string) =>
+    apiClient.get<{ id: string; deleted: boolean }>('articles/delete', { id }),
 }

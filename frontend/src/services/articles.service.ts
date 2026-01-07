@@ -43,6 +43,10 @@ class ArticlesService {
 
     return articlesApi.update(payload)
   }
+
+  async deleteArticle(id: string): Promise<void> {
+    await articlesApi.delete(id)
+  }
 }
 
 export const articlesService = new ArticlesService()

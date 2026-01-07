@@ -30,6 +30,13 @@ class ApiClient {
       const data: ApiResponse<T> = await response.json()
 
       if (!data.ok) {
+        // If authentication error, clear storage and redirect to login
+        if (data.error?.code === 'INVALID_TOKEN' || data.error?.code === 'AUTH_REQUIRED') {
+          localStorage.removeItem('google_id_token')
+          localStorage.removeItem('user')
+          window.location.href = '/auth'
+          throw new Error('Session expired. Please sign in again.')
+        }
         throw new Error(data.error?.message || 'An error occurred')
       }
 

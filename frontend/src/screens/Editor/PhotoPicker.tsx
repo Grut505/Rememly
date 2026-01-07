@@ -5,21 +5,27 @@ import { Button } from '../../ui/Button'
 function convertDriveUrl(url: string): string {
   if (!url) return url
 
+  // If already in thumbnail format, return as-is
+  if (url.includes('drive.google.com/thumbnail')) {
+    return url
+  }
+
   // Extract file ID from various Drive URL formats
   const patterns = [
     /drive\.google\.com\/file\/d\/([^\/]+)/,
     /drive\.google\.com\/uc\?.*[&?]id=([^&]+)/,
     /drive\.google\.com\/open\?.*[&?]id=([^&]+)/,
+    /lh3\.googleusercontent\.com\/d\/([^?&]+)/,
   ]
 
   for (const pattern of patterns) {
     const match = url.match(pattern)
     if (match && match[1]) {
-      return `https://lh3.googleusercontent.com/d/${match[1]}`
+      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w2000`
     }
   }
 
-  // If already in lh3 format or not a Drive URL, return as-is
+  // If not a Drive URL, return as-is
   return url
 }
 

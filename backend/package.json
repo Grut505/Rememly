@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "push": "clasp push",
-    "deploy": "clasp push && clasp deploy",
+    "deploy": "clasp push && clasp deploy --deploymentId AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP2LYCPHf",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

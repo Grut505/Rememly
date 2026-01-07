@@ -138,7 +138,12 @@ function handleArticleUpdate(body) {
   const dateNow = now();
 
   // Update date_modification (use provided date or current time)
-  row[2] = body.date_modification || dateNow;
+  const dateModification = body.date_modification || dateNow;
+  row[2] = dateModification;
+
+  // Update year based on date_modification
+  const year = getYear(dateModification);
+  row[7] = year;
 
   // Update texte if provided
   if (body.texte !== undefined) {
@@ -147,7 +152,6 @@ function handleArticleUpdate(body) {
 
   // Update image if provided
   if (body.image) {
-    const year = getYear(dateNow);
     const fileName = `${formatTimestamp()}_${body.id}_assembled.jpg`;
     const imageData = uploadImage(body.image.base64, fileName, year, 'assembled');
     row[5] = imageData.url;

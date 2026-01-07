@@ -22,7 +22,8 @@ export function PhotoAssemblyScreen() {
 
     try {
       // Convert base64 to File for upload
-      const response = await fetch(imageBase64)
+      const dataUrl = `data:image/jpeg;base64,${imageBase64}`
+      const response = await fetch(dataUrl)
       const blob = await response.blob()
       const file = new File([blob], 'assembled.jpg', { type: 'image/jpeg' })
 

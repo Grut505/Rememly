@@ -106,11 +106,14 @@ export function ArticleEditor() {
 
     setIsSaving(true)
     try {
-      await articlesService.deleteArticle(id)
+      console.log('Deleting article:', id)
+      const result = await articlesService.deleteArticle(id)
+      console.log('Delete result:', result)
       deleteArticleFromStore(id)
       showToast('Article deleted', 'success')
       navigate('/')
     } catch (error) {
+      console.error('Delete error:', error)
       showToast(
         error instanceof Error ? error.message : 'Failed to delete article',
         'error'
@@ -197,6 +200,7 @@ export function ArticleEditor() {
         confirmLabel="Delete"
         cancelLabel="Cancel"
         variant="danger"
+        isLoading={isSaving}
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteConfirm(false)}
       />

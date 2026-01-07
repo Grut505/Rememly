@@ -1,14 +1,12 @@
 // Main entry point for Google Apps Script Web App
 
 function doGet(e) {
-  return handleRequest(e);
+  return ContentService.createTextOutput(
+    JSON.stringify({ error: 'Use POST requests' })
+  ).setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
-  return handleRequest(e);
-}
-
-function handleRequest(e) {
   try {
     const params = e.parameter;
     const path = params.path || '';

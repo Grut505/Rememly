@@ -1,0 +1,18 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Backend pour l'application Rememly utilisant Google Apps Script.",
+  "main": "index.js",
+  "scripts": {
+    "push": "clasp push",
+    "deploy": "clasp push && clasp deploy",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@google/clasp": "^3.1.3"
+  }
+}

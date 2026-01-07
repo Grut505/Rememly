@@ -38,7 +38,7 @@ export function ArticleCard({ article, onClick }: ArticleCardProps) {
   return (
     <div
       onClick={onClick}
-      className="bg-white border-b border-gray-200 cursor-pointer active:bg-gray-50 touch-manipulation"
+      className="bg-white border-b-4 border-gray-300 mb-4 cursor-pointer active:bg-gray-50 touch-manipulation"
     >
       {/* Image */}
       <div className="w-full">

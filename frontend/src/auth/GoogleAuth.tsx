@@ -59,7 +59,7 @@ export function GoogleAuth() {
               })
               setIsLoading(false)
             })
-            .catch((err) => {
+            .catch(() => {
               setError('Failed to get user information')
               setIsLoading(false)
             })

@@ -25,7 +25,7 @@ export interface UpdateArticlePayload {
   full_page?: boolean
 }
 
-export interface ListArticlesFilters extends Record<string, string> {
+export interface ListArticlesFilters {
   year?: string
   month?: string
   from?: string
@@ -33,6 +33,8 @@ export interface ListArticlesFilters extends Record<string, string> {
   limit?: string
   cursor?: string
 }
+
+type ListArticlesFiltersRecord = Record<string, string>
 
 export const articlesApi = {
   list: (filters?: ListArticlesFilters) =>

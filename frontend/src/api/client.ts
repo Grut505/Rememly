@@ -42,9 +42,16 @@ class ApiClient {
     }
   }
 
-  async get<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
-    const queryString = params
-      ? '&' + new URLSearchParams(params).toString()
+  async get<T>(endpoint: string, params?: Record<string, string | undefined>): Promise<T> {
+    // Filter out undefined values
+    const filteredParams = params
+      ? Object.fromEntries(
+          Object.entries(params).filter(([_, v]) => v !== undefined)
+        ) as Record<string, string>
+      : undefined
+
+    const queryString = filteredParams
+      ? '&' + new URLSearchParams(filteredParams).toString()
       : ''
     // Use POST for all requests to avoid CORS issues with Apps Script
     return this.request<T>(`${endpoint}${queryString}`, {

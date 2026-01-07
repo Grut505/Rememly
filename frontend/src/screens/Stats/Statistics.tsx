@@ -4,8 +4,11 @@ import { articlesApi } from '../../api/articles'
 import { Article } from '../../api/types'
 import { LoadingScreen } from '../../ui/Spinner'
 import { ErrorMessage } from '../../ui/ErrorMessage'
+import { Button } from '../../ui/Button'
 import { MONTHS_FR } from '../../utils/constants'
 import { getCurrentYear } from '../../utils/date'
+import { pdfService } from '../../services/pdf.service'
+import { useUiStore } from '../../state/uiStore'
 
 interface MonthStats {
   month: string
@@ -14,10 +17,13 @@ interface MonthStats {
 
 export function Statistics() {
   const navigate = useNavigate()
+  const { showToast } = useUiStore()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [yearStats, setYearStats] = useState<MonthStats[]>([])
   const [totalCount, setTotalCount] = useState(0)
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
+  const [pdfProgress, setPdfProgress] = useState(0)
 
   useEffect(() => {
     loadStats()
@@ -52,6 +58,38 @@ export function Statistics() {
       setError(err instanceof Error ? err.message : 'Failed to load statistics')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleGeneratePdf = async () => {
+    setIsGeneratingPdf(true)
+    setPdfProgress(0)
+
+    try {
+      const year = getCurrentYear()
+      const from = `${year}-01-01`
+      const to = `${year}-12-31`
+
+      // Create PDF job
+      const jobId = await pdfService.createPdf(from, to)
+
+      // Poll for completion
+      const result = await pdfService.pollJobStatus(jobId, (job) => {
+        setPdfProgress(job.progress)
+      })
+
+      if (result.pdf_url) {
+        showToast('PDF generated successfully!', 'success')
+        window.open(result.pdf_url, '_blank')
+      }
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : 'Failed to generate PDF',
+        'error'
+      )
+    } finally {
+      setIsGeneratingPdf(false)
+      setPdfProgress(0)
     }
   }
 
@@ -107,6 +145,39 @@ export function Statistics() {
               {totalCount} articles
             </span>
           </div>
+        </div>
+
+        {/* PDF Generation */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mt-4">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">
+            Export to PDF
+          </h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Generate a PDF document with all articles from {getCurrentYear()}
+          </p>
+
+          {isGeneratingPdf && (
+            <div className="mb-4">
+              <div className="flex justify-between text-sm text-gray-600 mb-1">
+                <span>Generating PDF...</span>
+                <span>{pdfProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${pdfProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          <Button
+            onClick={handleGeneratePdf}
+            disabled={isGeneratingPdf || totalCount === 0}
+            fullWidth
+          >
+            {isGeneratingPdf ? 'Generating...' : 'Generate PDF'}
+          </Button>
         </div>
       </div>
     </div>

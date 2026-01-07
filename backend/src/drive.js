@@ -46,16 +46,21 @@ function uploadImage(base64, fileName, year, folderType) {
 
   const file = folder.createFile(blob);
 
+  // Make file publicly viewable
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  const fileId = file.getId();
+
   return {
-    fileId: file.getId(),
-    url: file.getUrl(),
+    fileId: fileId,
+    url: `https://drive.google.com/uc?export=view&id=${fileId}`,
   };
 }
 
 function getImageUrl(fileId) {
   try {
     const file = DriveApp.getFileById(fileId);
-    return file.getUrl();
+    return `https://drive.google.com/uc?export=view&id=${fileId}`;
   } catch (error) {
     return '';
   }

@@ -6,6 +6,7 @@ import { Timeline } from './screens/Timeline/Timeline'
 import { ArticleEditor } from './screens/Editor/ArticleEditor'
 import { FiltersPanel } from './screens/Filters/FiltersPanel'
 import { Statistics } from './screens/Stats/Statistics'
+import { PhotoAssemblyScreen } from './screens/PhotoAssembly/PhotoAssemblyScreen'
 
 function App() {
   return (
@@ -50,6 +51,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Statistics />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/photo-assembly"
+            element={
+              <ProtectedRoute>
+                <PhotoAssemblyScreen />
               </ProtectedRoute>
             }
           />

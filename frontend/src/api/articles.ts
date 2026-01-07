@@ -9,6 +9,7 @@ export interface CreateArticlePayload {
     mimeType: string
     base64: string
   }
+  date_modification?: string
   assembly_state?: object | null
   full_page?: boolean
 }
@@ -21,6 +22,7 @@ export interface UpdateArticlePayload {
     mimeType: string
     base64: string
   }
+  date_modification?: string
   assembly_state?: object | null
   full_page?: boolean
 }

@@ -53,14 +53,14 @@ function uploadImage(base64, fileName, year, folderType) {
 
   return {
     fileId: fileId,
-    url: `https://drive.google.com/uc?export=view&id=${fileId}`,
+    url: `https://lh3.googleusercontent.com/d/${fileId}`,
   };
 }
 
 function getImageUrl(fileId) {
   try {
     const file = DriveApp.getFileById(fileId);
-    return `https://drive.google.com/uc?export=view&id=${fileId}`;
+    return `https://lh3.googleusercontent.com/d/${fileId}`;
   } catch (error) {
     return '';
   }

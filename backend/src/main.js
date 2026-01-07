@@ -41,6 +41,9 @@ function handleRequest(e) {
       case 'articles/update':
         return handleArticleUpdate(body);
 
+      case 'articles/delete':
+        return handleArticleDelete(params.id);
+
       case 'pdf/create':
         return handlePdfCreate(body, authResult.user);
 

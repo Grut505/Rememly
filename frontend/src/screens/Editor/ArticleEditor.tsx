@@ -8,6 +8,7 @@ import { useArticlesStore } from '../../state/articlesStore'
 import { useUiStore } from '../../state/uiStore'
 import { Button } from '../../ui/Button'
 import { LoadingScreen } from '../../ui/Spinner'
+import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { PhotoPicker } from './PhotoPicker'
 import { TextInput } from './TextInput'
 
@@ -23,6 +24,7 @@ export function ArticleEditor() {
   const [previewUrl, setPreviewUrl] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const isEditMode = !!id
 
@@ -99,6 +101,25 @@ export function ArticleEditor() {
     navigate('/')
   }
 
+  const handleDelete = async () => {
+    if (!id) return
+
+    setIsSaving(true)
+    try {
+      await articlesService.deleteArticle(id)
+      showToast('Article deleted', 'success')
+      navigate('/')
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : 'Failed to delete article',
+        'error'
+      )
+    } finally {
+      setIsSaving(false)
+      setShowDeleteConfirm(false)
+    }
+  }
+
   if (isLoading) {
     return <LoadingScreen message="Loading article..." />
   }
@@ -147,6 +168,16 @@ export function ArticleEditor() {
         >
           Use Photo Assembly
         </Button>
+        {isEditMode && (
+          <Button
+            variant="danger"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={isSaving}
+            fullWidth
+          >
+            Delete Article
+          </Button>
+        )}
         <Button
           variant="secondary"
           onClick={handleCancel}
@@ -156,6 +187,18 @@ export function ArticleEditor() {
           Cancel
         </Button>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Delete Article"
+        message="Are you sure you want to delete this article? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   )
 }

@@ -9,6 +9,7 @@ interface ConfirmDialogProps {
   onConfirm: () => void
   onCancel: () => void
   variant?: 'danger' | 'primary'
+  isLoading?: boolean
 }
 
 export function ConfirmDialog({
@@ -20,6 +21,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   variant = 'primary',
+  isLoading = false,
 }: ConfirmDialogProps) {
   if (!isOpen) return null
 
@@ -41,6 +43,7 @@ export function ConfirmDialog({
             variant="secondary"
             fullWidth
             onClick={onCancel}
+            disabled={isLoading}
           >
             {cancelLabel}
           </Button>
@@ -48,8 +51,9 @@ export function ConfirmDialog({
             variant={variant}
             fullWidth
             onClick={onConfirm}
+            disabled={isLoading}
           >
-            {confirmLabel}
+            {isLoading ? 'Deleting...' : confirmLabel}
           </Button>
         </div>
       </div>

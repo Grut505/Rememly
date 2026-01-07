@@ -34,11 +34,9 @@ export interface ListArticlesFilters {
   cursor?: string
 }
 
-type ListArticlesFiltersRecord = Record<string, string>
-
 export const articlesApi = {
   list: (filters?: ListArticlesFilters) =>
-    apiClient.get<ListArticlesResponse>('articles/list', filters),
+    apiClient.get<ListArticlesResponse>('articles/list', filters as Record<string, string | undefined>),
 
   get: (id: string) =>
     apiClient.get<Article>('articles/get', { id }),

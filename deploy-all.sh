@@ -9,9 +9,10 @@ echo "🚀 Déploiement de Rememly"
 echo ""
 
 # Backend
-echo "📤 Push du backend vers Google Apps Script..."
+echo "📤 Push et déploiement du backend vers Google Apps Script..."
 cd backend
 npx clasp push
+npx clasp deploy --deploymentId AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP2LYCPHf --description "Auto-deploy $(date '+%Y-%m-%d %H:%M:%S')"
 cd ..
 echo "✅ Backend déployé"
 echo ""

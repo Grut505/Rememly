@@ -3,7 +3,10 @@ import { Button } from '../../ui/Button'
 
 // Convert old Drive URLs to new embeddable format
 function convertDriveUrl(url: string): string {
-  if (!url) return url
+  if (!url) {
+    console.warn('Empty image URL provided to PhotoPicker')
+    return ''
+  }
 
   // If already in thumbnail format, return as-is
   if (url.includes('drive.google.com/thumbnail')) {
@@ -25,7 +28,7 @@ function convertDriveUrl(url: string): string {
     }
   }
 
-  // If not a Drive URL, return as-is
+  // If not a Drive URL, return as-is (could be data URL or other format)
   return url
 }
 

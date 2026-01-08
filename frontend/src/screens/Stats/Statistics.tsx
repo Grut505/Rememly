@@ -99,16 +99,16 @@ export function Statistics() {
 
   if (error) {
     return (
-      <div className="h-full flex items-center justify-center p-6">
+      <div className="min-h-screen flex items-center justify-center p-6">
         <ErrorMessage message={error} onRetry={loadStats} />
       </div>
     )
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center">
+      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center sticky top-0 z-10">
         <button
           onClick={() => navigate('/')}
           className="text-gray-600 touch-manipulation"
@@ -119,7 +119,7 @@ export function Statistics() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 p-4 pb-20">
         <div className="bg-white rounded-lg shadow-sm p-4">
           <h2 className="text-xl font-bold text-gray-900 mb-4">
             {getCurrentYear()}

@@ -94,7 +94,7 @@ export function Timeline() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
         <button
@@ -113,7 +113,7 @@ export function Timeline() {
       </header>
 
       {/* Timeline */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 pb-20">
         {articles.length === 0 ? (
           <EmptyState />
         ) : (

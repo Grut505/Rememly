@@ -91,9 +91,9 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center">
+      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center sticky top-0 z-10">
         <button
           onClick={onCancel}
           className="text-gray-600 touch-manipulation"
@@ -104,7 +104,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 pb-32">
         <TemplateSelector
           selectedTemplateId={selectedTemplate.id}
           onSelect={handleTemplateSelect}

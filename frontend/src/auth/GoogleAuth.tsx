@@ -23,6 +23,15 @@ export function GoogleAuth() {
     }
   }, [isAuthenticated, navigate])
 
+  // Check for stored auth error on mount
+  useEffect(() => {
+    const authError = localStorage.getItem('auth_error')
+    if (authError) {
+      setError(authError)
+      localStorage.removeItem('auth_error')
+    }
+  }, [])
+
   useEffect(() => {
     // Load Google Identity Services
     const script = document.createElement('script')
@@ -82,7 +91,7 @@ export function GoogleAuth() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-6">
+    <div className="flex flex-col items-center justify-center min-h-screen p-6">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Rememly</h1>
         <p className="text-gray-600">Family photo journal</p>
@@ -90,12 +99,14 @@ export function GoogleAuth() {
 
       {error && (
         <div className="mb-6 w-full max-w-sm">
-          <ErrorMessage message={error} onRetry={() => setError(null)} />
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="text-red-600 text-center text-sm">{error}</div>
+          </div>
         </div>
       )}
 
       <Button onClick={handleGoogleSignIn} className="w-full max-w-sm">
-        Sign in with Google
+        {error ? 'Try another account' : 'Sign in with Google'}
       </Button>
     </div>
   )

@@ -34,8 +34,13 @@ class ApiClient {
         if (data.error?.code === 'INVALID_TOKEN' || data.error?.code === 'AUTH_REQUIRED') {
           localStorage.removeItem('google_id_token')
           localStorage.removeItem('user')
+
+          // Store error message for display on login page
+          const errorMessage = data.error?.message || 'Your account is not authorized to access this application.'
+          localStorage.setItem('auth_error', errorMessage)
+
           window.location.href = '/auth'
-          throw new Error('Session expired. Please sign in again.')
+          throw new Error(errorMessage)
         }
         throw new Error(data.error?.message || 'An error occurred')
       }

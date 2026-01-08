@@ -5,15 +5,15 @@ import { useProfile } from '../../contexts/ProfileContext'
 import { useAuth } from '../../auth/AuthContext'
 import { useState } from 'react'
 
-// Convert old Drive URLs to uc?export=view format (avoids 429 rate limiting)
+// Convert old Drive URLs to thumbnail format
 function convertDriveUrl(url: string): string {
   if (!url) {
     console.warn('Empty image URL provided')
     return ''
   }
 
-  // If already in uc?export=view format, return as-is
-  if (url.includes('drive.google.com/uc?') && url.includes('export=view')) {
+  // If already in thumbnail format, return as-is
+  if (url.includes('drive.google.com/thumbnail')) {
     return url
   }
 
@@ -22,14 +22,13 @@ function convertDriveUrl(url: string): string {
     /drive\.google\.com\/file\/d\/([^\/]+)/,
     /drive\.google\.com\/uc\?.*[&?]id=([^&]+)/,
     /drive\.google\.com\/open\?.*[&?]id=([^&]+)/,
-    /drive\.google\.com\/thumbnail\?id=([^&]+)/,
     /lh3\.googleusercontent\.com\/d\/([^?&=]+)/,
   ]
 
   for (const pattern of patterns) {
     const match = url.match(pattern)
     if (match && match[1]) {
-      return `https://drive.google.com/uc?export=view&id=${match[1]}`
+      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w2000`
     }
   }
 

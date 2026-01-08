@@ -5,7 +5,7 @@ import { useProfile } from '../../contexts/ProfileContext'
 import { useAuth } from '../../auth/AuthContext'
 import { useState } from 'react'
 
-// Convert old Drive URLs to thumbnail format
+// Convert Drive URLs to thumbnail format (same for all images)
 function convertDriveUrl(url: string): string {
   if (!url) {
     console.warn('Empty image URL provided')
@@ -17,12 +17,12 @@ function convertDriveUrl(url: string): string {
     return url
   }
 
-  // Extract file ID from various Drive URL formats
+  // Convert ALL other Drive formats to thumbnail
   const patterns = [
-    /drive\.google\.com\/file\/d\/([^\/]+)/,
-    /drive\.google\.com\/uc\?.*[&?]id=([^&]+)/,
-    /drive\.google\.com\/open\?.*[&?]id=([^&]+)/,
-    /lh3\.googleusercontent\.com\/d\/([A-Za-z0-9_-]+)/,  // Match the ID before any params
+    /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/,
+    /drive\.google\.com\/uc\?.*id=([A-Za-z0-9_-]+)/,
+    /drive\.google\.com\/open\?.*id=([A-Za-z0-9_-]+)/,
+    /lh3\.googleusercontent\.com\/d\/([A-Za-z0-9_-]+)/,
   ]
 
   for (const pattern of patterns) {
@@ -38,9 +38,13 @@ function convertDriveUrl(url: string): string {
 
 function getAvatarOrInitials(author: string, avatarUrl?: string): JSX.Element {
   if (avatarUrl) {
+    // If it's already a blob URL or data URL, use it directly (no conversion needed)
+    const finalUrl = (avatarUrl.startsWith('blob:') || avatarUrl.startsWith('data:'))
+      ? avatarUrl
+      : convertDriveUrl(avatarUrl)
     return (
       <img
-        src={convertDriveUrl(avatarUrl)}
+        src={finalUrl}
         alt={author}
         className="w-10 h-10 rounded-full object-cover border-2 border-primary-200 flex-shrink-0"
       />
@@ -68,7 +72,7 @@ interface ArticleCardProps {
 export function ArticleCard({ article }: ArticleCardProps) {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { profile } = useProfile()
+  const { profile, avatarBlobUrl } = useProfile()
   const [imageLoading, setImageLoading] = useState(true)
 
   const handleEdit = (e: React.MouseEvent) => {
@@ -85,8 +89,9 @@ export function ArticleCard({ article }: ArticleCardProps) {
     ? (profile?.pseudo || article.auteur)
     : article.auteur
 
+  // Use cached blob URL for avatar to avoid multiple Drive requests
   const displayAvatar = user?.name === article.auteur
-    ? profile?.avatar_url
+    ? avatarBlobUrl || undefined
     : undefined
 
   return (

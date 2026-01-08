@@ -19,15 +19,30 @@ function getProfileByEmail(email) {
       email: email,
       pseudo: email.split('@')[0],
       avatar_url: '',
-      avatar_file_id: ''
+      avatar_file_id: '',
+      avatar_base64: ''
     };
+  }
+
+  // Get avatar as base64 to avoid CORS and rate limiting issues
+  let avatarBase64 = '';
+  if (user.avatar_file_id) {
+    try {
+      const file = DriveApp.getFileById(user.avatar_file_id);
+      const blob = file.getBlob();
+      const bytes = blob.getBytes();
+      avatarBase64 = Utilities.base64Encode(bytes);
+    } catch (error) {
+      Logger.log('Failed to get avatar base64: ' + error);
+    }
   }
 
   return {
     email: user.email,
     pseudo: user.pseudo,
     avatar_url: user.avatar_url,
-    avatar_file_id: user.avatar_file_id
+    avatar_file_id: user.avatar_file_id,
+    avatar_base64: avatarBase64
   };
 }
 

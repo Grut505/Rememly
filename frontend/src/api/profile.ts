@@ -5,6 +5,7 @@ export interface UserProfile {
   pseudo: string
   avatar_url: string
   avatar_file_id: string
+  avatar_base64?: string
 }
 
 export interface SaveProfilePayload {

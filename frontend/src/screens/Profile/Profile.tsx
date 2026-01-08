@@ -7,7 +7,7 @@ import { LoadingScreen } from '../../ui/Spinner'
 import { useUiStore } from '../../state/uiStore'
 import { useProfile } from '../../contexts/ProfileContext'
 
-// Convert Drive URLs to thumbnail format
+// Convert Drive URLs to thumbnail format (same as articles)
 function convertDriveUrl(url: string): string {
   if (!url || url.startsWith('blob:')) return url
 
@@ -16,12 +16,12 @@ function convertDriveUrl(url: string): string {
     return url
   }
 
-  // Extract file ID from various Drive URL formats
+  // Convert ALL other Drive formats to thumbnail
   const patterns = [
-    /drive\.google\.com\/file\/d\/([^\/]+)/,
-    /drive\.google\.com\/uc\?.*[&?]id=([^&]+)/,
-    /drive\.google\.com\/open\?.*[&?]id=([^&]+)/,
-    /lh3\.googleusercontent\.com\/d\/([A-Za-z0-9_-]+)/,  // Match the ID before any params
+    /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/,
+    /drive\.google\.com\/uc\?.*id=([A-Za-z0-9_-]+)/,
+    /drive\.google\.com\/open\?.*id=([A-Za-z0-9_-]+)/,
+    /lh3\.googleusercontent\.com\/d\/([A-Za-z0-9_-]+)/,
   ]
 
   for (const pattern of patterns) {
@@ -38,7 +38,7 @@ export function Profile() {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const { showToast } = useUiStore()
-  const { profile, isLoading, saveProfile } = useProfile()
+  const { profile, isLoading, saveProfile, avatarBlobUrl } = useProfile()
 
   const [pseudo, setPseudo] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
@@ -48,11 +48,12 @@ export function Profile() {
   useEffect(() => {
     if (profile) {
       setPseudo(profile.pseudo)
-      setPreviewUrl(profile.avatar_url)
+      // Use blob URL from context if available, otherwise use Drive URL
+      setPreviewUrl(avatarBlobUrl || profile.avatar_url)
     } else if (user) {
       setPseudo(user.name)
     }
-  }, [profile, user])
+  }, [profile, user, avatarBlobUrl])
 
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -160,6 +161,19 @@ export function Profile() {
             value={user?.email || ''}
             disabled
             className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+          />
+        </div>
+
+        {/* Backend URL (debug) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Backend URL
+          </label>
+          <input
+            type="text"
+            value={import.meta.env.VITE_APPS_SCRIPT_URL || ''}
+            disabled
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 text-xs"
           />
         </div>
       </div>

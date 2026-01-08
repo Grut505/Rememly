@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useArticlesStore } from '../../state/articlesStore'
 import { articlesApi } from '../../api/articles'
@@ -8,6 +8,7 @@ import { ErrorMessage } from '../../ui/ErrorMessage'
 import { ArticleCard } from './ArticleCard'
 import { EmptyState } from './EmptyState'
 import { MonthSeparator } from './MonthSeparator'
+import { AppHeader } from '../../ui/AppHeader'
 import { useAuth } from '../../auth/AuthContext'
 import { getCurrentYear, getMonthYear, getMonthYearKey } from '../../utils/date'
 
@@ -95,22 +96,21 @@ export function Timeline() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-        <button
-          onClick={() => navigate('/stats')}
-          className="text-gray-600 touch-manipulation"
-        >
-          ☰
-        </button>
-        <h1 className="text-lg font-semibold">Rememly {getCurrentYear()}</h1>
+      <AppHeader />
+
+      {/* Year Header with Filter */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-[60px] z-10">
+        <h2 className="text-lg font-semibold text-gray-900">{getCurrentYear()}</h2>
         <button
           onClick={() => navigate('/filters')}
-          className="text-gray-600 touch-manipulation"
+          className="text-primary-600 hover:text-primary-700 touch-manipulation flex items-center gap-2"
         >
-          🔍
+          <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+            <path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+          </svg>
+          Filter
         </button>
-      </header>
+      </div>
 
       {/* Timeline */}
       <div className="flex-1 pb-20">
@@ -125,17 +125,17 @@ export function Timeline() {
               const showMonthSeparator = currentMonthKey !== previousMonthKey
 
               return (
-                <div key={article.id}>
+                <Fragment key={article.id}>
                   {showMonthSeparator && (
                     <MonthSeparator monthYear={getMonthYear(article.date_modification)} />
                   )}
-                  <div ref={index === articles.length - 1 ? lastArticleRef : undefined}>
-                    <ArticleCard
-                      article={article}
-                      onClick={() => navigate(`/editor/${article.id}`)}
-                    />
+                  <div
+                    ref={index === articles.length - 1 ? lastArticleRef : undefined}
+                    className={`relative z-0 ${showMonthSeparator ? 'pt-4' : ''}`}
+                  >
+                    <ArticleCard article={article} />
                   </div>
-                </div>
+                </Fragment>
               )
             })}
             {isLoading && (

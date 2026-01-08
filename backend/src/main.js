@@ -48,6 +48,12 @@ function doPost(e) {
       case 'pdf/status':
         return handlePdfStatus(params.job_id);
 
+      case 'profile/get':
+        return handleProfileGet(authResult.user.email);
+
+      case 'profile/save':
+        return handleProfileSave(authResult.user.email, body);
+
       default:
         return createResponse({
           ok: false,

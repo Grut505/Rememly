@@ -15,6 +15,16 @@ export function formatDateShort(isoString: string): string {
   return `${day} ${month}`
 }
 
+export function formatDateTimeFull(isoString: string): string {
+  const date = new Date(isoString)
+  const day = date.getDate()
+  const month = MONTHS_FR[date.getMonth()].toLowerCase()
+  const year = date.getFullYear()
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${day} ${month} ${year} · ${hours}:${minutes}`
+}
+
 export function getCurrentYear(): number {
   return new Date().getFullYear()
 }

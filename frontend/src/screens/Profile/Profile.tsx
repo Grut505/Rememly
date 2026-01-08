@@ -7,27 +7,28 @@ import { LoadingScreen } from '../../ui/Spinner'
 import { useUiStore } from '../../state/uiStore'
 import { useProfile } from '../../contexts/ProfileContext'
 
-// Convert Drive URLs to googleusercontent format
+// Convert Drive URLs to uc?export=view format (avoids 429 rate limiting)
 function convertDriveUrl(url: string): string {
   if (!url || url.startsWith('blob:')) return url
 
-  // If already in googleusercontent format, return as-is
-  if (url.includes('lh3.googleusercontent.com')) {
+  // If already in uc?export=view format, return as-is
+  if (url.includes('drive.google.com/uc?') && url.includes('export=view')) {
     return url
   }
 
-  // Extract file ID from various Drive URL formats and convert to googleusercontent
+  // Extract file ID from various Drive URL formats
   const patterns = [
     /drive\.google\.com\/file\/d\/([^\/]+)/,
     /drive\.google\.com\/uc\?.*[&?]id=([^&]+)/,
     /drive\.google\.com\/open\?.*[&?]id=([^&]+)/,
     /drive\.google\.com\/thumbnail\?id=([^&]+)/,
+    /lh3\.googleusercontent\.com\/d\/([^?&=]+)/,
   ]
 
   for (const pattern of patterns) {
     const match = url.match(pattern)
     if (match && match[1]) {
-      return `https://lh3.googleusercontent.com/d/${match[1]}=w2000`
+      return `https://drive.google.com/uc?export=view&id=${match[1]}`
     }
   }
 

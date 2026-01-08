@@ -11,7 +11,7 @@ import { PhotoAssemblyScreen } from './screens/PhotoAssembly/PhotoAssemblyScreen
 function App() {
   return (
     <AuthProvider>
-      <div className="h-full max-w-mobile mx-auto bg-white shadow-lg">
+      <div className="min-h-screen max-w-content mx-auto bg-white">
         <Routes>
           <Route path="/auth" element={<GoogleAuth />} />
           <Route

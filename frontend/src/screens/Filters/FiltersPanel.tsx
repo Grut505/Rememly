@@ -25,9 +25,9 @@ export function FiltersPanel() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center">
+      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center sticky top-0 z-10">
         <button
           onClick={() => navigate('/')}
           className="text-gray-600 touch-manipulation"
@@ -38,7 +38,7 @@ export function FiltersPanel() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 p-4 space-y-6 pb-32">
         {/* Year */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -97,7 +97,7 @@ export function FiltersPanel() {
       </div>
 
       {/* Actions */}
-      <div className="bg-white border-t border-gray-200 p-4 space-y-2">
+      <div className="bg-white border-t border-gray-200 p-4 space-y-2 sticky bottom-0">
         <Button onClick={handleApply} fullWidth>
           Apply Filters
         </Button>

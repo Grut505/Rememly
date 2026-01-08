@@ -1,9 +1,10 @@
 interface ErrorMessageProps {
   message: string
   onRetry?: () => void
+  retryLabel?: string
 }
 
-export function ErrorMessage({ message, onRetry }: ErrorMessageProps) {
+export function ErrorMessage({ message, onRetry, retryLabel = 'Retry' }: ErrorMessageProps) {
   return (
     <div className="flex flex-col items-center justify-center p-6 bg-red-50 border border-red-200 rounded-lg">
       <div className="text-red-600 text-center mb-4">{message}</div>
@@ -12,7 +13,7 @@ export function ErrorMessage({ message, onRetry }: ErrorMessageProps) {
           onClick={onRetry}
           className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
         >
-          Retry
+          {retryLabel}
         </button>
       )}
     </div>

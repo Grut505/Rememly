@@ -21,7 +21,7 @@ function convertDriveUrl(url: string): string {
     /drive\.google\.com\/file\/d\/([^\/]+)/,
     /drive\.google\.com\/uc\?.*[&?]id=([^&]+)/,
     /drive\.google\.com\/open\?.*[&?]id=([^&]+)/,
-    /lh3\.googleusercontent\.com\/d\/([^?&=]+)/,
+    /lh3\.googleusercontent\.com\/d\/([A-Za-z0-9_-]+)/,  // Match the ID before any params
   ]
 
   for (const pattern of patterns) {

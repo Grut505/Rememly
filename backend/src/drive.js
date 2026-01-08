@@ -51,9 +51,10 @@ function uploadImage(base64, fileName, year, folderType) {
 
   const fileId = file.getId();
 
+  // Use file/d/ID/view format (same as articles) - will be converted to thumbnail on frontend
   return {
     fileId: fileId,
-    url: `https://drive.google.com/thumbnail?id=${fileId}&sz=w2000`,
+    url: `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk`,
   };
 }
 

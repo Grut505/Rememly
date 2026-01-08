@@ -26,14 +26,20 @@ interface ProfileContextType {
   isLoading: boolean
   saveProfile: (pseudo: string, avatarFile?: File) => Promise<void>
   reloadProfile: () => void
+  avatarBlobUrl: string | null
 }
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined)
+
+// Cache for avatar blob URL to avoid multiple fetches
+let cachedAvatarBlobUrl: string | null = null
+let cachedAvatarDriveUrl: string | null = null
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [avatarBlobUrl, setAvatarBlobUrl] = useState<string | null>(null)
 
   const loadProfile = async () => {
     if (!isAuthenticated) return
@@ -45,6 +51,33 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         pseudo: data.pseudo,
         avatar_url: data.avatar_url
       })
+
+      // Convert base64 to data URL (from backend, no CORS issues)
+      if (data.avatar_base64 && data.avatar_url !== cachedAvatarDriveUrl) {
+        try {
+          // Create data URL from base64
+          const dataUrl = `data:image/jpeg;base64,${data.avatar_base64}`
+
+          // Revoke old blob URL if exists
+          if (cachedAvatarBlobUrl) {
+            URL.revokeObjectURL(cachedAvatarBlobUrl)
+          }
+
+          // Store data URL (no need for blob, data URLs work directly)
+          cachedAvatarBlobUrl = dataUrl
+          cachedAvatarDriveUrl = data.avatar_url
+          setAvatarBlobUrl(dataUrl)
+        } catch (error) {
+          console.error('Failed to convert avatar to data URL:', error)
+          setAvatarBlobUrl(null)
+        }
+      } else if (data.avatar_url === cachedAvatarDriveUrl && cachedAvatarBlobUrl) {
+        // Reuse cached data URL
+        setAvatarBlobUrl(cachedAvatarBlobUrl)
+      } else if (!data.avatar_base64) {
+        // No avatar
+        setAvatarBlobUrl(null)
+      }
     } catch (error) {
       console.error('Failed to load profile:', error)
     } finally {
@@ -73,6 +106,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         pseudo: data.pseudo,
         avatar_url: data.avatar_url
       })
+
+      // Reload to update blob cache
+      await loadProfile()
     } catch (error) {
       console.error('Failed to save profile:', error)
       throw error
@@ -86,6 +122,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         isLoading,
         saveProfile,
         reloadProfile: loadProfile,
+        avatarBlobUrl,
       }}
     >
       {children}

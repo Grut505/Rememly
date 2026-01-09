@@ -3,12 +3,11 @@ import { formatDateTimeFull } from '../../utils/date'
 import { useNavigate } from 'react-router-dom'
 import { useProfile } from '../../contexts/ProfileContext'
 import { useAuth } from '../../auth/AuthContext'
-import { useState } from 'react'
+import { useImageLoader } from '../../hooks/useImageLoader'
 
-// Convert Drive URLs to thumbnail format (same for all images)
+// Convert Drive URLs to thumbnail format
 function convertDriveUrl(url: string): string {
   if (!url) {
-    console.warn('Empty image URL provided')
     return ''
   }
 
@@ -17,7 +16,7 @@ function convertDriveUrl(url: string): string {
     return url
   }
 
-  // Convert ALL other Drive formats to thumbnail
+  // Extract file ID from various Drive URL formats and convert to thumbnail
   const patterns = [
     /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/,
     /drive\.google\.com\/uc\?.*id=([A-Za-z0-9_-]+)/,
@@ -28,7 +27,7 @@ function convertDriveUrl(url: string): string {
   for (const pattern of patterns) {
     const match = url.match(pattern)
     if (match && match[1]) {
-      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w2000`
+      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200`
     }
   }
 
@@ -73,7 +72,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { profile, avatarBlobUrl } = useProfile()
-  const [imageLoading, setImageLoading] = useState(true)
+  const { src: imageSrc, isLoading: imageLoading, error: imageError } = useImageLoader(article.image_url, article.image_file_id)
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -124,22 +123,26 @@ export function ArticleCard({ article }: ArticleCardProps) {
           onClick={handleCardClick}
           className="w-full cursor-pointer bg-gray-50 relative"
         >
-          {imageLoading && (
+          {imageLoading && !imageError && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
             </div>
           )}
-          <img
-            src={convertDriveUrl(article.image_url)}
-            alt=""
-            className={`w-full h-auto object-contain ${imageLoading ? 'opacity-0' : 'opacity-100'} transition-opacity`}
-            loading="lazy"
-            onLoad={() => setImageLoading(false)}
-            onError={(e) => {
-              console.error('Image failed to load:', article.image_url)
-              setImageLoading(false)
-            }}
-          />
+          {imageError ? (
+            <div className="p-8 text-center text-gray-500">
+              <p className="text-sm">Failed to load image</p>
+              <p className="text-xs mt-1">FileId: {article.image_file_id}</p>
+            </div>
+          ) : (
+            imageSrc && (
+              <img
+                src={imageSrc}
+                alt=""
+                className="w-full h-auto object-contain"
+                loading="lazy"
+              />
+            )
+          )}
         </div>
 
         {/* Text Content */}

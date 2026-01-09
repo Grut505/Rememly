@@ -29,15 +29,15 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
   }
 
   return (
-    <header className="bg-primary-600 text-white px-4 py-4 flex items-center justify-between sticky top-0 z-20 shadow-md">
+    <header className="bg-primary-600 text-white px-4 h-14 flex items-center justify-between sticky top-0 z-30 shadow-md">
       <div className="flex items-center gap-3">
-        <h1 className="text-xl font-bold">Rememly</h1>
+        <h1 className="text-xl font-bold leading-none">Rememly</h1>
       </div>
 
       <div className="relative" ref={menuRef}>
         <button
           onClick={() => setShowMenu(!showMenu)}
-          className="p-2 hover:bg-primary-700 rounded-lg transition-colors touch-manipulation"
+          className="p-2 hover:bg-primary-700 rounded-lg transition-colors touch-manipulation flex items-center justify-center"
           aria-label="Menu"
         >
           <svg
@@ -54,7 +54,7 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
         </button>
 
         {showMenu && (
-          <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg py-2 text-gray-800">
+          <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg py-2 text-gray-800 z-30">
             <button
               onClick={() => handleMenuItemClick('/profile')}
               className="w-full px-4 py-3 text-left hover:bg-gray-100 flex items-center gap-3 transition-colors"
@@ -73,6 +73,11 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
               </svg>
               <span>Statistics</span>
             </button>
+            <div className="border-t border-gray-200 mt-2 pt-2 px-4 py-2">
+              <p className="text-xs text-gray-400">
+                v{import.meta.env.VITE_APP_VERSION || 'dev'} / backend @{import.meta.env.VITE_BACKEND_VERSION || '?'}
+              </p>
+            </div>
           </div>
         )}
       </div>

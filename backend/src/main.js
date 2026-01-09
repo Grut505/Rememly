@@ -54,6 +54,9 @@ function doPost(e) {
       case 'profile/save':
         return handleProfileSave(authResult.user.email, body);
 
+      case 'image/fetch':
+        return handleImageFetch(params.fileId);
+
       default:
         return createResponse({
           ok: false,

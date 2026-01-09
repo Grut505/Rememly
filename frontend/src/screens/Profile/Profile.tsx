@@ -93,14 +93,14 @@ export function Profile() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-center relative sticky top-0 z-10">
         <button
           onClick={() => navigate('/')}
-          className="text-gray-600 touch-manipulation"
+          className="text-gray-600 touch-manipulation absolute left-4"
         >
           ← Back
         </button>
-        <h1 className="text-lg font-semibold ml-4">Profile</h1>
+        <h1 className="text-lg font-semibold">Profile</h1>
       </header>
 
       {/* Content */}

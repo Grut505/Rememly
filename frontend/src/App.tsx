@@ -5,15 +5,16 @@ import { ProtectedRoute } from './auth/ProtectedRoute'
 import { GoogleAuth } from './auth/GoogleAuth'
 import { Timeline } from './screens/Timeline/Timeline'
 import { ArticleEditor } from './screens/Editor/ArticleEditor'
-import { FiltersPanel } from './screens/Filters/FiltersPanel'
 import { Statistics } from './screens/Stats/Statistics'
 import { PhotoAssemblyScreen } from './screens/PhotoAssembly/PhotoAssemblyScreen'
 import { Profile } from './screens/Profile/Profile'
+import { UpdatePrompt } from './components/UpdatePrompt'
 
 function App() {
   return (
     <AuthProvider>
       <ProfileProvider>
+        <UpdatePrompt />
         <div className="min-h-screen max-w-content mx-auto bg-white">
           <Routes>
           <Route path="/auth" element={<GoogleAuth />} />
@@ -38,14 +39,6 @@ function App() {
             element={
               <ProtectedRoute>
                 <ArticleEditor />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/filters"
-            element={
-              <ProtectedRoute>
-                <FiltersPanel />
               </ProtectedRoute>
             }
           />

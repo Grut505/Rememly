@@ -7,7 +7,11 @@ function handleArticlesList(params) {
 
   // Parse filters
   const year = params.year ? parseInt(params.year) : null;
+  const month = params.month ? params.month : null;
+  const from = params.from ? new Date(params.from) : null;
+  const to = params.to ? new Date(params.to) : null;
   const limit = params.limit ? parseInt(params.limit) : 40;
+  const cursor = params.cursor ? parseInt(params.cursor) : 0; // Offset-based cursor
 
   // Get articles (skip header row)
   const articles = [];
@@ -19,13 +23,34 @@ function handleArticlesList(params) {
       article[header] = row[index];
     });
 
+    // Filter by status
+    if (article.status === 'DELETED') {
+      continue;
+    }
+
+    // Parse date_modification for filtering
+    const dateModification = new Date(article.date_modification);
+
     // Filter by year if specified
     if (year && article.year !== year) {
       continue;
     }
 
-    // Filter by status
-    if (article.status === 'DELETED') {
+    // Filter by month if specified (format: "01", "02", etc.)
+    if (month) {
+      const articleMonth = (dateModification.getMonth() + 1).toString().padStart(2, '0');
+      if (articleMonth !== month) {
+        continue;
+      }
+    }
+
+    // Filter by date range (from)
+    if (from && dateModification < from) {
+      continue;
+    }
+
+    // Filter by date range (to)
+    if (to && dateModification > to) {
       continue;
     }
 
@@ -37,14 +62,16 @@ function handleArticlesList(params) {
     return new Date(b.date_modification).getTime() - new Date(a.date_modification).getTime();
   });
 
-  // Apply limit
-  const limited = articles.slice(0, limit);
+  // Apply cursor (offset) and limit
+  const paginatedArticles = articles.slice(cursor, cursor + limit);
+  const nextOffset = cursor + limit;
+  const hasMore = nextOffset < articles.length;
 
   return createResponse({
     ok: true,
     data: {
-      items: limited,
-      next_cursor: articles.length > limit ? 'has_more' : null,
+      items: paginatedArticles,
+      next_cursor: hasMore ? String(nextOffset) : null,
     },
   });
 }

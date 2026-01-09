@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '../ui/Button'
 import { LoadingScreen } from '../ui/Spinner'
 import { ErrorMessage } from '../ui/ErrorMessage'
+import { isStandalonePWA } from '../utils/constants'
 
 declare global {
   interface Window {
@@ -16,6 +17,8 @@ export function GoogleAuth() {
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isStandalone] = useState(isStandalonePWA())
+  const [showStandaloneHelp, setShowStandaloneHelp] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -71,15 +74,24 @@ export function GoogleAuth() {
             .catch(() => {
               setError('Failed to get user information')
               setIsLoading(false)
+              if (isStandalone) {
+                setShowStandaloneHelp(true)
+              }
             })
         } else {
           setError('Failed to authenticate with Google')
           setIsLoading(false)
+          if (isStandalone) {
+            setShowStandaloneHelp(true)
+          }
         }
       },
       error_callback: () => {
         setError('Google Sign-In failed')
         setIsLoading(false)
+        if (isStandalone) {
+          setShowStandaloneHelp(true)
+        }
       },
     })
 
@@ -88,6 +100,55 @@ export function GoogleAuth() {
 
   if (isLoading) {
     return <LoadingScreen message="Signing in..." />
+  }
+
+  // Show special help message if in standalone PWA mode and login failed
+  if (isStandalone && showStandaloneHelp) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-6">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Rememly</h1>
+          <p className="text-gray-600">Family photo journal</p>
+        </div>
+
+        <div className="mb-6 w-full max-w-md">
+          <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
+            <h2 className="text-lg font-semibold text-blue-900 mb-3">
+              Connexion depuis Safari requise
+            </h2>
+            <p className="text-blue-800 text-sm mb-4">
+              La connexion Google ne fonctionne pas en mode application. Vous devez vous connecter depuis Safari :
+            </p>
+            <ol className="text-blue-800 text-sm space-y-2 mb-4 list-decimal list-inside">
+              <li>Ouvrez Safari sur votre iPhone</li>
+              <li>Allez sur <span className="font-mono bg-blue-100 px-1 rounded">grut505.github.io</span></li>
+              <li>Connectez-vous avec votre compte Google</li>
+              <li>Ajoutez à nouveau l'app sur l'écran d'accueil</li>
+            </ol>
+            <p className="text-blue-700 text-xs italic">
+              Important : vous devez rajouter l'app sur l'écran d'accueil après vous être connecté dans Safari.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          onClick={() => {
+            // Open in Safari
+            window.location.href = 'https://grut505.github.io/auth'
+          }}
+          className="w-full max-w-sm"
+        >
+          Ouvrir dans Safari
+        </Button>
+
+        <button
+          onClick={() => setShowStandaloneHelp(false)}
+          className="mt-4 text-sm text-gray-600 underline"
+        >
+          Réessayer la connexion
+        </button>
+      </div>
+    )
   }
 
   return (

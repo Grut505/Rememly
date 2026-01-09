@@ -1,44 +1,61 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 import { MONTHS_FR } from '../../utils/constants'
 import { getCurrentYear } from '../../utils/date'
 
-export function FiltersPanel() {
-  const navigate = useNavigate()
-  const [year, setYear] = useState(getCurrentYear().toString())
-  const [month, setMonth] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+interface FiltersPanelProps {
+  initialFilters?: FilterValues
+  onApply: (filters: FilterValues) => void
+  onClose: () => void
+}
+
+export interface FilterValues {
+  year: string
+  month: string
+  dateFrom: string
+  dateTo: string
+}
+
+export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelProps) {
+  const [year, setYear] = useState(initialFilters?.year || getCurrentYear().toString())
+  const [month, setMonth] = useState(initialFilters?.month || '')
+  const [dateFrom, setDateFrom] = useState(initialFilters?.dateFrom || '')
+  const [dateTo, setDateTo] = useState(initialFilters?.dateTo || '')
+
+  useEffect(() => {
+    if (initialFilters) {
+      setYear(initialFilters.year || getCurrentYear().toString())
+      setMonth(initialFilters.month || '')
+      setDateFrom(initialFilters.dateFrom || '')
+      setDateTo(initialFilters.dateTo || '')
+    }
+  }, [initialFilters])
 
   const handleApply = () => {
-    // TODO: Apply filters to articles list
-    navigate('/')
+    onApply({ year, month, dateFrom, dateTo })
+    onClose()
   }
 
   const handleReset = () => {
-    setYear(getCurrentYear().toString())
-    setMonth('')
-    setDateFrom('')
-    setDateTo('')
+    const defaultFilters = {
+      year: getCurrentYear().toString(),
+      month: '',
+      dateFrom: '',
+      dateTo: '',
+    }
+    setYear(defaultFilters.year)
+    setMonth(defaultFilters.month)
+    setDateFrom(defaultFilters.dateFrom)
+    setDateTo(defaultFilters.dateTo)
+    onApply(defaultFilters)
+    onClose()
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center sticky top-0 z-10">
-        <button
-          onClick={() => navigate('/')}
-          className="text-gray-600 touch-manipulation"
-        >
-          ← Back
-        </button>
-        <h1 className="text-lg font-semibold ml-4">Filters</h1>
-      </header>
-
+    <>
       {/* Content */}
-      <div className="flex-1 p-4 space-y-6 pb-32">
+      <div className="p-4 space-y-6">
         {/* Year */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -97,7 +114,7 @@ export function FiltersPanel() {
       </div>
 
       {/* Actions */}
-      <div className="bg-white border-t border-gray-200 p-4 space-y-2 sticky bottom-0">
+      <div className="border-t border-gray-200 p-4 space-y-2">
         <Button onClick={handleApply} fullWidth>
           Apply Filters
         </Button>
@@ -105,6 +122,6 @@ export function FiltersPanel() {
           Reset
         </Button>
       </div>
-    </div>
+    </>
   )
 }

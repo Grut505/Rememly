@@ -39,13 +39,12 @@ export function useImageLoader(driveUrl: string, fileId?: string): UseImageLoade
   const [src, setSrc] = useState<string>('')
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [error, setError] = useState<boolean>(false)
-  const [needsFallback, setNeedsFallback] = useState<boolean>(false)
 
   useEffect(() => {
     // Reset state when URL changes
+    setSrc('')
     setIsLoading(true)
     setError(false)
-    setNeedsFallback(false)
 
     if (!driveUrl) {
       setIsLoading(false)
@@ -59,7 +58,7 @@ export function useImageLoader(driveUrl: string, fileId?: string): UseImageLoade
       return
     }
 
-    // On standalone PWA mode (iOS), fetch via backend immediately
+    // On standalone PWA mode (iOS), fetch via backend
     if (isStandalonePWA()) {
       fetchViaBackend()
     } else {
@@ -71,37 +70,26 @@ export function useImageLoader(driveUrl: string, fileId?: string): UseImageLoade
   }, [driveUrl, fileId])
 
   const convertToThumbnail = (url: string): string => {
-    const fileId = extractFileId(url)
-    if (fileId) {
-      return `https://drive.google.com/thumbnail?id=${fileId}&sz=w2000`
+    const extractedFileId = extractFileId(url)
+    if (extractedFileId) {
+      return `https://drive.google.com/thumbnail?id=${extractedFileId}&sz=w2000`
     }
     return url
   }
 
   const fetchViaBackend = async () => {
-    // Use provided fileId or extract from URL
     const finalFileId = fileId || extractFileId(driveUrl)
-    console.log('[useImageLoader] Fetching image via backend, fileId:', finalFileId, 'url:', driveUrl)
 
     if (!finalFileId) {
-      console.error('[useImageLoader] Could not extract fileId from URL:', driveUrl)
       setError(true)
       setIsLoading(false)
       return
     }
 
     try {
-      console.log('[useImageLoader] Calling API with fileId:', finalFileId)
-      // DEBUG: Show the URL that will be called
-      const debugUrl = `${import.meta.env.VITE_APPS_SCRIPT_URL}?path=image/fetch&fileId=${finalFileId}`
-      console.log('[useImageLoader] DEBUG URL:', debugUrl)
-      alert('DEBUG URL: ' + debugUrl)
       const response = await apiClient.get<{ base64: string }>('image/fetch', { fileId: finalFileId })
-      console.log('[useImageLoader] Got response, base64 length:', response.base64?.length)
 
       if (!response.base64) {
-        console.error('[useImageLoader] No base64 in response:', response)
-        alert('DEBUG: No base64 in response: ' + JSON.stringify(response))
         setError(true)
         setIsLoading(false)
         return
@@ -110,24 +98,7 @@ export function useImageLoader(driveUrl: string, fileId?: string): UseImageLoade
       const dataUrl = `data:image/jpeg;base64,${response.base64}`
       setSrc(dataUrl)
       setIsLoading(false)
-      console.log('[useImageLoader] Image loaded successfully')
     } catch (err) {
-      console.error('[useImageLoader] Failed to load image via backend:', err)
-      const errorMsg = err instanceof Error ? err.message : String(err)
-      alert('DEBUG: API Error: ' + errorMsg)
-      setError(true)
-      setIsLoading(false)
-    }
-  }
-
-  // Handle image load error (fallback mechanism)
-  const handleImageError = () => {
-    if (!isStandalonePWA() && !needsFallback) {
-      // Try fetching via backend as fallback
-      setNeedsFallback(true)
-      setIsLoading(true)
-      fetchViaBackend()
-    } else {
       setError(true)
       setIsLoading(false)
     }

@@ -151,7 +151,40 @@ cd frontend
 npm run build
 ```
 
-Deploy the `frontend/dist` folder to your preferred hosting (Netlify, Vercel, Firebase Hosting, etc.)
+## Deployment
+
+### Frontend (GitHub Pages)
+
+The frontend is deployed to GitHub Pages at `grut505.github.io`.
+
+```bash
+cd frontend
+npm run deploy
+```
+
+This command:
+1. Builds the project (`npm run build`)
+2. Pushes the `dist/` folder to the GitHub Pages repository
+
+### Backend (Google Apps Script)
+
+The backend uses a specific deployment ID that the frontend references.
+
+**Current Deployment ID:** `AKfycbwnwljzz7VuZNvAc-Y675huhQdRMkm6Eg_aOhPGuOOvy0l1Y3g0KjUhoLfN3IFf2bSL`
+
+To update the backend:
+
+```bash
+cd backend
+
+# Push code changes
+npx clasp push
+
+# Update the existing deployment (keeps the same URL)
+npx clasp deploy -i AKfycbwnwljzz7VuZNvAc-Y675huhQdRMkm6Eg_aOhPGuOOvy0l1Y3g0KjUhoLfN3IFf2bSL -d "Description of changes"
+```
+
+**Important:** Always use `-i <DEPLOYMENT_ID>` to update the existing deployment. Creating a new deployment generates a different URL that would require updating the frontend `.env` file.
 
 ## Usage
 

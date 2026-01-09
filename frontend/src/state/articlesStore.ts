@@ -1,18 +1,27 @@
 import { create } from 'zustand'
 import { Article } from '../api/types'
 
+export interface ArticleFilters {
+  year?: string
+  month?: string
+  from?: string
+  to?: string
+}
+
 interface ArticlesState {
   articles: Article[]
   isLoading: boolean
   error: string | null
   cursor: string | null
   hasMore: boolean
-  setArticles: (articles: Article[]) => void
+  filters: ArticleFilters
+  setArticles: (articles: Article[], cursor?: string | null) => void
   addArticles: (articles: Article[], cursor: string | null) => void
   updateArticle: (article: Article) => void
   deleteArticle: (id: string) => void
   setLoading: (isLoading: boolean) => void
   setError: (error: string | null) => void
+  setFilters: (filters: ArticleFilters) => void
   reset: () => void
 }
 
@@ -22,16 +31,30 @@ export const useArticlesStore = create<ArticlesState>((set) => ({
   error: null,
   cursor: null,
   hasMore: true,
+  filters: {},
 
-  setArticles: (articles) =>
-    set({ articles, cursor: null, hasMore: true }),
+  setArticles: (articles, cursor = null) => {
+    // Remove duplicates based on id
+    const seen = new Set<string>()
+    const uniqueArticles = articles.filter(a => {
+      if (seen.has(a.id)) return false
+      seen.add(a.id)
+      return true
+    })
+    return set({ articles: uniqueArticles, cursor, hasMore: cursor !== null })
+  },
 
   addArticles: (articles, cursor) =>
-    set((state) => ({
-      articles: [...state.articles, ...articles],
-      cursor,
-      hasMore: cursor !== null,
-    })),
+    set((state) => {
+      // Filter out duplicates based on id
+      const existingIds = new Set(state.articles.map(a => a.id))
+      const newArticles = articles.filter(a => !existingIds.has(a.id))
+      return {
+        articles: [...state.articles, ...newArticles],
+        cursor,
+        hasMore: cursor !== null,
+      }
+    }),
 
   updateArticle: (article) =>
     set((state) => ({
@@ -49,6 +72,8 @@ export const useArticlesStore = create<ArticlesState>((set) => ({
 
   setError: (error) => set({ error }),
 
+  setFilters: (filters) => set({ filters }),
+
   reset: () =>
     set({
       articles: [],
@@ -56,5 +81,6 @@ export const useArticlesStore = create<ArticlesState>((set) => ({
       error: null,
       cursor: null,
       hasMore: true,
+      filters: {},
     }),
 }))

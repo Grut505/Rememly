@@ -79,3 +79,39 @@ function savePdfToFolder(pdfBlob, year, fileName) {
     url: file.getUrl(),
   };
 }
+
+function handleImageFetch(fileId) {
+  Logger.log('handleImageFetch called with fileId: ' + fileId);
+
+  if (!fileId) {
+    Logger.log('ERROR: fileId is missing');
+    return createResponse({
+      ok: false,
+      error: { code: 'INVALID_PARAMS', message: 'fileId is required' }
+    });
+  }
+
+  try {
+    Logger.log('Attempting to get file with ID: ' + fileId);
+    const file = DriveApp.getFileById(fileId);
+    Logger.log('File retrieved: ' + file.getName());
+
+    const blob = file.getBlob();
+    Logger.log('Blob size: ' + blob.getBytes().length);
+
+    const bytes = blob.getBytes();
+    const base64 = Utilities.base64Encode(bytes);
+    Logger.log('Base64 encoded, length: ' + base64.length);
+
+    return createResponse({
+      ok: true,
+      data: { base64: base64 }
+    });
+  } catch (error) {
+    Logger.log('ERROR in handleImageFetch: ' + error.toString());
+    return createResponse({
+      ok: false,
+      error: { code: 'FETCH_ERROR', message: 'Failed to fetch image from Drive: ' + error.toString() }
+    });
+  }
+}

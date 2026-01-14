@@ -8,6 +8,7 @@ import { ArticleEditor } from './screens/Editor/ArticleEditor'
 import { Statistics } from './screens/Stats/Statistics'
 import { PhotoAssemblyScreen } from './screens/PhotoAssembly/PhotoAssemblyScreen'
 import { Profile } from './screens/Profile/Profile'
+import { FamileoBrowser } from './screens/Famileo/FamileoBrowser'
 import { UpdatePrompt } from './components/UpdatePrompt'
 
 function App() {
@@ -63,6 +64,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/famileo"
+            element={
+              <ProtectedRoute>
+                <FamileoBrowser />
               </ProtectedRoute>
             }
           />

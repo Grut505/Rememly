@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { articlesService } from '../../services/articles.service'
 import { storageService } from '../../services/storage.service'
@@ -13,9 +13,18 @@ import { PhotoPicker } from './PhotoPicker'
 import { TextInput } from './TextInput'
 import { DateTimeInput } from './DateTimeInput'
 
+interface FamileoImportData {
+  text: string
+  date: string
+  author: string
+  imageBase64: string
+  imageMimeType: string
+}
+
 export function ArticleEditor() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAuth()
   const { updateArticle: updateArticleInStore, deleteArticle: deleteArticleFromStore } = useArticlesStore()
   const { showToast } = useUiStore()
@@ -29,6 +38,40 @@ export function ArticleEditor() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const isEditMode = !!id
+
+  // Check for Famileo import data
+  useEffect(() => {
+    const state = location.state as { famileoImport?: FamileoImportData } | null
+    if (state?.famileoImport) {
+      const { text, date, imageBase64, imageMimeType } = state.famileoImport
+
+      // Set text
+      setTexte(text)
+
+      // Convert Famileo date format (YYYY-MM-DD HH:mm:ss) to ISO
+      const parsedDate = new Date(date.replace(' ', 'T'))
+      if (!isNaN(parsedDate.getTime())) {
+        setDateModification(parsedDate.toISOString())
+      }
+
+      // Convert base64 to File and set preview
+      if (imageBase64) {
+        const dataUrl = `data:${imageMimeType};base64,${imageBase64}`
+        setPreviewUrl(dataUrl)
+
+        // Convert to File object for upload
+        fetch(dataUrl)
+          .then(res => res.blob())
+          .then(blob => {
+            const file = new File([blob], 'famileo-import.jpg', { type: imageMimeType })
+            setPhotoFile(file)
+          })
+      }
+
+      // Clear the state to prevent re-import on refresh
+      window.history.replaceState({}, document.title)
+    }
+  }, [location.state])
 
   useEffect(() => {
     if (isEditMode) {

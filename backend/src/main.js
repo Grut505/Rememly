@@ -57,6 +57,15 @@ function doPost(e) {
       case 'image/fetch':
         return handleImageFetch(params.fileId);
 
+      case 'famileo/status':
+        return handleFamileoStatus();
+
+      case 'famileo/posts':
+        return handleFamileoPosts(params);
+
+      case 'famileo/image':
+        return handleFamileoImage(params);
+
       default:
         return createResponse({
           ok: false,

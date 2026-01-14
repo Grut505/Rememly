@@ -1,0 +1,307 @@
+// Famileo API integration
+// Credentials are stored in Script Properties (never in code)
+
+// Allowed authors for filtering posts
+// Key = Famileo author name, Value = Rememly author name
+const FAMILEO_AUTHOR_MAPPING = {
+  'Yann Graufogel': 'Yann',
+  'Marie Cabedoce': 'Marie'
+};
+
+/**
+ * Update Famileo session cookies in Script Properties
+ * Run this manually from the Apps Script editor when cookies expire
+ * Get fresh cookies from browser DevTools after manual login on famileo.com
+ *
+ * Usage: updateFamileoSession('your-phpsessid', 'your-rememberme-cookie')
+ */
+function updateFamileoSession(phpsessid, rememberme, familyId) {
+  if (!phpsessid || !rememberme) {
+    throw new Error('Usage: updateFamileoSession("phpsessid", "rememberme", "familyId")');
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  props.setProperties({
+    'FAMILEO_FAMILY_ID': familyId || props.getProperty('FAMILEO_FAMILY_ID') || '321238',
+    'FAMILEO_SESSION': JSON.stringify({
+      'PHPSESSID': phpsessid,
+      'REMEMBERME': rememberme
+    })
+  });
+  Logger.log('Famileo session updated successfully');
+}
+
+/**
+ * Clear Famileo session from Script Properties
+ */
+function clearFamileoSession() {
+  const props = PropertiesService.getScriptProperties();
+  props.deleteProperty('FAMILEO_FAMILY_ID');
+  props.deleteProperty('FAMILEO_SESSION');
+  Logger.log('Famileo session cleared');
+}
+
+/**
+ * Get stored session cookies
+ * Note: Automatic login is blocked by reCAPTCHA, so we use manually-obtained cookies
+ */
+function getFamileoSession() {
+  const props = PropertiesService.getScriptProperties();
+  const sessionJson = props.getProperty('FAMILEO_SESSION');
+
+  if (!sessionJson) {
+    throw new Error('Famileo session not configured. Run initFamileoSession() first with cookies from browser.');
+  }
+
+  try {
+    return JSON.parse(sessionJson);
+  } catch (e) {
+    throw new Error('Invalid Famileo session format');
+  }
+}
+
+/**
+ * Format cookies object as Cookie header string
+ */
+function formatCookies(cookies) {
+  return Object.entries(cookies)
+    .map(([name, value]) => `${name}=${value}`)
+    .join('; ');
+}
+
+/**
+ * Fetch posts from Famileo API
+ * @param {number} limit - Number of posts to fetch
+ * @param {string} timestamp - ISO timestamp for pagination (fetches posts before this date)
+ */
+function famileoFetchPosts(limit = 20, timestamp = null) {
+  const props = PropertiesService.getScriptProperties();
+  const familyId = props.getProperty('FAMILEO_FAMILY_ID') || '321238';
+
+  const session = getFamileoSession();
+
+  let url = `https://www.famileo.com/api/families/${familyId}/posts?limit=${limit}`;
+  if (timestamp) {
+    url += `&timestamp=${encodeURIComponent(timestamp)}`;
+  }
+
+  const response = UrlFetchApp.fetch(url, {
+    method: 'GET',
+    muteHttpExceptions: true,
+    headers: {
+      'Cookie': formatCookies(session),
+      'Accept': 'application/json',
+      'Referer': 'https://www.famileo.com/'
+    }
+  });
+
+  const responseCode = response.getResponseCode();
+  Logger.log('Fetch posts response code: ' + responseCode);
+
+  if (responseCode === 401 || responseCode === 403) {
+    throw new Error('Session expired. Please update cookies by running initFamileoSession() with fresh cookies from browser.');
+  }
+
+  if (responseCode !== 200) {
+    throw new Error('Failed to fetch posts: HTTP ' + responseCode);
+  }
+
+  return JSON.parse(response.getContentText());
+}
+
+/**
+ * Handler for famileo/posts endpoint
+ * Params:
+ *   - limit: number of posts (default 20)
+ *   - timestamp: ISO date string to fetch posts before (for pagination)
+ */
+function handleFamileoPosts(params) {
+  try {
+    const limit = parseInt(params.limit) || 20;
+    const timestamp = params.timestamp || null;
+
+    const response = famileoFetchPosts(limit, timestamp);
+
+    // Extract only the fields we need and filter by allowed authors
+    const allowedAuthors = Object.keys(FAMILEO_AUTHOR_MAPPING);
+    const posts = (response.familyWall || [])
+      .filter(post => allowedAuthors.includes(post.author_name))
+      .map(post => ({
+        id: post.wall_post_id,
+        text: post.text,
+        date: post.date,
+        date_tz: post.date_tz,
+        author_id: post.author_id,
+        author_name: post.author_name,
+        rememly_author: FAMILEO_AUTHOR_MAPPING[post.author_name] || post.author_name,
+        image_url: post.image_2x || post.image,
+        image_orientation: post.image_orientation
+      }));
+
+    // Calculate next_timestamp for pagination (use last post from raw response, not filtered)
+    let nextTimestamp = null;
+    const rawPosts = response.familyWall || [];
+    if (rawPosts.length > 0) {
+      const lastRawPost = rawPosts[rawPosts.length - 1];
+      // Use date_tz if available, otherwise convert date to ISO
+      nextTimestamp = lastRawPost.date_tz || new Date(lastRawPost.date).toISOString();
+    }
+
+    return createResponse({
+      ok: true,
+      data: {
+        posts: posts,
+        unread: response.unreadPost || 0,
+        next_timestamp: nextTimestamp,
+        has_more: rawPosts.length === limit
+      }
+    });
+  } catch (error) {
+    Logger.log('Famileo posts error: ' + error);
+    return createResponse({
+      ok: false,
+      error: { code: 'FAMILEO_ERROR', message: String(error) }
+    });
+  }
+}
+
+/**
+ * Fetch a Famileo image and return as base64
+ */
+function famileoFetchImage(imageUrl) {
+  if (!imageUrl || !imageUrl.includes('cloudfront.net')) {
+    throw new Error('Invalid Famileo image URL');
+  }
+
+  const session = getFamileoSession();
+
+  const response = UrlFetchApp.fetch(imageUrl, {
+    method: 'GET',
+    muteHttpExceptions: true,
+    headers: {
+      'Cookie': formatCookies(session),
+      'Referer': 'https://www.famileo.com/'
+    }
+  });
+
+  const responseCode = response.getResponseCode();
+  if (responseCode !== 200) {
+    throw new Error('Failed to fetch image: HTTP ' + responseCode);
+  }
+
+  const blob = response.getBlob();
+  const base64 = Utilities.base64Encode(blob.getBytes());
+  const mimeType = blob.getContentType() || 'image/jpeg';
+
+  return {
+    base64: base64,
+    mimeType: mimeType
+  };
+}
+
+/**
+ * Handler for famileo/image endpoint
+ */
+function handleFamileoImage(params) {
+  try {
+    const imageUrl = params.url;
+    if (!imageUrl) {
+      return createResponse({
+        ok: false,
+        error: { code: 'MISSING_URL', message: 'Image URL required' }
+      });
+    }
+
+    const image = famileoFetchImage(decodeURIComponent(imageUrl));
+
+    return createResponse({
+      ok: true,
+      data: {
+        base64: image.base64,
+        mimeType: image.mimeType
+      }
+    });
+  } catch (error) {
+    Logger.log('Famileo image error: ' + error);
+    return createResponse({
+      ok: false,
+      error: { code: 'FAMILEO_ERROR', message: String(error) }
+    });
+  }
+}
+
+/**
+ * Handler for famileo/status endpoint - check if session is valid
+ */
+function handleFamileoStatus() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const sessionJson = props.getProperty('FAMILEO_SESSION');
+
+    if (!sessionJson) {
+      return createResponse({
+        ok: true,
+        data: { configured: false, message: 'No session configured' }
+      });
+    }
+
+    return createResponse({
+      ok: true,
+      data: { configured: true, message: 'Session configured' }
+    });
+  } catch (error) {
+    return createResponse({
+      ok: false,
+      error: { code: 'FAMILEO_ERROR', message: String(error) }
+    });
+  }
+}
+
+/**
+ * Test function - run from Apps Script editor
+ */
+function testFamileo() {
+  try {
+    Logger.log('=== Testing Famileo fetch posts (first page) ===');
+    const response1 = famileoFetchPosts(5);
+
+    const posts1 = (response1.familyWall || []).map(post => ({
+      id: post.wall_post_id,
+      text: post.text.substring(0, 50) + '...',
+      date: post.date,
+      date_tz: post.date_tz,
+      author_name: post.author_name
+    }));
+
+    Logger.log('First page - Posts count: ' + posts1.length);
+    Logger.log('Posts: ' + JSON.stringify(posts1, null, 2));
+
+    // Get next timestamp for pagination
+    const lastPost = response1.familyWall[response1.familyWall.length - 1];
+    const nextTimestamp = lastPost.date_tz;
+    Logger.log('Next timestamp for pagination: ' + nextTimestamp);
+
+    // Test pagination with timestamp
+    Logger.log('=== Testing pagination with timestamp ===');
+    const response2 = famileoFetchPosts(3, nextTimestamp);
+    const posts2 = (response2.familyWall || []).map(post => ({
+      id: post.wall_post_id,
+      text: post.text.substring(0, 50) + '...',
+      date: post.date,
+      author_name: post.author_name
+    }));
+    Logger.log('Second page - Posts count: ' + posts2.length);
+    Logger.log('Posts: ' + JSON.stringify(posts2, null, 2));
+
+    // Test image fetch with first post
+    if (response1.familyWall.length > 0) {
+      const imageUrl = response1.familyWall[0].image_2x || response1.familyWall[0].image;
+      Logger.log('=== Testing image fetch ===');
+      Logger.log('URL: ' + imageUrl);
+      const image = famileoFetchImage(imageUrl);
+      Logger.log('Image fetched! MimeType: ' + image.mimeType + ', Base64 length: ' + image.base64.length);
+    }
+  } catch (error) {
+    Logger.log('Test error: ' + error);
+  }
+}

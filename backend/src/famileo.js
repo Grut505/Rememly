@@ -43,20 +43,92 @@ function clearFamileoSession() {
 
 /**
  * Get stored session cookies
- * Note: Automatic login is blocked by reCAPTCHA, so we use manually-obtained cookies
+ * First tries to read from Config sheet (updated by GitHub Actions)
+ * Falls back to Script Properties (legacy/manual method)
  */
 function getFamileoSession() {
+  // Try Config sheet first (populated by GitHub Actions)
+  const configSession = getConfigValue('famileo_session');
+  if (configSession) {
+    try {
+      return JSON.parse(configSession);
+    } catch (e) {
+      Logger.log('Invalid session format in Config sheet');
+    }
+  }
+
+  // Fallback to Script Properties
   const props = PropertiesService.getScriptProperties();
   const sessionJson = props.getProperty('FAMILEO_SESSION');
 
   if (!sessionJson) {
-    throw new Error('Famileo session not configured. Run initFamileoSession() first with cookies from browser.');
+    throw new Error('Famileo session not configured. Waiting for GitHub Actions to refresh cookies.');
   }
 
   try {
     return JSON.parse(sessionJson);
   } catch (e) {
     throw new Error('Invalid Famileo session format');
+  }
+}
+
+/**
+ * Handler for famileo/update-session endpoint
+ * Called by GitHub Actions to update session cookies
+ * Secured by a secret token stored in Script Properties
+ */
+function handleFamileoUpdateSession(body) {
+  try {
+    // Verify secret token
+    const props = PropertiesService.getScriptProperties();
+    const expectedToken = props.getProperty('FAMILEO_UPDATE_TOKEN');
+
+    if (!expectedToken) {
+      return createResponse({
+        ok: false,
+        error: { code: 'NOT_CONFIGURED', message: 'Update token not configured in Script Properties' }
+      });
+    }
+
+    if (body.token !== expectedToken) {
+      return createResponse({
+        ok: false,
+        error: { code: 'UNAUTHORIZED', message: 'Invalid token' }
+      });
+    }
+
+    // Validate session data
+    if (!body.phpsessid || !body.rememberme) {
+      return createResponse({
+        ok: false,
+        error: { code: 'INVALID_DATA', message: 'Missing phpsessid or rememberme' }
+      });
+    }
+
+    // Store session in Config sheet
+    const session = {
+      PHPSESSID: body.phpsessid,
+      REMEMBERME: body.rememberme
+    };
+    setConfigValue('famileo_session', JSON.stringify(session));
+
+    // Optionally update family ID
+    if (body.familyId) {
+      setConfigValue('famileo_family_id', body.familyId);
+    }
+
+    Logger.log('Famileo session updated via API');
+
+    return createResponse({
+      ok: true,
+      data: { message: 'Session updated successfully' }
+    });
+  } catch (error) {
+    Logger.log('Update session error: ' + error);
+    return createResponse({
+      ok: false,
+      error: { code: 'UPDATE_ERROR', message: String(error) }
+    });
   }
 }
 

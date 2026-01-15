@@ -131,7 +131,68 @@ Then open a Pull Request on GitHub with:
 
 ## Testing
 
-Currently no automated tests. Manual testing checklist:
+Currently no automated tests. **All changes must be tested in the 3 deployment modes.**
+
+### The 3 Testing Modes
+
+Every feature must work correctly in these 3 distinct environments:
+
+#### 1. Local Development (`npm run dev`)
+
+```bash
+cd frontend
+npm run dev
+```
+
+- URL: `http://localhost:5173/Rememly/`
+- Uses `.env` for environment variables
+- Hot reload enabled
+- Service worker may be disabled or behave differently
+- Full browser DevTools access
+- OAuth redirect configured for localhost
+
+#### 2 & 3. GitHub Pages (Browser + Standalone PWA)
+
+```bash
+cd frontend
+npm run deploy
+```
+
+This single command builds and deploys to GitHub Pages. Both modes use the same deployment:
+
+**Mode 2 - Browser:** Accéder via `https://grut505.github.io/Rememly/` dans un navigateur
+
+**Mode 3 - Standalone PWA:** Même URL, mais installée sur téléphone ("Ajouter à l'écran d'accueil")
+
+- URL: `https://grut505.github.io/Rememly/`
+- Uses `.env.production` for environment variables
+- Full PWA with service worker caching
+- OAuth redirect configured for GitHub Pages domain
+
+**Différences du mode Standalone (installé sur téléphone) :**
+- Runs in `display: standalone` mode (no browser UI)
+- `window.matchMedia('(display-mode: standalone)')` returns true
+- Different caching behavior (more aggressive)
+- No address bar = no easy refresh (must rely on pull-to-refresh or in-app controls)
+- OAuth popups may behave differently
+- Network errors less visible to user
+- App updates require explicit reload logic
+- Some APIs behave differently (clipboard, share, etc.)
+
+### Why These 3 Modes Matter
+
+| Aspect | Local | GitHub Pages (Browser) | Standalone PWA |
+|--------|-------|------------------------|----------------|
+| Service Worker | Often disabled | Active | Active + cached |
+| OAuth Flow | Popup works | Popup works | May need redirect flow |
+| Network Errors | Easy to debug | Visible in DevTools | Hidden from user |
+| App Updates | Instant (HMR) | Refresh loads new | Requires update prompt |
+| API URL | Dev backend | Prod backend | Prod backend |
+| CORS | Localhost allowed | GitHub Pages allowed | Same as browser |
+
+### Testing Checklist
+
+Before any PR, verify in **all 3 modes**:
 
 - [ ] Mobile viewport (375px width)
 - [ ] Portrait orientation only
@@ -143,6 +204,12 @@ Currently no automated tests. Manual testing checklist:
 - [ ] Filters work
 - [ ] Stats display correctly
 - [ ] PDF generation works (create job, poll status, download)
+
+**Standalone PWA specific checks:**
+- [ ] App launches correctly from home screen
+- [ ] Login/OAuth works without browser UI
+- [ ] App update prompt appears when new version deployed
+- [ ] Offline behavior is graceful (if applicable)
 
 ## Adding New Features
 

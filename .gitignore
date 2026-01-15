@@ -36,3 +36,7 @@ backend/.clasp.json
 
 # Secret
 GoogleCloudSecret
+
+# Famileo scraper (contains credentials)
+scripts/famileo/.env
+scripts/famileo/data/

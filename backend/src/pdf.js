@@ -3,19 +3,58 @@
 function handlePdfCreate(body, user) {
   const jobId = createJob(body.from, body.to, user.email);
 
-  // Trigger async generation
-  ScriptApp.newTrigger('generatePdfAsync')
-    .timeBased()
-    .after(1000)
-    .create();
+  // Generate PDF synchronously (no trigger needed)
+  try {
+    updateJobStatus(jobId, 'RUNNING', 10);
 
-  // Store job ID in properties for the trigger
-  PropertiesService.getScriptProperties().setProperty('CURRENT_PDF_JOB', jobId);
+    const job = getJobStatus(jobId);
+    if (!job) {
+      throw new Error('Job not found');
+    }
 
-  return createResponse({
-    ok: true,
-    data: { job_id: jobId },
-  });
+    // Get articles in date range
+    const articles = getArticlesInRange(job.date_from, job.date_to);
+
+    updateJobStatus(jobId, 'RUNNING', 30);
+
+    // Generate HTML with embedded images
+    const html = generatePdfHtml(articles, job.year, job.date_from, job.date_to);
+
+    updateJobStatus(jobId, 'RUNNING', 60);
+
+    // Convert to PDF
+    const pdfBlob = convertHtmlToPdf(html);
+
+    updateJobStatus(jobId, 'RUNNING', 80);
+
+    // Save to Drive
+    const fileName = `Livre_${job.year}_${job.date_from.substring(0, 10)}-${job.date_to.substring(
+      0,
+      10
+    )}_gen-${formatTimestamp()}_v01.pdf`;
+
+    const pdfData = savePdfToFolder(pdfBlob, job.year, fileName);
+
+    // Update job status
+    updateJobStatus(jobId, 'DONE', 100, pdfData.fileId, pdfData.url);
+
+    return createResponse({
+      ok: true,
+      data: {
+        job_id: jobId,
+        status: 'DONE',
+        progress: 100,
+        pdf_file_id: pdfData.fileId,
+        pdf_url: pdfData.url,
+      },
+    });
+  } catch (error) {
+    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error));
+    return createResponse({
+      ok: false,
+      error: { code: 'PDF_GENERATION_ERROR', message: String(error) },
+    });
+  }
 }
 
 function generatePdfAsync() {

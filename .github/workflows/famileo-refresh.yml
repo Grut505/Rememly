@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd scripts/famileo-refresh
-          npm ci
+          npm install
 
       - name: Run Famileo login and get cookies
         id: login

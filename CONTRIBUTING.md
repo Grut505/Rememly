@@ -10,28 +10,37 @@ See [SETUP.md](SETUP.md) for detailed setup instructions.
 
 ```
 Rememly/
-├── frontend/         # React PWA
+├── frontend/              # React PWA
 │   ├── src/
-│   │   ├── auth/    # Authentication logic
-│   │   ├── api/     # API client
-│   │   ├── screens/ # Main UI screens
-│   │   ├── modules/ # Feature modules (photo assembly)
-│   │   ├── services/# Business logic
-│   │   ├── state/   # State management
-│   │   ├── ui/      # Reusable UI components
-│   │   ├── hooks/   # Custom React hooks
-│   │   └── utils/   # Utility functions
-│   └── public/      # Static assets
-└── backend/         # Google Apps Script
-    └── src/
-        ├── main.ts  # HTTP routing
-        ├── auth.ts  # Authentication
-        ├── articles.ts # CRUD operations
-        ├── drive.ts # Google Drive
-        ├── sheets.ts # Google Sheets
-        ├── jobs.ts  # PDF jobs
-        ├── pdf.ts   # PDF generation
-        └── utils.ts # Utilities
+│   │   ├── auth/         # Authentication logic
+│   │   ├── api/          # API client
+│   │   ├── screens/      # Main UI screens
+│   │   ├── modules/      # Feature modules (photo assembly)
+│   │   ├── services/     # Business logic
+│   │   ├── state/        # State management
+│   │   ├── ui/           # Reusable UI components
+│   │   ├── hooks/        # Custom React hooks
+│   │   └── utils/        # Utility functions
+│   └── public/           # Static assets
+├── backend/              # Google Apps Script
+│   └── src/
+│       ├── main.js       # HTTP routing
+│       ├── auth.js       # Authentication
+│       ├── articles.js   # CRUD operations
+│       ├── drive.js      # Google Drive
+│       ├── sheets.js     # Google Sheets + Config
+│       ├── famileo.js    # Famileo integration
+│       ├── jobs.js       # PDF jobs
+│       ├── pdf.js        # PDF generation
+│       └── utils.js      # Utilities
+├── scripts/
+│   └── famileo-refresh/  # GitHub Actions scripts
+│       ├── login.js      # Puppeteer login to Famileo
+│       ├── update-backend.js # Update session in backend
+│       └── package.json
+└── .github/
+    └── workflows/
+        └── famileo-refresh.yml # Nightly cookie refresh
 ```
 
 ## Development Workflow
@@ -234,6 +243,148 @@ Open an issue with:
 - Screenshots (if applicable)
 - Browser and OS information
 - Console errors (if any)
+
+## Famileo Integration
+
+### Architecture Overview
+
+Famileo is integrated to import family posts from the Famileo service. The integration handles automatic session management since Famileo uses cookie-based authentication that expires regularly.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     GitHub Actions (Nightly)                     │
+│  ┌─────────────────┐    ┌──────────────────┐                    │
+│  │  login.js       │───>│ update-backend.js│                    │
+│  │  (Puppeteer)    │    │                  │                    │
+│  │  - Login        │    │  - POST cookies  │                    │
+│  │  - Get cookies  │    │    to backend    │                    │
+│  └─────────────────┘    └────────┬─────────┘                    │
+└──────────────────────────────────┼──────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Backend (Apps Script)                         │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  famileo/update-session endpoint                          │   │
+│  │  - Validates secret token                                 │   │
+│  │  - Stores cookies in Google Sheet (config tab)            │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  famileo/posts endpoint                                   │   │
+│  │  - Reads cookies from config sheet                        │   │
+│  │  - Fetches posts from Famileo API                         │   │
+│  │  - Filters by allowed authors                             │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  famileo/image endpoint                                   │   │
+│  │  - Proxies images from Famileo CDN                        │   │
+│  │  - Returns base64 to avoid CORS issues                    │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Frontend (PWA)                              │
+│  - Calls famileo/posts to get posts                             │
+│  - Displays posts in timeline                                    │
+│  - Calls famileo/image to load images                           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Components
+
+#### 1. GitHub Actions Workflow (`.github/workflows/famileo-refresh.yml`)
+
+Runs every night at 3:00 AM UTC (or manually via `workflow_dispatch`).
+
+**Steps:**
+1. Installs Puppeteer
+2. Runs `login.js` - logs into Famileo and extracts cookies
+3. Runs `update-backend.js` - sends cookies to backend API
+
+**Required Secrets (GitHub → Settings → Secrets → Actions):**
+- `FAMILEO_EMAIL` - Famileo login email
+- `FAMILEO_PASSWORD` - Famileo login password
+- `BACKEND_URL` - Apps Script web app URL
+- `BACKEND_SECRET_TOKEN` - Secret token to authenticate with backend
+
+#### 2. Puppeteer Login Script (`scripts/famileo-refresh/login.js`)
+
+- Launches headless Chrome
+- Navigates to Famileo login page
+- Fills in credentials and submits
+- Extracts `PHPSESSID` and `REMEMBERME` cookies
+- Saves to `cookies.json` for next step
+
+#### 3. Backend Update Script (`scripts/famileo-refresh/update-backend.js`)
+
+- Reads cookies from `cookies.json`
+- POSTs to `{BACKEND_URL}?path=famileo/update-session`
+- Includes secret token for authentication
+
+#### 4. Backend Endpoints (`backend/src/famileo.js`)
+
+| Endpoint | Auth | Description |
+|----------|------|-------------|
+| `famileo/update-session` | Secret token | Stores new cookies in config sheet |
+| `famileo/posts` | User token | Fetches posts from Famileo API |
+| `famileo/image` | User token | Proxies images as base64 |
+| `famileo/status` | User token | Checks if session is configured |
+
+#### 5. Config Storage (`backend/src/sheets.js`)
+
+Cookies are stored in a `config` sheet tab:
+
+| key | value | updated_at |
+|-----|-------|------------|
+| famileo_session | `{"PHPSESSID":"...","REMEMBERME":"..."}` | 2026-01-15T12:30:00Z |
+
+### Setup Instructions
+
+1. **Configure GitHub Secrets:**
+   ```
+   FAMILEO_EMAIL=your-email@example.com
+   FAMILEO_PASSWORD=your-password
+   BACKEND_URL=https://script.google.com/macros/s/.../exec
+   BACKEND_SECRET_TOKEN=<generate with: openssl rand -hex 32>
+   ```
+
+2. **Configure Apps Script Properties:**
+   - Go to Apps Script → Project Settings → Script Properties
+   - Add: `FAMILEO_UPDATE_TOKEN` = same value as `BACKEND_SECRET_TOKEN`
+
+3. **Test manually:**
+   - Go to GitHub → Actions → "Refresh Famileo Session"
+   - Click "Run workflow"
+   - Check the config sheet for updated cookies
+
+### Troubleshooting
+
+**"Session expired" error:**
+- The nightly refresh should handle this automatically
+- To force refresh: trigger the GitHub Action manually
+
+**"Endpoint not found" error:**
+- Check that the backend URL in GitHub Secrets matches the current Apps Script deployment
+- After updating Apps Script code, create a new deployment and update `BACKEND_URL`
+
+**Login fails in GitHub Actions:**
+- Check `FAMILEO_EMAIL` and `FAMILEO_PASSWORD` secrets
+- Famileo may have changed their login page structure
+- Check the error screenshot in the workflow logs
+
+**"AUTH_REQUIRED" error from backend:**
+- Ensure the backend was redeployed after adding the `famileo/update-session` endpoint
+- The endpoint must be handled BEFORE the auth check in `main.js`
+
+### Security Notes
+
+- Famileo credentials are stored only in GitHub Secrets (never in code)
+- Backend secret token is stored in Apps Script Properties (never in code)
+- Cookies are stored in Google Sheet (access controlled by Google account)
+- The `famileo/update-session` endpoint uses a secret token, not user authentication
 
 ## Questions?
 

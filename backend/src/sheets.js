@@ -110,3 +110,43 @@ function findRowById(sheet, id) {
   }
   return -1;
 }
+
+function getConfigSheet() {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName('config');
+
+  if (!sheet) {
+    sheet = ss.insertSheet('config');
+    sheet.appendRow(['key', 'value', 'updated_at']);
+  }
+
+  return sheet;
+}
+
+function getConfigValue(key) {
+  const sheet = getConfigSheet();
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === key) {
+      return data[i][1];
+    }
+  }
+  return null;
+}
+
+function setConfigValue(key, value) {
+  const sheet = getConfigSheet();
+  const data = sheet.getDataRange().getValues();
+  const now = new Date().toISOString();
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === key) {
+      sheet.getRange(i + 1, 2).setValue(value);
+      sheet.getRange(i + 1, 3).setValue(now);
+      return;
+    }
+  }
+
+  // Key not found, add new row
+  sheet.appendRow([key, value, now]);
+}

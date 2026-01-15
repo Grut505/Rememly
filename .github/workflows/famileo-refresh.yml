@@ -1,0 +1,43 @@
+name: Refresh Famileo Session
+
+on:
+  schedule:
+    # Run every night at 3:00 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    # Allow manual trigger from GitHub UI or API
+
+jobs:
+  refresh-session:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          cd scripts/famileo-refresh
+          npm ci
+
+      - name: Run Famileo login and get cookies
+        id: login
+        env:
+          FAMILEO_EMAIL: ${{ secrets.FAMILEO_EMAIL }}
+          FAMILEO_PASSWORD: ${{ secrets.FAMILEO_PASSWORD }}
+        run: |
+          cd scripts/famileo-refresh
+          node login.js
+
+      - name: Update backend with new session
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          BACKEND_SECRET_TOKEN: ${{ secrets.BACKEND_SECRET_TOKEN }}
+        run: |
+          cd scripts/famileo-refresh
+          node update-backend.js

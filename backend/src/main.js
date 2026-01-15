@@ -11,6 +11,12 @@ function doPost(e) {
     const params = e.parameter;
     const path = params.path || '';
 
+    // Special endpoint for GitHub Actions (no user auth, uses secret token)
+    if (path === 'famileo/update-session') {
+      const body = e.postData ? JSON.parse(e.postData.contents) : {};
+      return handleFamileoUpdateSession(body);
+    }
+
     // Get auth token from header or parameter
     const token = getAuthToken(e);
 

@@ -40,3 +40,8 @@ GoogleCloudSecret
 # Famileo scraper (contains credentials)
 scripts/famileo/.env
 scripts/famileo/data/
+
+# Famileo refresh (temporary files)
+scripts/famileo-refresh/cookies.json
+scripts/famileo-refresh/error-screenshot.png
+scripts/famileo-refresh/node_modules/

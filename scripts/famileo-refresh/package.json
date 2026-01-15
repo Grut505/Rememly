@@ -1,0 +1,13 @@
+{
+  "name": "famileo-refresh",
+  "version": "1.0.0",
+  "description": "Refresh Famileo session cookies via Puppeteer",
+  "private": true,
+  "scripts": {
+    "login": "node login.js",
+    "update": "node update-backend.js"
+  },
+  "dependencies": {
+    "puppeteer": "^22.0.0"
+  }
+}

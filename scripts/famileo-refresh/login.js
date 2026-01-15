@@ -55,18 +55,37 @@ async function loginToFamileo() {
     await emailSelector.type(email, { delay: 50 });
     await passwordSelector.type(password, { delay: 50 });
 
-    // Check "Remember me" if present
-    const rememberMe = await page.$('input[name="remember_me"], input[type="checkbox"]');
-    if (rememberMe) {
-      await rememberMe.click();
+    // Check "Remember me" if present - use evaluate to safely click
+    try {
+      const rememberMeClicked = await page.evaluate(() => {
+        const checkbox = document.querySelector('input[name="_remember_me"], input[name="remember_me"], label[for*="remember"] input');
+        if (checkbox && !checkbox.checked) {
+          checkbox.click();
+          return true;
+        }
+        return false;
+      });
+      if (rememberMeClicked) {
+        console.log('Checked "Remember me" checkbox');
+      }
+    } catch (e) {
+      console.log('No remember me checkbox found or could not click it');
     }
 
     // Submit the form
     console.log('Submitting login form...');
-    const submitButton = await page.$('button[type="submit"], input[type="submit"]');
-    if (submitButton) {
-      await submitButton.click();
-    } else {
+
+    // Try clicking submit button first
+    const submitted = await page.evaluate(() => {
+      const btn = document.querySelector('button[type="submit"], input[type="submit"], form button');
+      if (btn) {
+        btn.click();
+        return true;
+      }
+      return false;
+    });
+
+    if (!submitted) {
       await page.keyboard.press('Enter');
     }
 

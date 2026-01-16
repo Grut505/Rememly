@@ -9,6 +9,7 @@ import { MONTHS_FR } from '../../utils/constants'
 import { getCurrentYear } from '../../utils/date'
 import { pdfService } from '../../services/pdf.service'
 import { useUiStore } from '../../state/uiStore'
+import { AppHeader } from '../../ui/AppHeader'
 
 interface MonthStats {
   month: string
@@ -43,7 +44,7 @@ export function Statistics() {
       // Group by month
       const monthCounts: Record<number, number> = {}
       response.items.forEach((article: Article) => {
-        const month = new Date(article.date_modification).getMonth()
+        const month = new Date(article.date).getMonth()
         monthCounts[month] = (monthCounts[month] || 0) + 1
       })
 
@@ -107,16 +108,22 @@ export function Statistics() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center sticky top-0 z-10">
-        <button
-          onClick={() => navigate('/')}
-          className="text-gray-600 touch-manipulation"
-        >
-          ← Back
-        </button>
-        <h1 className="text-lg font-semibold ml-4">Statistics</h1>
-      </header>
+      <AppHeader />
+
+      {/* Subheader - sticky under main header */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-14 z-20">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/')}
+            className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation"
+          >
+            <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+              <path d="M15 19l-7-7 7-7"></path>
+            </svg>
+          </button>
+          <h2 className="text-lg font-semibold text-gray-900">Statistics</h2>
+        </div>
+      </div>
 
       {/* Content */}
       <div className="flex-1 p-4 pb-20">

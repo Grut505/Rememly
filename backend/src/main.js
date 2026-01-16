@@ -72,6 +72,9 @@ function doPost(e) {
       case 'famileo/image':
         return handleFamileoImage(params);
 
+      case 'famileo/trigger-refresh':
+        return handleFamileoTriggerRefresh();
+
       default:
         return createResponse({
           ok: false,
@@ -88,7 +91,11 @@ function doPost(e) {
 }
 
 function getAuthToken(e) {
-  // Try to get from Authorization header first
+  // Try to get auth parameter (new email-based auth: "Email user@example.com")
+  if (e.parameter && e.parameter.auth) {
+    return e.parameter.auth;
+  }
+  // Fallback to legacy token parameter
   if (e.parameter && e.parameter.token) {
     return e.parameter.token;
   }

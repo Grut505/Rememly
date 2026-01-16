@@ -3,26 +3,33 @@ import { ApiResponse } from './types'
 const API_BASE_URL = import.meta.env.VITE_APPS_SCRIPT_URL
 
 class ApiClient {
-  private getToken(): string | null {
-    return localStorage.getItem('google_id_token')
+  private getUserEmail(): string | null {
+    const userJson = localStorage.getItem('user')
+    if (!userJson) return null
+    try {
+      const user = JSON.parse(userJson)
+      return user.email || null
+    } catch {
+      return null
+    }
   }
 
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const token = this.getToken()
+    const email = this.getUserEmail()
 
     // Don't set Content-Type header to avoid CORS preflight
     const headers: HeadersInit = {
       ...(options.headers || {}),
     }
 
-    // Add token as URL parameter for Apps Script
-    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : ''
+    // Add email as URL parameter for Apps Script (email-based auth)
+    const authParam = email ? `&auth=${encodeURIComponent('Email ' + email)}` : ''
 
     try {
-      const response = await fetch(`${API_BASE_URL}?path=${endpoint}${tokenParam}`, {
+      const response = await fetch(`${API_BASE_URL}?path=${endpoint}${authParam}`, {
         ...options,
         headers,
       })
@@ -31,8 +38,7 @@ class ApiClient {
 
       if (!data.ok) {
         // If authentication error, clear storage and redirect to login
-        if (data.error?.code === 'INVALID_TOKEN' || data.error?.code === 'AUTH_REQUIRED') {
-          localStorage.removeItem('google_id_token')
+        if (data.error?.code === 'INVALID_TOKEN' || data.error?.code === 'AUTH_REQUIRED' || data.error?.code === 'FORBIDDEN') {
           localStorage.removeItem('user')
 
           // Store error message for display on login page

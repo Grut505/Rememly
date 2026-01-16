@@ -1,14 +1,16 @@
+export type ArticleStatus = 'ACTIVE' | 'DELETED'
+
 export interface Article {
   id: string
-  date_creation: string
-  date_modification: string
+  date: string
   auteur: string
+  author_pseudo: string
   texte: string
   image_url: string
   image_file_id: string
-  year: number
   assembly_state?: AssemblyState
   full_page?: boolean
+  status?: ArticleStatus
 }
 
 export interface AssemblyState {

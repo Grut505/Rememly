@@ -12,6 +12,10 @@ function handleArticlesList(params) {
   const to = params.to ? new Date(params.to) : null;
   const limit = params.limit ? parseInt(params.limit) : 40;
   const cursor = params.cursor ? parseInt(params.cursor) : 0; // Offset-based cursor
+  const statusFilter = params.status_filter || 'active'; // 'active', 'all', or 'deleted'
+
+  // Build a cache of email -> pseudo for all users
+  const userPseudoCache = buildUserPseudoCache();
 
   // Get articles (skip header row)
   const articles = [];
@@ -23,43 +27,49 @@ function handleArticlesList(params) {
       article[header] = row[index];
     });
 
+    // Add author_pseudo from cache (auteur contains email)
+    article.author_pseudo = userPseudoCache[article.auteur] || 'Unknown';
+
     // Filter by status
-    if (article.status === 'DELETED') {
+    if (statusFilter === 'active' && article.status === 'DELETED') {
+      continue;
+    }
+    if (statusFilter === 'deleted' && article.status !== 'DELETED') {
       continue;
     }
 
-    // Parse date_modification for filtering
-    const dateModification = new Date(article.date_modification);
+    // Parse date for filtering
+    const articleDate = new Date(article.date);
 
     // Filter by year if specified
-    if (year && article.year !== year) {
+    if (year && articleDate.getFullYear() !== year) {
       continue;
     }
 
     // Filter by month if specified (format: "01", "02", etc.)
     if (month) {
-      const articleMonth = (dateModification.getMonth() + 1).toString().padStart(2, '0');
+      const articleMonth = (articleDate.getMonth() + 1).toString().padStart(2, '0');
       if (articleMonth !== month) {
         continue;
       }
     }
 
     // Filter by date range (from)
-    if (from && dateModification < from) {
+    if (from && articleDate < from) {
       continue;
     }
 
     // Filter by date range (to)
-    if (to && dateModification > to) {
+    if (to && articleDate > to) {
       continue;
     }
 
     articles.push(article);
   }
 
-  // Sort by date_modification descending
+  // Sort by date descending
   articles.sort((a, b) => {
-    return new Date(b.date_modification).getTime() - new Date(a.date_modification).getTime();
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 
   // Apply cursor (offset) and limit
@@ -89,6 +99,10 @@ function handleArticleGet(id) {
         article[header] = row[index];
       });
 
+      // Add author_pseudo (auteur contains email)
+      const user = findUserByEmail(article.auteur);
+      article.author_pseudo = user ? user.pseudo : 'Unknown';
+
       return createResponse({
         ok: true,
         data: article,
@@ -107,41 +121,38 @@ function handleArticleCreate(body) {
 
   const id = generateId();
   const dateNow = now();
-  const dateModification = body.date_modification || dateNow;
-  const year = getYear(dateModification);
+  const articleDate = body.date || dateNow;
+  const year = getYear(articleDate);
 
   // Upload image to Drive
   const fileName = `${formatTimestamp()}_${id}_assembled.jpg`;
   const imageData = uploadImage(body.image.base64, fileName, year, 'assembled');
 
-  // Create article row
+  // Create article row - 9 columns: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status
   const row = [
-    id,
-    dateNow,
-    dateModification,
-    body.auteur,
-    body.texte || '',
-    imageData.url,
-    imageData.fileId,
-    year,
-    body.assembly_state ? JSON.stringify(body.assembly_state) : '',
-    body.full_page || false,
-    'ACTIVE',
+    id,                                                          // 0: id
+    articleDate,                                                 // 1: date
+    body.auteur,                                                 // 2: auteur
+    body.texte || '',                                            // 3: texte
+    imageData.url,                                               // 4: image_url
+    imageData.fileId,                                            // 5: image_file_id
+    body.assembly_state ? JSON.stringify(body.assembly_state) : '', // 6: assembly_state
+    body.full_page || false,                                     // 7: full_page
+    'ACTIVE',                                                    // 8: status
   ];
 
   sheet.appendRow(row);
 
   const article = {
     id,
-    date_creation: dateNow,
-    date_modification: dateModification,
+    date: articleDate,
     auteur: body.auteur,
     texte: body.texte || '',
     image_url: imageData.url,
     image_file_id: imageData.fileId,
-    year,
     assembly_state: body.assembly_state ? JSON.stringify(body.assembly_state) : undefined,
     full_page: body.full_page || false,
+    status: 'ACTIVE',
   };
 
   return createResponse({
@@ -161,53 +172,55 @@ function handleArticleUpdate(body) {
     });
   }
 
-  const row = sheet.getRange(rowIndex, 1, 1, 11).getValues()[0];
+  // 9 columns: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status
+  const row = sheet.getRange(rowIndex, 1, 1, 9).getValues()[0];
   const dateNow = now();
 
-  // Update date_modification (use provided date or current time)
-  const dateModification = body.date_modification || dateNow;
-  row[2] = dateModification;
+  const articleDate = body.date || dateNow;
+  row[1] = articleDate; // date
 
-  // Update year based on date_modification
-  const year = getYear(dateModification);
-  row[7] = year;
+  const year = getYear(articleDate);
 
   // Update texte if provided
   if (body.texte !== undefined) {
-    row[4] = body.texte;
+    row[3] = body.texte;
   }
 
   // Update image if provided
   if (body.image) {
     const fileName = `${formatTimestamp()}_${body.id}_assembled.jpg`;
     const imageData = uploadImage(body.image.base64, fileName, year, 'assembled');
-    row[5] = imageData.url;
-    row[6] = imageData.fileId;
+    row[4] = imageData.url;      // image_url
+    row[5] = imageData.fileId;   // image_file_id
   }
 
   // Update assembly_state if provided
   if (body.assembly_state !== undefined) {
-    row[8] = body.assembly_state ? JSON.stringify(body.assembly_state) : '';
+    row[6] = body.assembly_state ? JSON.stringify(body.assembly_state) : '';
   }
 
   // Update full_page if provided
   if (body.full_page !== undefined) {
-    row[9] = body.full_page;
+    row[7] = body.full_page;
   }
 
-  sheet.getRange(rowIndex, 1, 1, 11).setValues([row]);
+  // Update status if provided (for restore)
+  if (body.status !== undefined) {
+    row[8] = body.status;
+  }
+
+  sheet.getRange(rowIndex, 1, 1, 9).setValues([row]);
 
   const article = {
     id: row[0],
-    date_creation: row[1],
-    date_modification: row[2],
-    auteur: row[3],
-    texte: row[4],
-    image_url: row[5],
-    image_file_id: row[6],
-    year: row[7],
-    assembly_state: row[8],
-    full_page: row[9],
+    date: row[1],
+    auteur: row[2],
+    texte: row[3],
+    image_url: row[4],
+    image_file_id: row[5],
+    assembly_state: row[6],
+    full_page: row[7],
+    status: row[8],
   };
 
   return createResponse({
@@ -228,9 +241,10 @@ function handleArticleDelete(id) {
   }
 
   // Soft delete: mark as DELETED
-  const row = sheet.getRange(rowIndex, 1, 1, 11).getValues()[0];
-  row[10] = 'DELETED'; // status column
-  sheet.getRange(rowIndex, 1, 1, 11).setValues([row]);
+  // 9 columns: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status
+  const row = sheet.getRange(rowIndex, 1, 1, 9).getValues()[0];
+  row[8] = 'DELETED'; // status column (index 8)
+  sheet.getRange(rowIndex, 1, 1, 9).setValues([row]);
 
   return createResponse({
     ok: true,

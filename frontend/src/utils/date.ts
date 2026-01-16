@@ -1,28 +1,28 @@
-import { CONSTANTS, MONTHS_FR } from './constants'
+import { CONSTANTS, MONTHS_EN } from './constants'
 
 export function formatDate(isoString: string): string {
   const date = new Date(isoString)
   const day = date.getDate()
-  const month = MONTHS_FR[date.getMonth()].toLowerCase()
+  const month = MONTHS_EN[date.getMonth()]
   const year = date.getFullYear()
-  return `${day} ${month} ${year}`
+  return `${month} ${day}, ${year}`
 }
 
 export function formatDateShort(isoString: string): string {
   const date = new Date(isoString)
   const day = date.getDate()
-  const month = MONTHS_FR[date.getMonth()].substring(0, 3).toLowerCase()
-  return `${day} ${month}`
+  const month = MONTHS_EN[date.getMonth()].substring(0, 3)
+  return `${month} ${day}`
 }
 
 export function formatDateTimeFull(isoString: string): string {
   const date = new Date(isoString)
   const day = date.getDate()
-  const month = MONTHS_FR[date.getMonth()].toLowerCase()
+  const month = MONTHS_EN[date.getMonth()]
   const year = date.getFullYear()
   const hours = String(date.getHours()).padStart(2, '0')
   const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${day} ${month} ${year} · ${hours}:${minutes}`
+  return `${month} ${day}, ${year} · ${hours}:${minutes}`
 }
 
 export function getCurrentYear(): number {
@@ -51,7 +51,7 @@ export function now(): string {
 
 export function getMonthYear(isoString: string): string {
   const date = new Date(isoString)
-  const month = MONTHS_FR[date.getMonth()]
+  const month = MONTHS_EN[date.getMonth()]
   const year = date.getFullYear()
   return `${month} ${year}`
 }

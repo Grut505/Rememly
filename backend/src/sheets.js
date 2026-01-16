@@ -101,6 +101,24 @@ function findUserByEmail(email) {
   return null;
 }
 
+/**
+ * Build a cache of email -> pseudo for all users
+ * Used to efficiently enrich articles with author pseudos
+ */
+function buildUserPseudoCache() {
+  const sheet = getUsersSheet();
+  const data = sheet.getDataRange().getValues();
+  const cache = {};
+  for (let i = 1; i < data.length; i++) {
+    const email = data[i][0];
+    const pseudo = data[i][1];
+    if (email) {
+      cache[email] = pseudo || email.split('@')[0];
+    }
+  }
+  return cache;
+}
+
 function findRowById(sheet, id) {
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {

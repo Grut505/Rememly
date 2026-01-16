@@ -2,10 +2,10 @@
 // Credentials are stored in Script Properties (never in code)
 
 // Allowed authors for filtering posts
-// Key = Famileo author name, Value = Rememly author name
+// Key = Famileo author name, Value = user email (persistent identifier)
 const FAMILEO_AUTHOR_MAPPING = {
-  'Yann Graufogel': 'Yann',
-  'Marie Cabedoce': 'Marie'
+  'Yann Graufogel': 'grutspam@gmail.com',
+  'Marie Cabedoce': 'mariealex@gmail.com'
 };
 
 /**
@@ -196,19 +196,39 @@ function handleFamileoPosts(params) {
 
     // Extract only the fields we need and filter by allowed authors
     const allowedAuthors = Object.keys(FAMILEO_AUTHOR_MAPPING);
+
+    // Cache for user profiles to avoid multiple lookups
+    const userProfileCache = {};
+
     const posts = (response.familyWall || [])
       .filter(post => allowedAuthors.includes(post.author_name))
-      .map(post => ({
-        id: post.wall_post_id,
-        text: post.text,
-        date: post.date,
-        date_tz: post.date_tz,
-        author_id: post.author_id,
-        author_name: post.author_name,
-        rememly_author: FAMILEO_AUTHOR_MAPPING[post.author_name] || post.author_name,
-        image_url: post.image_2x || post.image,
-        image_orientation: post.image_orientation
-      }));
+      .map(post => {
+        const authorEmail = FAMILEO_AUTHOR_MAPPING[post.author_name];
+
+        // Get pseudo from Users sheet (cached)
+        let authorPseudo;
+        if (userProfileCache[authorEmail]) {
+          authorPseudo = userProfileCache[authorEmail];
+        } else {
+          const user = findUserByEmail(authorEmail);
+          // Use user's pseudo if exists, otherwise use first name from Famileo
+          authorPseudo = user ? user.pseudo : post.author_name.split(' ')[0];
+          userProfileCache[authorEmail] = authorPseudo;
+        }
+
+        return {
+          id: post.wall_post_id,
+          text: post.text,
+          date: post.date,
+          date_tz: post.date_tz,
+          author_id: post.author_id,
+          author_name: post.author_name,
+          author_email: authorEmail,
+          author_pseudo: authorPseudo,
+          image_url: post.image_2x || post.image,
+          image_orientation: post.image_orientation
+        };
+      });
 
     // Calculate next_timestamp for pagination (use last post from raw response, not filtered)
     let nextTimestamp = null;
@@ -325,6 +345,62 @@ function handleFamileoStatus() {
     return createResponse({
       ok: false,
       error: { code: 'FAMILEO_ERROR', message: String(error) }
+    });
+  }
+}
+
+/**
+ * Handler for famileo/trigger-refresh endpoint
+ * Triggers the GitHub Actions workflow to refresh Famileo session
+ */
+function handleFamileoTriggerRefresh() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const githubToken = props.getProperty('GITHUB_TOKEN');
+
+    if (!githubToken) {
+      return createResponse({
+        ok: false,
+        error: { code: 'NOT_CONFIGURED', message: 'GitHub token not configured in Script Properties' }
+      });
+    }
+
+    // Trigger the workflow via GitHub API
+    const response = UrlFetchApp.fetch(
+      'https://api.github.com/repos/Grut505/Rememly/actions/workflows/famileo-refresh.yml/dispatches',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + githubToken,
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        },
+        payload: JSON.stringify({ ref: 'main' }),
+        muteHttpExceptions: true
+      }
+    );
+
+    const responseCode = response.getResponseCode();
+    Logger.log('GitHub API response code: ' + responseCode);
+
+    if (responseCode === 204) {
+      return createResponse({
+        ok: true,
+        data: { message: 'Workflow triggered successfully. Session will be refreshed in ~2 minutes.' }
+      });
+    } else {
+      const responseText = response.getContentText();
+      Logger.log('GitHub API error: ' + responseText);
+      return createResponse({
+        ok: false,
+        error: { code: 'GITHUB_ERROR', message: 'Failed to trigger workflow: HTTP ' + responseCode }
+      });
+    }
+  } catch (error) {
+    Logger.log('Trigger refresh error: ' + error);
+    return createResponse({
+      ok: false,
+      error: { code: 'TRIGGER_ERROR', message: String(error) }
     });
   }
 }

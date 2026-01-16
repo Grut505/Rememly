@@ -9,6 +9,7 @@ import { Statistics } from './screens/Stats/Statistics'
 import { PhotoAssemblyScreen } from './screens/PhotoAssembly/PhotoAssemblyScreen'
 import { Profile } from './screens/Profile/Profile'
 import { FamileoBrowser } from './screens/Famileo/FamileoBrowser'
+import { PdfExport } from './screens/PdfExport/PdfExport'
 import { UpdatePrompt } from './components/UpdatePrompt'
 
 function App() {
@@ -72,6 +73,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <FamileoBrowser />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pdf-export"
+            element={
+              <ProtectedRoute>
+                <PdfExport />
               </ProtectedRoute>
             }
           />

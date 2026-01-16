@@ -1,6 +1,6 @@
 // Authentication and authorization
 
-function checkAuth(token) {
+function checkAuth(authHeader) {
   const scriptProperties = PropertiesService.getScriptProperties();
   const whitelistJson = scriptProperties.getProperty('AUTHORIZED_EMAILS');
 
@@ -16,8 +16,8 @@ function checkAuth(token) {
 
   const whitelist = JSON.parse(whitelistJson);
 
-  // If no token provided, check session user
-  if (!token) {
+  // If no auth header provided, check session user
+  if (!authHeader) {
     const sessionEmail = Session.getActiveUser().getEmail();
     if (sessionEmail && whitelist.includes(sessionEmail)) {
       return {
@@ -37,7 +37,31 @@ function checkAuth(token) {
     };
   }
 
-  // Verify Google OAuth token
+  // Check if it's email-based auth (new format: "Email <email>")
+  if (authHeader.startsWith('Email ')) {
+    const email = authHeader.substring(6).trim();
+
+    if (!email || !whitelist.includes(email)) {
+      return {
+        ok: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'User not authorized',
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      user: {
+        email: email,
+        name: email.split('@')[0],
+      },
+    };
+  }
+
+  // Legacy: Verify Google OAuth token (Bearer token)
+  const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
   const tokenInfo = verifyGoogleToken(token);
 
   if (!tokenInfo || !tokenInfo.email) {

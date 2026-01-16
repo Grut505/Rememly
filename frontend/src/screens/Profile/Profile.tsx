@@ -6,6 +6,7 @@ import { Input } from '../../ui/Input'
 import { LoadingScreen } from '../../ui/Spinner'
 import { useUiStore } from '../../state/uiStore'
 import { useProfile } from '../../contexts/ProfileContext'
+import { AppHeader } from '../../ui/AppHeader'
 
 // Convert Drive URLs to thumbnail format (same as articles)
 function convertDriveUrl(url: string): string {
@@ -92,16 +93,22 @@ export function Profile() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-center relative sticky top-0 z-10">
-        <button
-          onClick={() => navigate('/')}
-          className="text-gray-600 touch-manipulation absolute left-4"
-        >
-          ← Back
-        </button>
-        <h1 className="text-lg font-semibold">Profile</h1>
-      </header>
+      <AppHeader />
+
+      {/* Subheader - sticky under main header */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-14 z-20">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/')}
+            className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation"
+          >
+            <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+              <path d="M15 19l-7-7 7-7"></path>
+            </svg>
+          </button>
+          <h2 className="text-lg font-semibold text-gray-900">Profile</h2>
+        </div>
+      </div>
 
       {/* Content */}
       <div className="flex-1 p-4 space-y-6 pb-32 max-w-md mx-auto w-full">

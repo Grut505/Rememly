@@ -114,19 +114,19 @@ export function GoogleAuth() {
         <div className="mb-6 w-full max-w-md">
           <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
             <h2 className="text-lg font-semibold text-blue-900 mb-3">
-              Connexion depuis Safari requise
+              Safari login required
             </h2>
             <p className="text-blue-800 text-sm mb-4">
-              La connexion Google ne fonctionne pas en mode application. Vous devez vous connecter depuis Safari :
+              Google sign-in doesn't work in app mode. Please login from Safari:
             </p>
             <ol className="text-blue-800 text-sm space-y-2 mb-4 list-decimal list-inside">
-              <li>Ouvrez Safari sur votre iPhone</li>
-              <li>Allez sur <span className="font-mono bg-blue-100 px-1 rounded">grut505.github.io</span></li>
-              <li>Connectez-vous avec votre compte Google</li>
-              <li>Ajoutez à nouveau l'app sur l'écran d'accueil</li>
+              <li>Open Safari on your iPhone</li>
+              <li>Go to <span className="font-mono bg-blue-100 px-1 rounded">grut505.github.io</span></li>
+              <li>Sign in with your Google account</li>
+              <li>Add the app to your home screen again</li>
             </ol>
             <p className="text-blue-700 text-xs italic">
-              Important : vous devez rajouter l'app sur l'écran d'accueil après vous être connecté dans Safari.
+              Important: you must re-add the app to your home screen after signing in from Safari.
             </p>
           </div>
         </div>
@@ -138,7 +138,7 @@ export function GoogleAuth() {
           }}
           className="w-full max-w-sm"
         >
-          Ouvrir dans Safari
+          Open in Safari
         </Button>
 
         <button

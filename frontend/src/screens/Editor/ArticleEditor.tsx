@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { PhotoPicker } from './PhotoPicker'
 import { TextInput } from './TextInput'
 import { DateTimeInput } from './DateTimeInput'
+import { ArticleStatus } from '../../api/types'
 
 interface FamileoImportData {
   text: string
@@ -36,8 +37,10 @@ export function ArticleEditor() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [articleStatus, setArticleStatus] = useState<ArticleStatus>('ACTIVE')
 
   const isEditMode = !!id
+  const isDeleted = articleStatus === 'DELETED'
 
   // Check for Famileo import data
   useEffect(() => {
@@ -86,8 +89,9 @@ export function ArticleEditor() {
     try {
       const article = await articlesApi.get(id)
       setTexte(article.texte)
-      setDateModification(article.date_modification)
+      setDateModification(article.date)
       setPreviewUrl(article.image_url)
+      setArticleStatus(article.status || 'ACTIVE')
     } catch (error) {
       showToast('Failed to load article', 'error')
       navigate('/')
@@ -114,17 +118,22 @@ export function ArticleEditor() {
 
     try {
       if (isEditMode && id) {
+        // If article is deleted, restore it by setting status to ACTIVE
+        const newStatus = isDeleted ? 'ACTIVE' : undefined
         const updated = await articlesService.updateArticle(
           id,
           texte,
           photoFile || undefined,
-          dateModification
+          dateModification,
+          undefined, // assemblyState
+          undefined, // fullPage
+          newStatus
         )
         updateArticleInStore(updated)
-        showToast('Article updated', 'success')
+        showToast(isDeleted ? 'Article restored' : 'Article updated', 'success')
       } else if (photoFile) {
         await articlesService.createArticle(
-          user.name,
+          user.email,
           texte,
           photoFile,
           dateModification
@@ -216,7 +225,7 @@ export function ArticleEditor() {
           disabled={isSaving || (!photoFile && !isEditMode)}
           fullWidth
         >
-          {isSaving ? 'Saving...' : isEditMode ? 'Update' : 'Create'}
+          {isSaving ? 'Saving...' : isDeleted ? 'Save and restore' : isEditMode ? 'Update' : 'Create'}
         </Button>
         <Button
           variant="secondary"
@@ -226,7 +235,7 @@ export function ArticleEditor() {
         >
           Use Photo Assembly
         </Button>
-        {isEditMode && (
+        {isEditMode && !isDeleted && (
           <Button
             variant="danger"
             onClick={() => setShowDeleteConfirm(true)}

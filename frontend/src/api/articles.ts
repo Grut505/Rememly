@@ -9,7 +9,7 @@ export interface CreateArticlePayload {
     mimeType: string
     base64: string
   }
-  date_modification?: string
+  date?: string
   assembly_state?: object | null
   full_page?: boolean
 }
@@ -22,9 +22,10 @@ export interface UpdateArticlePayload {
     mimeType: string
     base64: string
   }
-  date_modification?: string
+  date?: string
   assembly_state?: object | null
   full_page?: boolean
+  status?: 'ACTIVE' | 'DELETED'
 }
 
 export interface ListArticlesFilters {
@@ -34,6 +35,7 @@ export interface ListArticlesFilters {
   to?: string
   limit?: string
   cursor?: string
+  status_filter?: 'active' | 'all' | 'deleted'
 }
 
 export const articlesApi = {

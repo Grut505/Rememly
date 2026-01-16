@@ -17,14 +17,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
 
   useEffect(() => {
-    const token = localStorage.getItem('google_id_token')
     const savedUser = localStorage.getItem('user')
 
-    if (token && savedUser) {
+    if (savedUser) {
       try {
         setUser(JSON.parse(savedUser))
       } catch {
-        localStorage.removeItem('google_id_token')
         localStorage.removeItem('user')
       }
     }
@@ -32,15 +30,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false)
   }, [])
 
-  const login = (token: string, userData: { email: string; name: string }) => {
-    localStorage.setItem('google_id_token', token)
+  const login = (_token: string, userData: { email: string; name: string }) => {
+    // Token is no longer stored - we use email-based auth
     localStorage.setItem('user', JSON.stringify(userData))
     setUser(userData)
     navigate('/')
   }
 
   const logout = () => {
-    localStorage.removeItem('google_id_token')
     localStorage.removeItem('user')
     setUser(null)
     navigate('/auth')

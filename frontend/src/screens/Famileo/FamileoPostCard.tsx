@@ -40,8 +40,8 @@ export function FamileoPostCard({ post, selected, onSelectionChange, onImageLoad
     loadImage()
   }, [post.id, post.image_url, cachedImage])
 
-  // Get initials for avatar
-  const initials = post.author_name
+  // Get initials for avatar from pseudo
+  const initials = post.author_pseudo
     .split(' ')
     .map((n) => n[0])
     .join('')
@@ -69,7 +69,7 @@ export function FamileoPostCard({ post, selected, onSelectionChange, onImageLoad
               <span className="text-sm font-semibold text-orange-700">{initials}</span>
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="font-semibold text-gray-900">{post.author_name}</span>
+              <span className="font-semibold text-gray-900">{post.author_pseudo}</span>
               <span className="text-sm text-gray-500">
                 {formatDateTimeFull(post.date)}
               </span>

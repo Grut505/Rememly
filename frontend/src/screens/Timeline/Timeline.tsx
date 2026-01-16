@@ -36,7 +36,6 @@ export function Timeline() {
   const observerRef = useRef<IntersectionObserver>()
   const loadingRef = useRef(false)
   const cursorRef = useRef<string | null>(null)
-  const initialLoadDone = useRef(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   // Keep refs in sync with state
@@ -55,11 +54,12 @@ export function Timeline() {
     console.log('Loading articles with filters:', filters)
     try {
       const response = await articlesApi.list({
-        year: filters.year || getCurrentYear().toString(),
+        year: filters.year || undefined,
         month: filters.month,
         from: filters.from,
         to: filters.to,
         limit: String(CONSTANTS.ARTICLES_PER_PAGE),
+        status_filter: filters.statusFilter || 'active',
       })
       console.log('Received articles:', response.items.length, 'cursor:', response.next_cursor)
       setArticles(response.items, response.next_cursor)
@@ -80,12 +80,13 @@ export function Timeline() {
     console.log('loadMore called with cursor:', currentCursor)
     try {
       const response = await articlesApi.list({
-        year: filters.year || getCurrentYear().toString(),
+        year: filters.year || undefined,
         month: filters.month,
         from: filters.from,
         to: filters.to,
         cursor: currentCursor,
         limit: String(CONSTANTS.ARTICLES_PER_PAGE),
+        status_filter: filters.statusFilter || 'active',
       })
       console.log('Loaded more articles:', response.items.length, 'next cursor:', response.next_cursor)
       // Update cursorRef immediately to prevent duplicate requests
@@ -97,7 +98,7 @@ export function Timeline() {
       loadingRef.current = false
       setIsLoadingMore(false)
     }
-  }, [filters.year, filters.month, filters.from, filters.to, addArticles, setError])
+  }, [filters.year, filters.month, filters.from, filters.to, filters.statusFilter, addArticles, setError])
 
   const sentinelRef = useCallback(
     (node: HTMLDivElement) => {
@@ -128,33 +129,44 @@ export function Timeline() {
       month: filterValues.month,
       from: filterValues.dateFrom,
       to: filterValues.dateTo,
+      statusFilter: filterValues.statusFilter,
     })
+  }
+
+  const handleArticleDeleted = (id: string) => {
+    // If showing only active articles, remove from the list
+    if (filters.statusFilter === 'active' || !filters.statusFilter) {
+      useArticlesStore.getState().deleteArticle(id)
+    } else {
+      // Otherwise (all or deleted), update the article status locally
+      const article = articles.find(a => a.id === id)
+      if (article) {
+        useArticlesStore.getState().updateArticle({ ...article, status: 'DELETED' })
+      }
+    }
   }
 
   // Check if filters are active (different from default)
   const hasActiveFilters =
+    filters.year || // Any year filter is active (including "all years")
     filters.month ||
     filters.from ||
     filters.to ||
-    (filters.year && filters.year !== getCurrentYear().toString())
+    (filters.statusFilter && filters.statusFilter !== 'active')
 
   // Convert store filters to FilterPanel format
   const currentFilterValues: FilterValues = {
-    year: filters.year || getCurrentYear().toString(),
+    year: filters.year || '',
     month: filters.month || '',
     dateFrom: filters.from || '',
     dateTo: filters.to || '',
+    statusFilter: filters.statusFilter || 'active',
   }
 
   useEffect(() => {
-    // Prevent double loading in StrictMode
-    if (initialLoadDone.current && !filters.year && !filters.month && !filters.from && !filters.to) {
-      return
-    }
     console.log('Filters changed, reloading articles:', filters)
     loadArticles()
-    initialLoadDone.current = true
-  }, [filters.year, filters.month, filters.from, filters.to])
+  }, [filters.year, filters.month, filters.from, filters.to, filters.statusFilter])
 
   if (isLoading && articles.length === 0) {
     return <LoadingScreen message="Loading articles..." />
@@ -174,7 +186,7 @@ export function Timeline() {
 
       {/* Year Header with Filter - Fixed */}
       <div className="bg-white border-b border-gray-300 px-4 py-3 flex items-center justify-between fixed top-[56px] left-0 right-0 z-[25] max-w-content mx-auto">
-        <h2 className="text-lg font-semibold text-gray-900">{filters.year || getCurrentYear()}</h2>
+        <h2 className="text-lg font-semibold text-gray-900">{filters.year || 'All years'}</h2>
         <button
           onClick={() => setShowFiltersModal(true)}
           className={`touch-manipulation flex items-center gap-2 ${
@@ -205,18 +217,18 @@ export function Timeline() {
         ) : (
           <>
             {articles.map((article, index) => {
-              const currentMonthKey = getMonthYearKey(article.date_modification)
+              const currentMonthKey = getMonthYearKey(article.date)
               const previousMonthKey =
-                index > 0 ? getMonthYearKey(articles[index - 1].date_modification) : null
+                index > 0 ? getMonthYearKey(articles[index - 1].date) : null
               const showMonthSeparator = currentMonthKey !== previousMonthKey
 
               return (
                 <Fragment key={article.id}>
                   {showMonthSeparator && (
-                    <MonthSeparator monthYear={getMonthYear(article.date_modification)} />
+                    <MonthSeparator monthYear={getMonthYear(article.date)} />
                   )}
                   <div className={`relative z-0 ${showMonthSeparator ? 'pt-8' : ''}`}>
-                    <ArticleCard article={article} />
+                    <ArticleCard article={article} onDeleted={handleArticleDeleted} />
                   </div>
                 </Fragment>
               )

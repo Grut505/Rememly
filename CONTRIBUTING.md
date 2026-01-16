@@ -153,7 +153,8 @@ cd frontend
 npm run dev
 ```
 
-- URL: `http://localhost:5173/Rememly/`
+- URL: `http://localhost:3000/`
+- PORT: Always 3000
 - Uses `.env` for environment variables
 - Hot reload enabled
 - Service worker may be disabled or behave differently
@@ -173,7 +174,7 @@ This single command builds and deploys to GitHub Pages. Both modes use the same 
 
 **Mode 3 - Standalone PWA:** Même URL, mais installée sur téléphone ("Ajouter à l'écran d'accueil")
 
-- URL: `https://grut505.github.io/Rememly/`
+- URL: `https://grut505.github.io/`
 - Uses `.env.production` for environment variables
 - Full PWA with service worker caching
 - OAuth redirect configured for GitHub Pages domain

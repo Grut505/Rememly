@@ -7,7 +7,8 @@ export interface FamileoPost {
   date_tz: string
   author_id: number
   author_name: string
-  rememly_author: string
+  author_email: string
+  author_pseudo: string
   image_url: string
   image_orientation: 'landscape' | 'portrait'
 }
@@ -29,6 +30,10 @@ export interface FamileoStatusResponse {
   message: string
 }
 
+export interface FamileoTriggerRefreshResponse {
+  message: string
+}
+
 export const famileoApi = {
   status: () =>
     apiClient.get<FamileoStatusResponse>('famileo/status'),
@@ -38,4 +43,7 @@ export const famileoApi = {
 
   image: (url: string) =>
     apiClient.get<FamileoImageResponse>('famileo/image', { url: encodeURIComponent(url) }),
+
+  triggerRefresh: () =>
+    apiClient.get<FamileoTriggerRefreshResponse>('famileo/trigger-refresh'),
 }

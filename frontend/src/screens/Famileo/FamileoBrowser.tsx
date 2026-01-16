@@ -33,6 +33,10 @@ export function FamileoBrowser() {
   const [bulkCreating, setBulkCreating] = useState(false)
   const [bulkProgress, setBulkProgress] = useState<BulkProgress | null>(null)
 
+  // Refresh session state
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null)
+
   const handleGetPosts = async () => {
     if (!startDate || !endDate) {
       setError('Please select both start and end dates')
@@ -184,9 +188,9 @@ export function FamileoBrowser() {
           ? parsedDate.toISOString()
           : new Date().toISOString()
 
-        // Create the article using rememly_author from backend mapping
+        // Create the article using author_email as persistent identifier
         await articlesService.createArticle(
-          post.rememly_author,
+          post.author_email,
           post.text,
           file,
           dateModification
@@ -198,13 +202,29 @@ export function FamileoBrowser() {
         }
       }
 
-      // Success - go back to timeline
-      navigate('/')
+      // Success - clear selection and show success message
+      setSelectedIds(new Set())
+      setRefreshMessage(`Successfully created ${selectedPosts.length} article${selectedPosts.length > 1 ? 's' : ''}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create articles')
     } finally {
       setBulkCreating(false)
       setBulkProgress(null)
+    }
+  }
+
+  const handleRefreshSession = async () => {
+    setRefreshing(true)
+    setRefreshMessage(null)
+    setError(null)
+
+    try {
+      const response = await famileoApi.triggerRefresh()
+      setRefreshMessage(response.message)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to trigger refresh')
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -214,27 +234,40 @@ export function FamileoBrowser() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <AppHeader />
 
-      {/* Back button and title */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center gap-3">
+      {/* Back button and title - sticky under main header */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-14 z-20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleBack}
+              className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation"
+              disabled={bulkCreating}
+            >
+              <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M15 19l-7-7 7-7"></path>
+              </svg>
+            </button>
+            <h2 className="text-lg font-semibold text-gray-900">Famileo Scraper</h2>
+          </div>
           <button
-            onClick={handleBack}
-            className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation"
-            disabled={bulkCreating}
+            onClick={handleRefreshSession}
+            disabled={refreshing || bulkCreating}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation disabled:opacity-50"
+            title="Refresh Famileo session"
           >
-            <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-              <path d="M15 19l-7-7 7-7"></path>
+            <svg className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
             </svg>
+            <span>{refreshing ? 'Refreshing...' : 'Refresh Session'}</span>
           </button>
-          <h2 className="text-lg font-semibold text-gray-900">Famileo Browser</h2>
         </div>
       </div>
 
       {/* Date filters */}
       <div className="bg-white border-b border-gray-200 px-4 py-4">
         <div className="flex flex-col gap-4">
-          <div className="flex gap-4">
-            <div className="flex-1">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <div className="flex-1 min-w-0">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Start Date
               </label>
@@ -243,10 +276,10 @@ export function FamileoBrowser() {
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 disabled={loading || bulkCreating}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 text-gray-900 bg-white appearance-none"
               />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 End Date
               </label>
@@ -255,7 +288,7 @@ export function FamileoBrowser() {
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 disabled={loading || bulkCreating}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 text-gray-900 bg-white appearance-none"
               />
             </div>
           </div>
@@ -290,6 +323,13 @@ export function FamileoBrowser() {
               {bulkProgress.currentPostText}
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Refresh success message */}
+      {refreshMessage && (
+        <div className="mx-4 mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+          {refreshMessage}
         </div>
       )}
 

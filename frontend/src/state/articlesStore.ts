@@ -1,11 +1,21 @@
 import { create } from 'zustand'
 import { Article } from '../api/types'
+import { StatusFilter } from '../screens/Filters/FiltersPanel'
 
 export interface ArticleFilters {
   year?: string
   month?: string
   from?: string
   to?: string
+  statusFilter?: StatusFilter
+}
+
+const defaultFilters: ArticleFilters = {
+  year: '',  // Empty = all years
+  month: '',
+  from: '',
+  to: '',
+  statusFilter: 'active',
 }
 
 interface ArticlesState {
@@ -31,7 +41,7 @@ export const useArticlesStore = create<ArticlesState>((set) => ({
   error: null,
   cursor: null,
   hasMore: true,
-  filters: {},
+  filters: defaultFilters,
 
   setArticles: (articles, cursor = null) => {
     // Remove duplicates based on id
@@ -81,6 +91,6 @@ export const useArticlesStore = create<ArticlesState>((set) => ({
       error: null,
       cursor: null,
       hasMore: true,
-      filters: {},
+      filters: defaultFilters,
     }),
 }))

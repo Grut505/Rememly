@@ -168,14 +168,10 @@ export function FamileoBrowser() {
         let imageBase64 = ''
         let imageMimeType = 'image/jpeg'
 
-        if (imageCache[post.id]) {
-          imageBase64 = imageCache[post.id].base64
-          imageMimeType = imageCache[post.id].mimeType
-        } else {
-          const imageResponse = await famileoApi.image(post.image_url)
-          imageBase64 = imageResponse.base64
-          imageMimeType = imageResponse.mimeType
-        }
+        // Always fetch the full resolution image for article creation
+        const imageResponse = await famileoApi.image(post.full_image_url)
+        imageBase64 = imageResponse.base64
+        imageMimeType = imageResponse.mimeType
 
         // Convert base64 to File
         const dataUrl = `data:${imageMimeType};base64,${imageBase64}`

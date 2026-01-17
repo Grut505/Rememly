@@ -226,6 +226,7 @@ function handleFamileoPosts(params) {
           author_email: authorEmail,
           author_pseudo: authorPseudo,
           image_url: post.image_2x || post.image,
+          full_image_url: post.full_image || post.image_2x || post.image,
           image_orientation: post.image_orientation
         };
       });

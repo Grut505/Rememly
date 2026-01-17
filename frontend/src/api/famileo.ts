@@ -10,6 +10,7 @@ export interface FamileoPost {
   author_email: string
   author_pseudo: string
   image_url: string
+  full_image_url: string
   image_orientation: 'landscape' | 'portrait'
 }
 

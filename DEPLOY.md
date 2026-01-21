@@ -41,6 +41,14 @@ AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP2LYCPHf
 
 ## Déploiement du code
 
+### Scripts de déploiement
+
+| Script | Description |
+|--------|-------------|
+| `./deploy-all.sh` | Déploie backend + frontend (complet) |
+| `./deploy-backend.sh` | Déploie uniquement le backend Apps Script |
+| `./deploy-frontend.sh` | Déploie uniquement le frontend GitHub Pages |
+
 ### Option 1 : Déploiement complet (recommandé)
 
 ```bash
@@ -48,18 +56,24 @@ AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP2LYCPHf
 ```
 
 Ce script :
-1. Push le code backend vers Apps Script
+1. Push le code backend vers Apps Script (`clasp push`)
 2. Crée un nouveau déploiement @X
-3. Build le frontend
-4. Commit et push vers GitHub
-5. Déploie sur GitHub Pages via `gh-pages`
+3. **Met à jour automatiquement** `.env` et `.env.production` avec la nouvelle version
+4. Build le frontend
+5. Commit et push vers GitHub
+6. Déploie sur GitHub Pages via `gh-pages`
+7. Affiche l'URL des GitHub Actions pour suivre le déploiement
 
 ### Option 2 : Backend uniquement
 
 ```bash
-cd backend
-npm run deploy
+./deploy-backend.sh
 ```
+
+Ce script :
+1. Push le code vers Apps Script
+2. Crée un nouveau déploiement
+3. Met à jour automatiquement les fichiers `.env` avec la nouvelle URL/version
 
 Ou manuellement :
 ```bash
@@ -71,17 +85,13 @@ npx clasp deploy -i AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmn
 ### Option 3 : Frontend uniquement
 
 ```bash
-cd frontend
-npm run build
-git add -A
-git commit -m "Update frontend"
-git push
+./deploy-frontend.sh
 ```
 
-Puis déployez sur GitHub Pages :
-```bash
-npm run deploy
-```
+Ce script :
+1. Build le frontend
+2. Déploie vers GitHub Pages
+3. Affiche l'URL des GitHub Actions pour suivre le déploiement
 
 ---
 
@@ -89,18 +99,13 @@ npm run deploy
 
 ### Mise à jour du fichier .env après déploiement backend
 
-**⚠️ Important** : Après un déploiement backend, le fichier `frontend/.env` doit être mis à jour manuellement pour pointer vers la nouvelle version. Sinon, le serveur de développement local utilisera une ancienne version du backend.
+Les scripts `./deploy-backend.sh` et `./deploy-all.sh` mettent à jour automatiquement les fichiers `.env` et `.env.production` avec la nouvelle version du backend.
 
+Si vous déployez manuellement, mettez à jour :
 ```bash
-# Dans frontend/.env, mettre à jour :
+# Dans frontend/.env et frontend/.env.production :
 VITE_APPS_SCRIPT_URL=https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec
 VITE_BACKEND_VERSION=<VERSION>
-```
-
-Exemple après un déploiement @45 :
-```
-VITE_APPS_SCRIPT_URL=https://script.google.com/macros/s/AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP2LYCPHf/exec
-VITE_BACKEND_VERSION=45
 ```
 
 ### Lancer le serveur de développement

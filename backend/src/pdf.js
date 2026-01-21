@@ -531,7 +531,7 @@ function getPngDimensions(bytes) {
 
 /**
  * Generate a mosaic cover page with all article images
- * Uses an intelligent layout algorithm that adapts to image count and orientations
+ * Uses a dynamic "masonry-style" layout that respects image orientations
  */
 function generateCoverMosaic(articles, from, to) {
   // Collect all images with their dimensions
@@ -563,7 +563,6 @@ function generateCoverMosaic(articles, from, to) {
   }
 
   if (images.length === 0) {
-    // No images, return simple cover
     return `
   <div class="cover">
     <h1>Livre de Souvenirs</h1>
@@ -572,37 +571,21 @@ function generateCoverMosaic(articles, from, to) {
 `;
   }
 
-  // Calculate optimal grid layout
-  const layout = calculateMosaicLayout(images.length);
-  const { cols, rows } = layout;
+  // Available space
+  const mosaicWidth = 19;  // cm
+  const mosaicHeight = 22; // cm
+  const gap = 0.12;        // cm between images
 
-  // Available space: A4 page (21cm x 29.7cm) minus margins (1cm each side)
-  // Title takes ~15% at top, mosaic gets ~80%
-  const mosaicWidth = 19; // cm (21 - 2)
-  const mosaicHeight = 22; // cm (~80% of available height after title)
-  const gap = 0.15; // cm between images
+  // Generate layout based on image count and orientations
+  const cells = generateDynamicLayout(images, mosaicWidth, mosaicHeight, gap);
 
-  // Calculate cell dimensions
-  const cellWidth = (mosaicWidth - (cols - 1) * gap) / cols;
-  const cellHeight = (mosaicHeight - (rows - 1) * gap) / rows;
-
-  // Generate mosaic cells
+  // Generate HTML for cells
   let mosaicHtml = '';
-  let imageIndex = 0;
-
-  for (let row = 0; row < rows && imageIndex < images.length; row++) {
-    for (let col = 0; col < cols && imageIndex < images.length; col++) {
-      const img = images[imageIndex];
-      const left = col * (cellWidth + gap);
-      const top = row * (cellHeight + gap);
-
-      mosaicHtml += `
-        <div class="mosaic-cell" style="left: ${left}cm; top: ${top}cm; width: ${cellWidth}cm; height: ${cellHeight}cm;">
-          <img src="data:${img.mimeType};base64,${img.base64}" alt="" />
+  for (const cell of cells) {
+    mosaicHtml += `
+        <div class="mosaic-cell" style="left: ${cell.x.toFixed(3)}cm; top: ${cell.y.toFixed(3)}cm; width: ${cell.w.toFixed(3)}cm; height: ${cell.h.toFixed(3)}cm;">
+          <img src="data:${cell.img.mimeType};base64,${cell.img.base64}" alt="" />
         </div>`;
-
-      imageIndex++;
-    }
   }
 
   return `
@@ -611,7 +594,7 @@ function generateCoverMosaic(articles, from, to) {
       <h1>Livre de Souvenirs</h1>
       <p class="dates">${formatDateFr(from)} - ${formatDateFr(to)}</p>
     </div>
-    <div class="mosaic-container" style="--cols: ${cols}; --rows: ${rows};">
+    <div class="mosaic-container">
       ${mosaicHtml}
     </div>
   </div>
@@ -619,35 +602,175 @@ function generateCoverMosaic(articles, from, to) {
 }
 
 /**
- * Calculate optimal grid layout for mosaic based on image count
- * Returns { cols, rows } that best fits the images in the available space
+ * Generate a dynamic layout that adapts to image orientations
+ * Uses a row-based approach where each row's height adapts to its content
  */
-function calculateMosaicLayout(imageCount) {
-  if (imageCount <= 0) return { cols: 1, rows: 1 };
-  if (imageCount === 1) return { cols: 1, rows: 1 };
-  if (imageCount === 2) return { cols: 2, rows: 1 };
-  if (imageCount === 3) return { cols: 3, rows: 1 };
-  if (imageCount === 4) return { cols: 2, rows: 2 };
-  if (imageCount <= 6) return { cols: 3, rows: 2 };
-  if (imageCount <= 9) return { cols: 3, rows: 3 };
-  if (imageCount <= 12) return { cols: 4, rows: 3 };
-  if (imageCount <= 16) return { cols: 4, rows: 4 };
-  if (imageCount <= 20) return { cols: 5, rows: 4 };
-  if (imageCount <= 25) return { cols: 5, rows: 5 };
-  if (imageCount <= 30) return { cols: 6, rows: 5 };
-  if (imageCount <= 36) return { cols: 6, rows: 6 };
-  if (imageCount <= 42) return { cols: 7, rows: 6 };
-  if (imageCount <= 49) return { cols: 7, rows: 7 };
-  if (imageCount <= 56) return { cols: 8, rows: 7 };
-  if (imageCount <= 64) return { cols: 8, rows: 8 };
+function generateDynamicLayout(images, totalWidth, totalHeight, gap) {
+  const n = images.length;
+  if (n === 0) return [];
 
-  // For very large counts, calculate dynamically
-  // Aim for slightly more columns than rows (landscape mosaic)
-  const ratio = 19 / 22; // width/height of mosaic area
-  const cols = Math.ceil(Math.sqrt(imageCount * ratio));
-  const rows = Math.ceil(imageCount / cols);
+  // Special cases for small counts
+  if (n === 1) {
+    return [{ img: images[0], x: 0, y: 0, w: totalWidth, h: totalHeight }];
+  }
 
-  return { cols, rows };
+  if (n === 2) {
+    // Side by side, respecting orientations
+    const w1 = images[0].isPortrait ? totalWidth * 0.4 : totalWidth * 0.55;
+    const w2 = totalWidth - w1 - gap;
+    return [
+      { img: images[0], x: 0, y: 0, w: w1, h: totalHeight },
+      { img: images[1], x: w1 + gap, y: 0, w: w2, h: totalHeight }
+    ];
+  }
+
+  if (n === 3) {
+    // One large + two stacked, or three in row depending on orientations
+    const portraitCount = images.filter(i => i.isPortrait).length;
+    if (portraitCount >= 2) {
+      // Big landscape on top, two portraits below
+      const topH = totalHeight * 0.5;
+      const botH = totalHeight - topH - gap;
+      const halfW = (totalWidth - gap) / 2;
+      return [
+        { img: images[0], x: 0, y: 0, w: totalWidth, h: topH },
+        { img: images[1], x: 0, y: topH + gap, w: halfW, h: botH },
+        { img: images[2], x: halfW + gap, y: topH + gap, w: halfW, h: botH }
+      ];
+    } else {
+      // One portrait left, two landscapes stacked right
+      const leftW = totalWidth * 0.4;
+      const rightW = totalWidth - leftW - gap;
+      const halfH = (totalHeight - gap) / 2;
+      return [
+        { img: images[0], x: 0, y: 0, w: leftW, h: totalHeight },
+        { img: images[1], x: leftW + gap, y: 0, w: rightW, h: halfH },
+        { img: images[2], x: leftW + gap, y: halfH + gap, w: rightW, h: halfH }
+      ];
+    }
+  }
+
+  if (n === 4) {
+    // 2x2 grid with size variations based on orientation
+    const cells = [];
+    const halfW = (totalWidth - gap) / 2;
+    const halfH = (totalHeight - gap) / 2;
+
+    cells.push({ img: images[0], x: 0, y: 0, w: halfW, h: halfH });
+    cells.push({ img: images[1], x: halfW + gap, y: 0, w: halfW, h: halfH });
+    cells.push({ img: images[2], x: 0, y: halfH + gap, w: halfW, h: halfH });
+    cells.push({ img: images[3], x: halfW + gap, y: halfH + gap, w: halfW, h: halfH });
+    return cells;
+  }
+
+  if (n === 5) {
+    // Big one + 4 smaller, or 2 + 3 rows
+    const topH = totalHeight * 0.55;
+    const botH = totalHeight - topH - gap;
+    const bigW = totalWidth * 0.55;
+    const smallW = totalWidth - bigW - gap;
+    const halfSmallH = (topH - gap) / 2;
+    const thirdW = (totalWidth - 2 * gap) / 3;
+
+    return [
+      { img: images[0], x: 0, y: 0, w: bigW, h: topH },
+      { img: images[1], x: bigW + gap, y: 0, w: smallW, h: halfSmallH },
+      { img: images[2], x: bigW + gap, y: halfSmallH + gap, w: smallW, h: halfSmallH },
+      { img: images[3], x: 0, y: topH + gap, w: (totalWidth - gap) / 2, h: botH },
+      { img: images[4], x: (totalWidth - gap) / 2 + gap, y: topH + gap, w: (totalWidth - gap) / 2, h: botH }
+    ];
+  }
+
+  if (n === 6) {
+    // 2 rows of 3
+    const halfH = (totalHeight - gap) / 2;
+    const thirdW = (totalWidth - 2 * gap) / 3;
+    const cells = [];
+    for (let i = 0; i < 3; i++) {
+      cells.push({ img: images[i], x: i * (thirdW + gap), y: 0, w: thirdW, h: halfH });
+    }
+    for (let i = 0; i < 3; i++) {
+      cells.push({ img: images[3 + i], x: i * (thirdW + gap), y: halfH + gap, w: thirdW, h: halfH });
+    }
+    return cells;
+  }
+
+  // For 7+ images: use adaptive row-based layout
+  return generateRowBasedLayout(images, totalWidth, totalHeight, gap);
+}
+
+/**
+ * Row-based layout for larger image counts
+ * Distributes images in rows, adapting cell widths to aspect ratios
+ */
+function generateRowBasedLayout(images, totalWidth, totalHeight, gap) {
+  const n = images.length;
+
+  // Determine number of rows based on image count
+  let numRows;
+  if (n <= 9) numRows = 3;
+  else if (n <= 16) numRows = 4;
+  else if (n <= 25) numRows = 5;
+  else if (n <= 36) numRows = 6;
+  else numRows = Math.ceil(Math.sqrt(n * (totalHeight / totalWidth)));
+
+  // Distribute images to rows as evenly as possible
+  const imagesPerRow = [];
+  const basePerRow = Math.floor(n / numRows);
+  let extra = n % numRows;
+
+  for (let r = 0; r < numRows; r++) {
+    imagesPerRow.push(basePerRow + (extra > 0 ? 1 : 0));
+    if (extra > 0) extra--;
+  }
+
+  // Calculate row height
+  const rowHeight = (totalHeight - (numRows - 1) * gap) / numRows;
+
+  // Generate cells
+  const cells = [];
+  let imageIndex = 0;
+  let currentY = 0;
+
+  for (let r = 0; r < numRows; r++) {
+    const rowImages = [];
+    for (let i = 0; i < imagesPerRow[r] && imageIndex < n; i++) {
+      rowImages.push(images[imageIndex++]);
+    }
+
+    if (rowImages.length === 0) continue;
+
+    // Calculate width for each image in this row based on aspect ratios
+    // Give portrait images slightly less width, landscape more
+    const totalAspect = rowImages.reduce((sum, img) => {
+      // Normalize: portrait gets weight ~0.7, landscape ~1.3, square ~1.0
+      const weight = img.isPortrait ? 0.7 : (img.aspectRatio > 1.2 ? 1.3 : 1.0);
+      return sum + weight;
+    }, 0);
+
+    let currentX = 0;
+    const availableWidth = totalWidth - (rowImages.length - 1) * gap;
+
+    for (let i = 0; i < rowImages.length; i++) {
+      const img = rowImages[i];
+      const weight = img.isPortrait ? 0.7 : (img.aspectRatio > 1.2 ? 1.3 : 1.0);
+      const cellWidth = (weight / totalAspect) * availableWidth;
+
+      cells.push({
+        img: img,
+        x: currentX,
+        y: currentY,
+        w: cellWidth,
+        h: rowHeight
+      });
+
+      currentX += cellWidth + gap;
+    }
+
+    currentY += rowHeight + gap;
+  }
+
+  return cells;
 }
 
 function formatDateFr(dateInput) {

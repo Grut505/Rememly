@@ -1,0 +1,7 @@
+- Listes des PDFS
+-- voir forme de liste
+--- Nom
+--- Date start
+-- Supprimer
+-- Filtre par date de génération
+- page de garde avec vraie gestion des photos payage, layout plus dynamique et intelligent

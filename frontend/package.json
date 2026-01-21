@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist -r https://github.com/Grut505/grut505.github.io.git"
+    "deploy": "gh-pages -d dist -r git@github-grut505:Grut505/grut505.github.io.git"
   },
   "dependencies": {
     "exif-js": "^2.3.0",

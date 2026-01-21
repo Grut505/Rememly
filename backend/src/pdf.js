@@ -210,6 +210,51 @@ function generatePdfHtml(articles, year, from, to) {
       color: #666;
     }
 
+    /* Mosaic cover page */
+    .cover-mosaic {
+      page-break-after: always;
+      height: 27.7cm;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .cover-title {
+      text-align: center;
+      padding: 0.5cm 0 0.8cm 0;
+      flex-shrink: 0;
+    }
+
+    .cover-title h1 {
+      font-size: 28pt;
+      margin: 0 0 0.3cm 0;
+      color: #333;
+    }
+
+    .cover-title .dates {
+      font-size: 14pt;
+      color: #666;
+      margin: 0;
+    }
+
+    .mosaic-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mosaic-cell {
+      position: absolute;
+      overflow: hidden;
+      border-radius: 3px;
+      background: #f0f0f0;
+    }
+
+    .mosaic-cell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
     .articles-page {
       page-break-before: always;
       height: 27.7cm; /* A4 height (29.7cm) - 2cm margins */
@@ -335,11 +380,8 @@ function generatePdfHtml(articles, year, from, to) {
   </style>
 </head>
 <body>
-  <!-- Cover Page -->
-  <div class="cover">
-    <h1>Livre de Souvenirs</h1>
-    <p class="dates">${formatDateFr(from)} - ${formatDateFr(to)}</p>
-  </div>
+  <!-- Cover Page with Mosaic -->
+  ${generateCoverMosaic(articles, from, to)}
 `;
 
   // Calculate total pages: 1 cover + (month dividers + article pages)
@@ -485,6 +527,127 @@ function getPngDimensions(bytes) {
     return { width: width, height: height };
   }
   return null;
+}
+
+/**
+ * Generate a mosaic cover page with all article images
+ * Uses an intelligent layout algorithm that adapts to image count and orientations
+ */
+function generateCoverMosaic(articles, from, to) {
+  // Collect all images with their dimensions
+  const images = [];
+
+  for (const article of articles) {
+    if (article.image_file_id) {
+      try {
+        const file = DriveApp.getFileById(article.image_file_id);
+        const blob = file.getBlob();
+        const base64 = Utilities.base64Encode(blob.getBytes());
+        const mimeType = blob.getContentType();
+        const imageBytes = blob.getBytes();
+        const dimensions = getImageDimensions(imageBytes, mimeType);
+
+        const isPortrait = dimensions && dimensions.height > dimensions.width;
+        const aspectRatio = dimensions ? dimensions.width / dimensions.height : 1;
+
+        images.push({
+          base64,
+          mimeType,
+          isPortrait,
+          aspectRatio
+        });
+      } catch (e) {
+        // Skip failed images
+      }
+    }
+  }
+
+  if (images.length === 0) {
+    // No images, return simple cover
+    return `
+  <div class="cover">
+    <h1>Livre de Souvenirs</h1>
+    <p class="dates">${formatDateFr(from)} - ${formatDateFr(to)}</p>
+  </div>
+`;
+  }
+
+  // Calculate optimal grid layout
+  const layout = calculateMosaicLayout(images.length);
+  const { cols, rows } = layout;
+
+  // Available space: A4 page (21cm x 29.7cm) minus margins (1cm each side)
+  // Title takes ~15% at top, mosaic gets ~80%
+  const mosaicWidth = 19; // cm (21 - 2)
+  const mosaicHeight = 22; // cm (~80% of available height after title)
+  const gap = 0.15; // cm between images
+
+  // Calculate cell dimensions
+  const cellWidth = (mosaicWidth - (cols - 1) * gap) / cols;
+  const cellHeight = (mosaicHeight - (rows - 1) * gap) / rows;
+
+  // Generate mosaic cells
+  let mosaicHtml = '';
+  let imageIndex = 0;
+
+  for (let row = 0; row < rows && imageIndex < images.length; row++) {
+    for (let col = 0; col < cols && imageIndex < images.length; col++) {
+      const img = images[imageIndex];
+      const left = col * (cellWidth + gap);
+      const top = row * (cellHeight + gap);
+
+      mosaicHtml += `
+        <div class="mosaic-cell" style="left: ${left}cm; top: ${top}cm; width: ${cellWidth}cm; height: ${cellHeight}cm;">
+          <img src="data:${img.mimeType};base64,${img.base64}" alt="" />
+        </div>`;
+
+      imageIndex++;
+    }
+  }
+
+  return `
+  <div class="cover-mosaic">
+    <div class="cover-title">
+      <h1>Livre de Souvenirs</h1>
+      <p class="dates">${formatDateFr(from)} - ${formatDateFr(to)}</p>
+    </div>
+    <div class="mosaic-container" style="--cols: ${cols}; --rows: ${rows};">
+      ${mosaicHtml}
+    </div>
+  </div>
+`;
+}
+
+/**
+ * Calculate optimal grid layout for mosaic based on image count
+ * Returns { cols, rows } that best fits the images in the available space
+ */
+function calculateMosaicLayout(imageCount) {
+  if (imageCount <= 0) return { cols: 1, rows: 1 };
+  if (imageCount === 1) return { cols: 1, rows: 1 };
+  if (imageCount === 2) return { cols: 2, rows: 1 };
+  if (imageCount === 3) return { cols: 3, rows: 1 };
+  if (imageCount === 4) return { cols: 2, rows: 2 };
+  if (imageCount <= 6) return { cols: 3, rows: 2 };
+  if (imageCount <= 9) return { cols: 3, rows: 3 };
+  if (imageCount <= 12) return { cols: 4, rows: 3 };
+  if (imageCount <= 16) return { cols: 4, rows: 4 };
+  if (imageCount <= 20) return { cols: 5, rows: 4 };
+  if (imageCount <= 25) return { cols: 5, rows: 5 };
+  if (imageCount <= 30) return { cols: 6, rows: 5 };
+  if (imageCount <= 36) return { cols: 6, rows: 6 };
+  if (imageCount <= 42) return { cols: 7, rows: 6 };
+  if (imageCount <= 49) return { cols: 7, rows: 7 };
+  if (imageCount <= 56) return { cols: 8, rows: 7 };
+  if (imageCount <= 64) return { cols: 8, rows: 8 };
+
+  // For very large counts, calculate dynamically
+  // Aim for slightly more columns than rows (landscape mosaic)
+  const ratio = 19 / 22; // width/height of mosaic area
+  const cols = Math.ceil(Math.sqrt(imageCount * ratio));
+  const rows = Math.ceil(imageCount / cols);
+
+  return { cols, rows };
 }
 
 function formatDateFr(dateInput) {

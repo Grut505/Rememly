@@ -10,6 +10,7 @@ cd "$SCRIPT_DIR"
 
 DEPLOYMENT_ID="AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP2LYCPHf"
 BACKEND_URL="https://script.google.com/macros/s/${DEPLOYMENT_ID}/exec"
+GITHUB_PAGES_REPO="Grut505/grut505.github.io"
 
 echo "🚀 Déploiement complet de Rememly"
 echo ""
@@ -63,9 +64,51 @@ echo "🌐 Déploiement vers GitHub Pages..."
 cd frontend
 npm run deploy
 cd ..
-echo "✅ Déployé sur GitHub Pages"
+echo "✅ Push vers GitHub Pages effectué"
 echo ""
 
+# Wait for GitHub Pages deployment
+echo "⏳ Attente du déploiement GitHub Pages..."
+echo "   Actions: https://github.com/${GITHUB_PAGES_REPO}/actions"
+echo ""
+
+# Check if gh CLI is available
+if command -v gh &> /dev/null; then
+    echo "🔄 Suivi du workflow en cours..."
+
+    # Wait a bit for the workflow to start
+    sleep 5
+
+    # Get the latest run
+    RUN_ID=$(gh run list --repo "$GITHUB_PAGES_REPO" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || echo "")
+
+    if [ -n "$RUN_ID" ]; then
+        echo "   Run ID: $RUN_ID"
+        echo "   URL: https://github.com/${GITHUB_PAGES_REPO}/actions/runs/${RUN_ID}"
+        echo ""
+
+        # Watch the run
+        gh run watch "$RUN_ID" --repo "$GITHUB_PAGES_REPO" --exit-status && {
+            echo ""
+            echo "✅ Déploiement GitHub Pages terminé avec succès !"
+        } || {
+            echo ""
+            echo "❌ Erreur lors du déploiement GitHub Pages"
+            echo "   Vérifiez: https://github.com/${GITHUB_PAGES_REPO}/actions/runs/${RUN_ID}"
+            exit 1
+        }
+    else
+        echo "⚠️  Impossible de récupérer le run ID"
+        echo "   Vérifiez manuellement: https://github.com/${GITHUB_PAGES_REPO}/actions"
+    fi
+else
+    echo "ℹ️  gh CLI non installé - impossible de suivre le workflow automatiquement"
+    echo "   Vérifiez manuellement: https://github.com/${GITHUB_PAGES_REPO}/actions"
+    echo ""
+    echo "   Pour installer gh: sudo apt install gh && gh auth login"
+fi
+
+echo ""
 echo "🎉 Déploiement terminé !"
 echo "   Backend: @$VERSION"
 echo "   Frontend: https://grut505.github.io/Rememly/"

@@ -46,6 +46,7 @@ export function PhotoAssemblyScreen() {
           texte,
           file,
           dateModification,
+          undefined, // famileoPostId
           assemblyState
         )
         showToast('Article created', 'success')

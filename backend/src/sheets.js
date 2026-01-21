@@ -21,22 +21,69 @@ function getArticlesSheet() {
 
   if (!sheet) {
     sheet = ss.insertSheet('articles');
+    // Structure: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status, famileo_post_id
     sheet.appendRow([
       'id',
-      'date_creation',
-      'date_modification',
+      'date',
       'auteur',
       'texte',
       'image_url',
       'image_file_id',
-      'year',
       'assembly_state',
       'full_page',
       'status',
+      'famileo_post_id',
     ]);
   }
 
   return sheet;
+}
+
+function getFamiliesSheet() {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName('families');
+
+  if (!sheet) {
+    sheet = ss.insertSheet('families');
+    sheet.appendRow(['id', 'name', 'famileo_id']);
+  }
+
+  return sheet;
+}
+
+function getFamilies() {
+  const sheet = getFamiliesSheet();
+  const data = sheet.getDataRange().getValues();
+  const families = [];
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0]) {
+      families.push({
+        id: data[i][0],
+        name: data[i][1],
+        famileo_id: data[i][2]
+      });
+    }
+  }
+
+  return families;
+}
+
+function getImportedFamileoPostIds() {
+  const sheet = getArticlesSheet();
+  const data = sheet.getDataRange().getValues();
+  const ids = [];
+
+  // Structure: id(0), date(1), auteur(2), texte(3), image_url(4), image_file_id(5), assembly_state(6), full_page(7), status(8), famileo_post_id(9)
+  for (let i = 1; i < data.length; i++) {
+    const famileoPostId = data[i][9];  // famileo_post_id is column 9 (0-indexed)
+    const status = data[i][8];          // status is column 8 (0-indexed)
+    if (famileoPostId && status !== 'DELETED') {
+      ids.push(String(famileoPostId));
+    }
+  }
+
+  return ids;
 }
 
 function getJobsSheet() {

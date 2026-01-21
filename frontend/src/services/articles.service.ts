@@ -8,6 +8,7 @@ class ArticlesService {
     texte: string,
     imageFile: File,
     dateModification?: string,
+    famileoPostId?: string,
     assemblyState?: object,
     fullPage?: boolean
   ): Promise<Article> {
@@ -18,6 +19,7 @@ class ArticlesService {
       texte,
       image: imageData,
       date: dateModification,
+      famileo_post_id: famileoPostId,
       assembly_state: assemblyState || null,
       full_page: fullPage || false,
     }

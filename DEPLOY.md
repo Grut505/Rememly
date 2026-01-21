@@ -1,8 +1,23 @@
 # Guide de déploiement Rememly
 
-## Configuration initiale du Web App (une seule fois)
+## Architecture
 
-### 1. Configuration Google Apps Script
+```
+Frontend (React/Vite)          Backend (Google Apps Script)
+        |                               |
+   localhost:3000                  Apps Script
+   ou GitHub Pages                 via clasp
+```
+
+## Fichiers de Configuration
+
+| Fichier | Usage |
+|---------|-------|
+| `frontend/.env` | Développement local |
+| `frontend/.env.production` | Build production (GitHub Pages) |
+| `backend/.clasp.json` | Configuration clasp |
+
+## Configuration initiale du Web App (une seule fois)
 
 Après chaque nouveau déploiement avec `clasp deploy`, il faut configurer les permissions :
 
@@ -16,11 +31,13 @@ Après chaque nouveau déploiement avec `clasp deploy`, il faut configurer les p
    - **Who has access**: Anyone (même anonyme)
 7. Cliquez sur **Deploy**
 
-### 2. Deployment ID à utiliser
+### Deployment ID stable
 
-Le deployment ID stable est : `AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP2LYCPHf`
+```
+AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP2LYCPHf
+```
 
-Cette URL est déjà configurée dans `frontend/.env.production`
+---
 
 ## Déploiement du code
 
@@ -35,7 +52,7 @@ Ce script :
 2. Crée un nouveau déploiement @X
 3. Build le frontend
 4. Commit et push vers GitHub
-5. Netlify déploie automatiquement
+5. Déploie sur GitHub Pages via `gh-pages`
 
 ### Option 2 : Backend uniquement
 
@@ -44,7 +61,12 @@ cd backend
 npm run deploy
 ```
 
-**⚠️ Important** : Après `npm run deploy`, il faut configurer les permissions du nouveau déploiement (voir section Configuration Google Apps Script ci-dessus).
+Ou manuellement :
+```bash
+cd backend
+npx clasp push
+npx clasp deploy -i AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP2LYCPHf
+```
 
 ### Option 3 : Frontend uniquement
 
@@ -56,7 +78,56 @@ git commit -m "Update frontend"
 git push
 ```
 
-Netlify déploiera automatiquement.
+Puis déployez sur GitHub Pages :
+```bash
+npm run deploy
+```
+
+---
+
+## Développement local
+
+### Mise à jour du fichier .env après déploiement backend
+
+**⚠️ Important** : Après un déploiement backend, le fichier `frontend/.env` doit être mis à jour manuellement pour pointer vers la nouvelle version. Sinon, le serveur de développement local utilisera une ancienne version du backend.
+
+```bash
+# Dans frontend/.env, mettre à jour :
+VITE_APPS_SCRIPT_URL=https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec
+VITE_BACKEND_VERSION=<VERSION>
+```
+
+Exemple après un déploiement @45 :
+```
+VITE_APPS_SCRIPT_URL=https://script.google.com/macros/s/AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP2LYCPHf/exec
+VITE_BACKEND_VERSION=45
+```
+
+### Lancer le serveur de développement
+
+```bash
+cd frontend
+npm run dev
+```
+
+**IMPORTANT** : Le serveur DOIT tourner sur `http://localhost:3000/`
+
+Si le port 3000 est occupé :
+```bash
+lsof -ti:3000 | xargs -r kill -9
+npm run dev
+```
+
+### Checklist Développement Local
+
+- [ ] Backend pushé via clasp (si modifié)
+- [ ] Backend redéployé avec `clasp deploy`
+- [ ] `frontend/.env` pointe vers la bonne URL backend
+- [ ] `VITE_BACKEND_VERSION` à jour dans `frontend/.env`
+- [ ] Serveur dev redémarré après modification du `.env`
+- [ ] Version affichée correcte dans le menu (ex: `v1.2.0 / backend @45`)
+
+---
 
 ## Vérification après déploiement
 
@@ -65,23 +136,44 @@ Netlify déploiera automatiquement.
    curl "https://script.google.com/macros/s/AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP2LYCPHf/exec?path=ping"
    ```
 
-2. **Frontend** : Attendez que Netlify déploie (1-2 minutes)
-   - Dashboard : https://app.netlify.com
-   - Vérifiez que le commit est déployé
+2. **Frontend** : Vérifiez sur GitHub Pages
+   - https://grut505.github.io/Rememly/
 
-## Problèmes courants
+---
+
+## Troubleshooting
+
+### Le serveur démarre sur le mauvais port
+
+```bash
+lsof -ti:3000 | xargs -r kill -9
+```
+
+### clasp ne fonctionne pas sous WSL
+
+**Solution** : Utiliser `npx clasp` depuis le dossier backend (clasp est installé localement via npm).
+
+```bash
+cd backend
+npx clasp push
+npx clasp deploy -i <deployment_id>
+```
+
+**Note** : Ne PAS utiliser la commande `clasp` globale (pointe vers Windows et bloque). Toujours utiliser `npx clasp`.
+
+### La version backend affichée est incorrecte
+
+Vérifier et synchroniser `VITE_BACKEND_VERSION` dans `.env` et `.env.production`, puis redémarrer le serveur de dev.
+
+### Erreur CORS avec le backend
+
+Vérifier que `VITE_APPS_SCRIPT_URL` pointe vers le bon deployment ID (pas @HEAD).
 
 ### Erreur 401 Unauthorized
 
 **Cause** : Le Web App n'est pas configuré pour "Anyone"
 
-**Solution** : Reconfigurez les permissions (voir Configuration Google Apps Script)
-
-### Erreur CORS
-
-**Cause** : Utilisation du déploiement @HEAD au lieu d'un déploiement Web App
-
-**Solution** : Vérifiez que `frontend/.env.production` utilise le bon deployment ID
+**Solution** : Reconfigurez les permissions (voir Configuration initiale du Web App)
 
 ### Images ne s'affichent pas
 
@@ -89,9 +181,16 @@ Netlify déploiera automatiquement.
 
 **Solution** : Le code utilise `file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)` automatiquement
 
+---
+
 ## URLs importantes
 
-- **Apps Script** : https://script.google.com
-- **Netlify Dashboard** : https://app.netlify.com
-- **App en production** : https://rememly.netlify.app
-- **GitHub** : https://github.com/Grut505/Rememly
+| Service | URL |
+|---------|-----|
+| Dev local | http://localhost:3000/ |
+| GitHub Main repo | https://grut505.github.io/ |
+| GitHub Pages | https://github.com/Grut505/grut505.github.io |
+| Backend | https://script.google.com/home/projects/122_ruL8YAsD0Mp8KUsUnf9tn_KA6wuhkWlOOwD2Tip6PsKwsviL9RqmT |
+| GitHub | https://github.com/Grut505/Rememly |
+| Google Cloud Client ID | https://console.cloud.google.com/auth/clients/175845978100-rqclosiat622f3b7ijpg17t2fnrnb522.apps.googleusercontent.com?project=rememly |
+

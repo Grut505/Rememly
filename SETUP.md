@@ -190,22 +190,7 @@ npm run build
 
 This creates a `dist/` folder.
 
-#### 2. Deploy to Netlify (Recommended)
-
-```bash
-# Install Netlify CLI
-npm install -g netlify-cli
-
-# Login
-netlify login
-
-# Deploy
-netlify deploy --prod --dir=dist
-```
-
-Follow the prompts. Netlify will give you a URL.
-
-#### 3. Update OAuth Credentials
+#### 2. Update OAuth Credentials
 
 Go back to Google Cloud Console:
 1. APIs & Services > Credentials
@@ -215,7 +200,7 @@ Go back to Google Cloud Console:
    - Authorized redirect URIs
 4. Save
 
-#### 4. Update Frontend .env
+#### 3. Update Frontend .env
 
 If your production domain changed, rebuild and redeploy.
 

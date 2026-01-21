@@ -128,7 +128,8 @@ function handleArticleCreate(body) {
   const fileName = `${formatTimestamp()}_${id}_assembled.jpg`;
   const imageData = uploadImage(body.image.base64, fileName, year, 'assembled');
 
-  // Create article row - 9 columns: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status
+  // Create article row - 10 columns matching sheet headers:
+  // id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status, famileo_post_id
   const row = [
     id,                                                          // 0: id
     articleDate,                                                 // 1: date
@@ -139,6 +140,7 @@ function handleArticleCreate(body) {
     body.assembly_state ? JSON.stringify(body.assembly_state) : '', // 6: assembly_state
     body.full_page || false,                                     // 7: full_page
     'ACTIVE',                                                    // 8: status
+    body.famileo_post_id || '',                                  // 9: famileo_post_id
   ];
 
   sheet.appendRow(row);
@@ -153,6 +155,7 @@ function handleArticleCreate(body) {
     assembly_state: body.assembly_state ? JSON.stringify(body.assembly_state) : undefined,
     full_page: body.full_page || false,
     status: 'ACTIVE',
+    famileo_post_id: body.famileo_post_id || '',
   };
 
   return createResponse({
@@ -172,11 +175,11 @@ function handleArticleUpdate(body) {
     });
   }
 
-  // 9 columns: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status
-  const row = sheet.getRange(rowIndex, 1, 1, 9).getValues()[0];
+  // 10 columns: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status, famileo_post_id
+  const row = sheet.getRange(rowIndex, 1, 1, 10).getValues()[0];
   const dateNow = now();
 
-  const articleDate = body.date || dateNow;
+  const articleDate = body.date || row[1] || dateNow;
   row[1] = articleDate; // date
 
   const year = getYear(articleDate);
@@ -209,7 +212,7 @@ function handleArticleUpdate(body) {
     row[8] = body.status;
   }
 
-  sheet.getRange(rowIndex, 1, 1, 9).setValues([row]);
+  sheet.getRange(rowIndex, 1, 1, 10).setValues([row]);
 
   const article = {
     id: row[0],
@@ -221,6 +224,7 @@ function handleArticleUpdate(body) {
     assembly_state: row[6],
     full_page: row[7],
     status: row[8],
+    famileo_post_id: row[9],
   };
 
   return createResponse({
@@ -241,10 +245,10 @@ function handleArticleDelete(id) {
   }
 
   // Soft delete: mark as DELETED
-  // 9 columns: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status
-  const row = sheet.getRange(rowIndex, 1, 1, 9).getValues()[0];
+  // 10 columns: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status, famileo_post_id
+  const row = sheet.getRange(rowIndex, 1, 1, 10).getValues()[0];
   row[8] = 'DELETED'; // status column (index 8)
-  sheet.getRange(rowIndex, 1, 1, 9).setValues([row]);
+  sheet.getRange(rowIndex, 1, 1, 10).setValues([row]);
 
   return createResponse({
     ok: true,

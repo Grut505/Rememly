@@ -75,6 +75,12 @@ function doPost(e) {
       case 'famileo/trigger-refresh':
         return handleFamileoTriggerRefresh();
 
+      case 'famileo/families':
+        return handleFamileoFamilies();
+
+      case 'famileo/imported-ids':
+        return handleFamileoImportedIds();
+
       default:
         return createResponse({
           ok: false,

@@ -145,10 +145,13 @@ function formatCookies(cookies) {
  * Fetch posts from Famileo API
  * @param {number} limit - Number of posts to fetch
  * @param {string} timestamp - ISO timestamp for pagination (fetches posts before this date)
+ * @param {string} familyId - Optional family ID to use (overrides default)
  */
-function famileoFetchPosts(limit = 20, timestamp = null) {
-  const props = PropertiesService.getScriptProperties();
-  const familyId = props.getProperty('FAMILEO_FAMILY_ID') || '321238';
+function famileoFetchPosts(limit = 20, timestamp = null, familyId = null) {
+  if (!familyId) {
+    const props = PropertiesService.getScriptProperties();
+    familyId = props.getProperty('FAMILEO_FAMILY_ID') || '321238';
+  }
 
   const session = getFamileoSession();
 
@@ -186,13 +189,15 @@ function famileoFetchPosts(limit = 20, timestamp = null) {
  * Params:
  *   - limit: number of posts (default 20)
  *   - timestamp: ISO date string to fetch posts before (for pagination)
+ *   - family_id: optional Famileo family ID to use
  */
 function handleFamileoPosts(params) {
   try {
     const limit = parseInt(params.limit) || 20;
     const timestamp = params.timestamp || null;
+    const familyId = params.family_id || null;
 
-    const response = famileoFetchPosts(limit, timestamp);
+    const response = famileoFetchPosts(limit, timestamp, familyId);
 
     // Extract only the fields we need and filter by allowed authors
     const allowedAuthors = Object.keys(FAMILEO_AUTHOR_MAPPING);
@@ -402,6 +407,48 @@ function handleFamileoTriggerRefresh() {
     return createResponse({
       ok: false,
       error: { code: 'TRIGGER_ERROR', message: String(error) }
+    });
+  }
+}
+
+/**
+ * Handler for famileo/families endpoint
+ * Returns list of configured families from the families sheet
+ */
+function handleFamileoFamilies() {
+  try {
+    const families = getFamilies();
+
+    return createResponse({
+      ok: true,
+      data: { families: families }
+    });
+  } catch (error) {
+    Logger.log('Famileo families error: ' + error);
+    return createResponse({
+      ok: false,
+      error: { code: 'FAMILEO_ERROR', message: String(error) }
+    });
+  }
+}
+
+/**
+ * Handler for famileo/imported-ids endpoint
+ * Returns list of Famileo post IDs that have already been imported
+ */
+function handleFamileoImportedIds() {
+  try {
+    const ids = getImportedFamileoPostIds();
+
+    return createResponse({
+      ok: true,
+      data: { ids: ids }
+    });
+  } catch (error) {
+    Logger.log('Famileo imported-ids error: ' + error);
+    return createResponse({
+      ok: false,
+      error: { code: 'FAMILEO_ERROR', message: String(error) }
     });
   }
 }

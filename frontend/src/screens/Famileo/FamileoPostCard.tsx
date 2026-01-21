@@ -8,9 +8,10 @@ interface FamileoPostCardProps {
   onSelectionChange: (selected: boolean) => void
   onImageLoaded: (postId: number, base64: string, mimeType: string) => void
   cachedImage?: { base64: string; mimeType: string }
+  alreadyImported?: boolean
 }
 
-export function FamileoPostCard({ post, selected, onSelectionChange, onImageLoaded, cachedImage }: FamileoPostCardProps) {
+export function FamileoPostCard({ post, selected, onSelectionChange, onImageLoaded, cachedImage, alreadyImported }: FamileoPostCardProps) {
   const [imageLoading, setImageLoading] = useState(false)
   const [imageSrc, setImageSrc] = useState<string | null>(null)
   const [imageError, setImageError] = useState(false)
@@ -55,7 +56,7 @@ export function FamileoPostCard({ post, selected, onSelectionChange, onImageLoad
           selected ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
         }`}
       >
-        {/* Header: Checkbox, Author, Date */}
+        {/* Header: Checkbox, Author, Date, Imported badge */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {/* Checkbox */}
@@ -75,6 +76,17 @@ export function FamileoPostCard({ post, selected, onSelectionChange, onImageLoad
               </span>
             </div>
           </div>
+          {/* Already imported badge */}
+          {alreadyImported && (
+            <div className="flex-shrink-0 ml-2">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Importé
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Image */}

@@ -10,6 +10,7 @@ export interface CreateArticlePayload {
     base64: string
   }
   date?: string
+  famileo_post_id?: string
   assembly_state?: object | null
   full_page?: boolean
 }

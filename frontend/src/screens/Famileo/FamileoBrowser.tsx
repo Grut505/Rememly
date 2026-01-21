@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../../ui/AppHeader'
-import { famileoApi, FamileoPost } from '../../api/famileo'
+import { famileoApi, FamileoPost, FamileoFamily } from '../../api/famileo'
 import { FamileoPostCard } from './FamileoPostCard'
 import { articlesService } from '../../services/articles.service'
 import { useAuth } from '../../auth/AuthContext'
@@ -37,6 +37,37 @@ export function FamileoBrowser() {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null)
 
+  // Families state
+  const [families, setFamilies] = useState<FamileoFamily[]>([])
+  const [selectedFamilyId, setSelectedFamilyId] = useState<string>('')
+  const [loadingFamilies, setLoadingFamilies] = useState(true)
+
+  // Imported posts filter state
+  const [importedPostIds, setImportedPostIds] = useState<Set<string>>(new Set())
+  const [hideImported, setHideImported] = useState(false)
+
+  // Load families and imported IDs on mount
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        const [familiesResponse, importedResponse] = await Promise.all([
+          famileoApi.families(),
+          famileoApi.importedIds()
+        ])
+        setFamilies(familiesResponse.families)
+        if (familiesResponse.families.length > 0) {
+          setSelectedFamilyId(familiesResponse.families[0].famileo_id)
+        }
+        setImportedPostIds(new Set(importedResponse.ids))
+      } catch (err) {
+        console.error('Failed to load initial data:', err)
+      } finally {
+        setLoadingFamilies(false)
+      }
+    }
+    loadInitialData()
+  }, [])
+
   const handleGetPosts = async () => {
     if (!startDate || !endDate) {
       setError('Please select both start and end dates')
@@ -70,6 +101,7 @@ export function FamileoBrowser() {
         const response = await famileoApi.posts({
           limit: '50',
           timestamp: timestamp,
+          family_id: selectedFamilyId || undefined,
         })
         console.log('Famileo fetch - got', response.posts.length, 'posts, has_more:', response.has_more, 'next_timestamp:', response.next_timestamp)
 
@@ -189,8 +221,12 @@ export function FamileoBrowser() {
           post.author_email,
           post.text,
           file,
-          dateModification
+          dateModification,
+          String(post.id) // famileo_post_id
         )
+
+        // Add to imported set so it shows as imported immediately
+        setImportedPostIds(prev => new Set([...prev, String(post.id)]))
 
         // Small delay between creations to avoid overwhelming the API
         if (i < selectedPosts.length - 1) {
@@ -259,9 +295,39 @@ export function FamileoBrowser() {
         </div>
       </div>
 
-      {/* Date filters */}
+      {/* Filters */}
       <div className="bg-white border-b border-gray-200 px-4 py-4">
         <div className="flex flex-col gap-4">
+          {/* Family selector */}
+          {families.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Famille
+              </label>
+              <select
+                value={selectedFamilyId}
+                onChange={(e) => setSelectedFamilyId(e.target.value)}
+                disabled={loading || bulkCreating || loadingFamilies}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 text-gray-900 bg-white"
+              >
+                {families.map((family) => (
+                  <option key={family.id} value={family.famileo_id}>
+                    {family.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {loadingFamilies && (
+            <div className="text-sm text-gray-500">Chargement des familles...</div>
+          )}
+          {!loadingFamilies && families.length === 0 && (
+            <div className="text-sm text-amber-600">
+              Aucune famille configurée. Ajoutez des familles dans la sheet "families".
+            </div>
+          )}
+
+          {/* Date filters */}
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <div className="flex-1 min-w-0">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -290,7 +356,7 @@ export function FamileoBrowser() {
           </div>
           <button
             onClick={handleGetPosts}
-            disabled={loading || bulkCreating || !startDate || !endDate}
+            disabled={loading || bulkCreating || !startDate || !endDate || (!selectedFamilyId && families.length > 0)}
             className="w-full py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors touch-manipulation"
           >
             {loading ? 'Loading...' : 'Get Posts'}
@@ -347,25 +413,42 @@ export function FamileoBrowser() {
       {!loading && posts.length > 0 && (
         <div className="flex-1 py-4 pb-24">
           {/* Selection controls */}
-          <div className="px-4 mb-3 flex items-center justify-between">
-            <div className="text-sm text-gray-500">
-              {posts.length} post{posts.length > 1 ? 's' : ''} found
-              {selectedCount > 0 && (
-                <span className="ml-2 text-primary-600 font-medium">
-                  ({selectedCount} selected)
-                </span>
-              )}
+          <div className="px-4 mb-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-500">
+                {posts.length} post{posts.length > 1 ? 's' : ''} found
+                {selectedCount > 0 && (
+                  <span className="ml-2 text-primary-600 font-medium">
+                    ({selectedCount} selected)
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={handleSelectAll}
+                disabled={bulkCreating}
+                className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+              >
+                {selectedIds.size === posts.length ? 'Deselect All' : 'Select All'}
+              </button>
             </div>
-            <button
-              onClick={handleSelectAll}
-              disabled={bulkCreating}
-              className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-            >
-              {selectedIds.size === posts.length ? 'Deselect All' : 'Select All'}
-            </button>
+            {/* Hide imported toggle */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="hideImported"
+                checked={hideImported}
+                onChange={(e) => setHideImported(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <label htmlFor="hideImported" className="text-sm text-gray-600">
+                Masquer les posts déjà importés ({posts.filter(p => importedPostIds.has(String(p.id))).length})
+              </label>
+            </div>
           </div>
           <div className="space-y-4">
-            {posts.map((post) => (
+            {posts
+              .filter(post => !hideImported || !importedPostIds.has(String(post.id)))
+              .map((post) => (
               <FamileoPostCard
                 key={post.id}
                 post={post}
@@ -373,6 +456,7 @@ export function FamileoBrowser() {
                 onSelectionChange={(selected) => handleSelectionChange(post.id, selected)}
                 onImageLoaded={handleImageLoaded}
                 cachedImage={imageCache[post.id]}
+                alreadyImported={importedPostIds.has(String(post.id))}
               />
             ))}
           </div>

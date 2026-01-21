@@ -35,11 +35,25 @@ export interface FamileoTriggerRefreshResponse {
   message: string
 }
 
+export interface FamileoFamily {
+  id: string
+  name: string
+  famileo_id: string
+}
+
+export interface FamileoFamiliesResponse {
+  families: FamileoFamily[]
+}
+
+export interface FamileoImportedIdsResponse {
+  ids: string[]
+}
+
 export const famileoApi = {
   status: () =>
     apiClient.get<FamileoStatusResponse>('famileo/status'),
 
-  posts: (params?: { limit?: string; timestamp?: string }) =>
+  posts: (params?: { limit?: string; timestamp?: string; family_id?: string }) =>
     apiClient.get<FamileoPostsResponse>('famileo/posts', params),
 
   image: (url: string) =>
@@ -47,4 +61,10 @@ export const famileoApi = {
 
   triggerRefresh: () =>
     apiClient.get<FamileoTriggerRefreshResponse>('famileo/trigger-refresh'),
+
+  families: () =>
+    apiClient.get<FamileoFamiliesResponse>('famileo/families'),
+
+  importedIds: () =>
+    apiClient.get<FamileoImportedIdsResponse>('famileo/imported-ids'),
 }

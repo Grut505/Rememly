@@ -11,6 +11,7 @@ export interface Article {
   assembly_state?: AssemblyState
   full_page?: boolean
   status?: ArticleStatus
+  famileo_post_id?: string
 }
 
 export interface AssemblyState {

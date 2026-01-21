@@ -170,7 +170,7 @@ npm run deploy
 
 This single command builds and deploys to GitHub Pages. Both modes use the same deployment:
 
-**Mode 2 - Browser:** Accéder via `https://grut505.github.io/Rememly/` dans un navigateur
+**Mode 2 - Browser:** Accéder via `https://grut505.github.io/` dans un navigateur
 
 **Mode 3 - Standalone PWA:** Même URL, mais installée sur téléphone ("Ajouter à l'écran d'accueil")
 

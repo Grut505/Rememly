@@ -70,9 +70,12 @@ function getAvatarOrInitials(author: string, avatarUrl?: string): JSX.Element {
 interface ArticleCardProps {
   article: Article
   onDeleted?: (id: string) => void
+  selectionMode?: boolean
+  selected?: boolean
+  onSelectionChange?: (id: string, selected: boolean) => void
 }
 
-export function ArticleCard({ article, onDeleted }: ArticleCardProps) {
+export function ArticleCard({ article, onDeleted, selectionMode, selected, onSelectionChange }: ArticleCardProps) {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { profile, avatarBlobUrl } = useProfile()
@@ -118,11 +121,19 @@ export function ArticleCard({ article, onDeleted }: ArticleCardProps) {
     ? avatarBlobUrl || undefined
     : undefined
 
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation()
+    onSelectionChange?.(article.id, e.target.checked)
+  }
+
   return (
     <div className="px-4 mb-4">
-      <div className={`bg-white rounded-lg shadow-md overflow-hidden border hover:shadow-lg transition-shadow max-w-2xl mx-auto relative z-0 ${
-        isDeleted ? 'border-red-300' : 'border-gray-200'
-      }`}>
+      <div
+        className={`bg-white rounded-lg shadow-md overflow-hidden border hover:shadow-lg transition-shadow max-w-2xl mx-auto relative z-0 ${
+          isDeleted ? 'border-red-300' : selected ? 'border-primary-500 ring-2 ring-primary-200' : 'border-gray-200'
+        }`}
+        onClick={selectionMode ? () => onSelectionChange?.(article.id, !selected) : undefined}
+      >
 
         {/* Header: Avatar, Author, Date, Edit/Delete buttons */}
         {isDeleted && (
@@ -132,6 +143,15 @@ export function ArticleCard({ article, onDeleted }: ArticleCardProps) {
         )}
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
           <div className="flex items-center gap-3 flex-1 min-w-0">
+            {selectionMode && (
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={handleCheckboxChange}
+                onClick={(e) => e.stopPropagation()}
+                className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 flex-shrink-0"
+              />
+            )}
             {getAvatarOrInitials(displayName, displayAvatar)}
             <div className="flex flex-col min-w-0">
               <span className="font-semibold text-gray-900">{displayName}</span>

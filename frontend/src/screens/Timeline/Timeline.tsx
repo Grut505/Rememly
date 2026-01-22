@@ -10,15 +10,24 @@ import { EmptyState } from './EmptyState'
 import { MonthSeparator } from './MonthSeparator'
 import { AppHeader } from '../../ui/AppHeader'
 import { useAuth } from '../../auth/AuthContext'
-import { getCurrentYear, getMonthYear, getMonthYearKey } from '../../utils/date'
+import { getMonthYear, getMonthYearKey } from '../../utils/date'
 import { CONSTANTS } from '../../utils/constants'
 import { Modal } from '../../ui/Modal'
 import { FiltersPanel, FilterValues } from '../Filters/FiltersPanel'
+import { ConfirmDialog } from '../../ui/ConfirmDialog'
+import { Switch } from '../../ui/Switch'
+import { articlesService } from '../../services/articles.service'
 
 export function Timeline() {
   const navigate = useNavigate()
   const { logout } = useAuth()
   const [showFiltersModal, setShowFiltersModal] = useState(false)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
+  const [showPermanentDeleteConfirm, setShowPermanentDeleteConfirm] = useState(false)
+  const [deleteProgress, setDeleteProgress] = useState<{ current: number; total: number } | null>(null)
   const {
     articles,
     isLoading,
@@ -146,6 +155,95 @@ export function Timeline() {
     }
   }
 
+  // Selection mode handlers
+  const handleSelectionChange = (id: string, selected: boolean) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev)
+      if (selected) {
+        newSet.add(id)
+      } else {
+        newSet.delete(id)
+      }
+      return newSet
+    })
+  }
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === articles.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(articles.map(a => a.id)))
+    }
+  }
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+  }
+
+  const handleSelectionModeToggle = (enabled: boolean) => {
+    setSelectionMode(enabled)
+    if (!enabled) {
+      setSelectedIds(new Set())
+    }
+  }
+
+  // Bulk soft delete (mark as DELETED)
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true)
+    const ids = Array.from(selectedIds)
+    setDeleteProgress({ current: 0, total: ids.length })
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        await articlesService.deleteArticle(ids[i])
+        setDeleteProgress({ current: i + 1, total: ids.length })
+      }
+      // Remove from list or update status based on current filter
+      if (filters.statusFilter === 'active' || !filters.statusFilter) {
+        selectedIds.forEach(id => useArticlesStore.getState().deleteArticle(id))
+      } else {
+        selectedIds.forEach(id => {
+          const article = articles.find(a => a.id === id)
+          if (article) {
+            useArticlesStore.getState().updateArticle({ ...article, status: 'DELETED' })
+          }
+        })
+      }
+      exitSelectionMode()
+    } catch (err) {
+      console.error('Bulk delete failed:', err)
+    } finally {
+      setBulkDeleting(false)
+      setDeleteProgress(null)
+      setShowBulkDeleteConfirm(false)
+    }
+  }
+
+  // Bulk permanent delete (remove from sheet)
+  const handleBulkPermanentDelete = async () => {
+    setBulkDeleting(true)
+    const ids = Array.from(selectedIds)
+    setDeleteProgress({ current: 0, total: ids.length })
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        await articlesApi.permanentDelete(ids[i])
+        setDeleteProgress({ current: i + 1, total: ids.length })
+      }
+      // Remove from list
+      selectedIds.forEach(id => useArticlesStore.getState().deleteArticle(id))
+      exitSelectionMode()
+    } catch (err) {
+      console.error('Bulk permanent delete failed:', err)
+    } finally {
+      setBulkDeleting(false)
+      setDeleteProgress(null)
+      setShowPermanentDeleteConfirm(false)
+    }
+  }
+
+  // Check if we're viewing deleted articles
+  const isViewingDeleted = filters.statusFilter === 'deleted'
+
   // Check if filters are active (different from default)
   const hasActiveFilters =
     filters.year || // Any year filter is active (including "all years")
@@ -186,25 +284,45 @@ export function Timeline() {
 
       {/* Year Header with Filter - Fixed */}
       <div className="bg-white border-b border-gray-300 px-4 py-3 flex items-center justify-between fixed top-[56px] left-0 right-0 z-[25] max-w-content mx-auto">
-        <h2 className="text-lg font-semibold text-gray-900">{filters.year || 'All years'}</h2>
-        <button
-          onClick={() => setShowFiltersModal(true)}
-          className={`touch-manipulation flex items-center gap-2 ${
-            hasActiveFilters
-              ? 'text-white bg-primary-600 hover:bg-primary-700 px-3 py-1.5 rounded-lg font-medium'
-              : 'text-primary-600 hover:text-primary-700'
-          }`}
-        >
-          <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-            <path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
-          </svg>
-          Filter
-          {hasActiveFilters && (
-            <span className="ml-1 bg-white text-primary-600 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-              !
-            </span>
+        <h2 className="text-lg font-semibold text-gray-900">
+          {selectionMode ? `${selectedIds.size} selected` : (filters.year || 'All years')}
+        </h2>
+        <div className="flex items-center gap-4">
+          {selectionMode ? (
+            <button
+              onClick={handleSelectAll}
+              className="text-primary-600 hover:text-primary-700 touch-manipulation text-sm font-medium"
+            >
+              {selectedIds.size === articles.length ? 'Deselect all' : 'Select all'}
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowFiltersModal(true)}
+              className={`touch-manipulation flex items-center gap-2 ${
+                hasActiveFilters
+                  ? 'text-white bg-primary-600 hover:bg-primary-700 px-3 py-1.5 rounded-lg font-medium'
+                  : 'text-primary-600 hover:text-primary-700'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+              </svg>
+              Filter
+              {hasActiveFilters && (
+                <span className="ml-1 bg-white text-primary-600 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  !
+                </span>
+              )}
+            </button>
           )}
-        </button>
+          {articles.length > 0 && (
+            <Switch
+              checked={selectionMode}
+              onChange={handleSelectionModeToggle}
+              label="Select"
+            />
+          )}
+        </div>
       </div>
 
       {/* Spacer for fixed year header */}
@@ -228,7 +346,13 @@ export function Timeline() {
                     <MonthSeparator monthYear={getMonthYear(article.date)} />
                   )}
                   <div className={`relative z-0 ${showMonthSeparator ? 'pt-8' : ''}`}>
-                    <ArticleCard article={article} onDeleted={handleArticleDeleted} />
+                    <ArticleCard
+                      article={article}
+                      onDeleted={handleArticleDeleted}
+                      selectionMode={selectionMode}
+                      selected={selectedIds.has(article.id)}
+                      onSelectionChange={handleSelectionChange}
+                    />
                   </div>
                 </Fragment>
               )
@@ -251,8 +375,66 @@ export function Timeline() {
         </div>
       )}
 
-      {/* FAB */}
-      <FloatingActionButton onClick={() => navigate('/editor')} />
+      {/* Selection Mode Action Bar */}
+      {selectionMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 p-4 z-50 shadow-lg">
+          <div className="max-w-content mx-auto flex items-center justify-between gap-4">
+            <span className="text-sm text-gray-600">
+              {selectedIds.size} article{selectedIds.size > 1 ? 's' : ''} selected
+            </span>
+            <div className="flex gap-2">
+              {isViewingDeleted ? (
+                <button
+                  onClick={() => setShowPermanentDeleteConfirm(true)}
+                  disabled={bulkDeleting}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-medium"
+                >
+                  {bulkDeleting ? 'Deleting...' : 'Delete permanently'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  disabled={bulkDeleting}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-medium"
+                >
+                  {bulkDeleting ? 'Deleting...' : 'Delete'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FAB - hide in selection mode */}
+      {!selectionMode && <FloatingActionButton onClick={() => navigate('/editor')} />}
+
+      {/* Bulk Delete Confirmation (soft delete) */}
+      <ConfirmDialog
+        isOpen={showBulkDeleteConfirm}
+        title="Delete articles?"
+        message={`${selectedIds.size} article${selectedIds.size > 1 ? 's' : ''} will be marked as deleted. You can find them later by enabling the 'Show deleted' filter.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={handleBulkDelete}
+        onCancel={() => setShowBulkDeleteConfirm(false)}
+        variant="danger"
+        isLoading={bulkDeleting}
+        progress={deleteProgress}
+      />
+
+      {/* Permanent Delete Confirmation */}
+      <ConfirmDialog
+        isOpen={showPermanentDeleteConfirm}
+        title="Permanently delete articles?"
+        message={`⚠️ WARNING: ${selectedIds.size} article${selectedIds.size > 1 ? 's' : ''} will be permanently removed from the database. This action cannot be undone!`}
+        confirmLabel="Delete permanently"
+        cancelLabel="Cancel"
+        onConfirm={handleBulkPermanentDelete}
+        onCancel={() => setShowPermanentDeleteConfirm(false)}
+        variant="danger"
+        isLoading={bulkDeleting}
+        progress={deleteProgress}
+      />
 
       {/* Filters Modal */}
       <Modal

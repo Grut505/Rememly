@@ -12,7 +12,7 @@ export function Button({
   children,
   ...props
 }: ButtonProps) {
-  const baseClasses = 'px-6 py-3 rounded-lg font-medium transition-colors touch-manipulation'
+  const baseClasses = 'px-6 py-3 rounded-lg font-medium transition-colors touch-manipulation flex items-center justify-center'
 
   const variantClasses = {
     primary: 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-300',

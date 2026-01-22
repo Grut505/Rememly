@@ -255,3 +255,36 @@ function handleArticleDelete(id) {
     data: { id, deleted: true },
   });
 }
+
+function handleArticlePermanentDelete(id) {
+  const sheet = getArticlesSheet();
+  const rowIndex = findRowById(sheet, id);
+
+  if (rowIndex === -1) {
+    return createResponse({
+      ok: false,
+      error: { code: 'NOT_FOUND', message: 'Article not found' },
+    });
+  }
+
+  // Get article data before deletion (for optional cleanup)
+  const row = sheet.getRange(rowIndex, 1, 1, 10).getValues()[0];
+  const imageFileId = row[5]; // image_file_id column
+
+  // Delete the row from the sheet
+  sheet.deleteRow(rowIndex);
+
+  // Optionally delete the image from Drive (commented out for safety)
+  // if (imageFileId) {
+  //   try {
+  //     DriveApp.getFileById(imageFileId).setTrashed(true);
+  //   } catch (e) {
+  //     Logger.log('Could not trash image file: ' + e);
+  //   }
+  // }
+
+  return createResponse({
+    ok: true,
+    data: { id, deleted: true, permanent: true },
+  });
+}

@@ -10,6 +10,7 @@ interface ConfirmDialogProps {
   onCancel: () => void
   variant?: 'danger' | 'primary'
   isLoading?: boolean
+  progress?: { current: number; total: number } | null
 }
 
 export function ConfirmDialog({
@@ -22,6 +23,7 @@ export function ConfirmDialog({
   onCancel,
   variant = 'primary',
   isLoading = false,
+  progress = null,
 }: ConfirmDialogProps) {
   if (!isOpen) return null
 
@@ -36,7 +38,25 @@ export function ConfirmDialog({
       {/* Dialog */}
       <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
         <h2 className="text-xl font-semibold mb-2">{title}</h2>
-        <p className="text-gray-600 mb-6">{message}</p>
+        <p className="text-gray-600 mb-4">{message}</p>
+
+        {/* Progress bar */}
+        {progress && (
+          <div className="mb-6">
+            <div className="flex justify-between text-sm text-gray-600 mb-1">
+              <span>Deleting...</span>
+              <span>{progress.current} / {progress.total}</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div
+                className="bg-red-600 h-2.5 rounded-full transition-all duration-200"
+                style={{ width: `${(progress.current / progress.total) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {!progress && <div className="mb-2" />}
 
         <div className="flex gap-3">
           <Button

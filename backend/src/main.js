@@ -48,6 +48,9 @@ function doPost(e) {
       case 'articles/delete':
         return handleArticleDelete(params.id);
 
+      case 'articles/permanent-delete':
+        return handleArticlePermanentDelete(params.id);
+
       case 'pdf/create':
         return handlePdfCreate(body, authResult.user);
 

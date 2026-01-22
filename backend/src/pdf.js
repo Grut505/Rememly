@@ -363,19 +363,80 @@ function generatePdfHtml(articles, year, from, to) {
     .month-divider {
       page-break-before: always;
       position: relative;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
       height: 27.7cm;
-      font-size: 32pt;
-      font-weight: bold;
+      overflow: hidden;
     }
 
     .month-divider .page-number {
       position: absolute;
       bottom: 0;
       right: 0;
+      z-index: 10;
+    }
+
+    /* Month mosaic background */
+    .month-mosaic-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      opacity: 0.15;
+    }
+
+    .month-mosaic-cell {
+      position: absolute;
+      overflow: hidden;
+    }
+
+    .month-mosaic-cell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Seasonal fruits decoration */
+    .season-fruits {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+    }
+
+    .fruit-icon {
+      position: absolute;
+      font-size: 2.5cm;
+      opacity: 0.6;
+    }
+
+    /* Month title overlay */
+    .month-title-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 5;
+    }
+
+    .month-title {
+      font-size: 42pt;
+      font-weight: bold;
+      color: #333;
+      text-shadow: 2px 2px 8px rgba(255,255,255,0.9), -2px -2px 8px rgba(255,255,255,0.9), 2px -2px 8px rgba(255,255,255,0.9), -2px 2px 8px rgba(255,255,255,0.9);
+      margin: 0;
+      padding: 0.5cm 1.5cm;
+      background: rgba(255,255,255,0.85);
+      border-radius: 0.5cm;
+    }
+
+    .month-subtitle {
+      font-size: 14pt;
+      color: #666;
+      margin-top: 0.3cm;
+      text-shadow: 1px 1px 4px rgba(255,255,255,0.9);
     }
   </style>
 </head>
@@ -402,7 +463,7 @@ function generatePdfHtml(articles, year, from, to) {
 
     // Month divider page
     currentPage++;
-    html += `  <div class="month-divider">${monthYear}<div class="page-number">${currentPage} / ${totalPages}</div></div>\n`;
+    html += generateMonthDivider(monthArticles, monthName, yearStr, monthIndex, currentPage, totalPages);
 
     // Get articles for this month
     const monthArticles = articlesByMonth[monthKey];
@@ -771,6 +832,165 @@ function generateRowBasedLayout(images, totalWidth, totalHeight, gap) {
   }
 
   return cells;
+}
+
+/**
+ * Generate a month divider page with mosaic background, seasonal fruits, and title
+ */
+function generateMonthDivider(monthArticles, monthName, year, monthIndex, currentPage, totalPages) {
+  const monthYear = `${monthName} ${year}`;
+  const articleCount = monthArticles.length;
+
+  // Generate mini mosaic from month's images
+  const mosaicHtml = generateMonthMosaic(monthArticles);
+
+  // Get seasonal fruits for this month
+  const fruitsHtml = generateSeasonalFruits(monthIndex);
+
+  return `
+  <div class="month-divider">
+    <!-- Background mosaic from month's photos -->
+    <div class="month-mosaic-bg">
+      ${mosaicHtml}
+    </div>
+
+    <!-- Seasonal fruit decorations -->
+    <div class="season-fruits">
+      ${fruitsHtml}
+    </div>
+
+    <!-- Month title -->
+    <div class="month-title-container">
+      <h2 class="month-title">${monthYear}</h2>
+      <p class="month-subtitle">${articleCount} souvenir${articleCount > 1 ? 's' : ''}</p>
+    </div>
+
+    <div class="page-number">${currentPage} / ${totalPages}</div>
+  </div>
+`;
+}
+
+/**
+ * Generate a small mosaic of images for the month divider background
+ */
+function generateMonthMosaic(monthArticles) {
+  // Collect images from articles
+  const images = [];
+
+  for (const article of monthArticles) {
+    if (article.image_file_id && images.length < 12) { // Limit to 12 images for performance
+      try {
+        const file = DriveApp.getFileById(article.image_file_id);
+        const blob = file.getBlob();
+        const base64 = Utilities.base64Encode(blob.getBytes());
+        const mimeType = blob.getContentType();
+        const imageBytes = blob.getBytes();
+        const dimensions = getImageDimensions(imageBytes, mimeType);
+
+        const isPortrait = dimensions && dimensions.height > dimensions.width;
+        const aspectRatio = dimensions ? dimensions.width / dimensions.height : 1;
+
+        images.push({
+          base64,
+          mimeType,
+          isPortrait,
+          aspectRatio
+        });
+      } catch (e) {
+        // Skip failed images
+      }
+    }
+  }
+
+  if (images.length === 0) {
+    return '';
+  }
+
+  // Generate a simple grid layout
+  const mosaicWidth = 19;  // cm
+  const mosaicHeight = 27.7; // cm
+  const gap = 0.1;
+
+  // Calculate grid dimensions
+  const cols = images.length <= 4 ? 2 : (images.length <= 9 ? 3 : 4);
+  const rows = Math.ceil(images.length / cols);
+
+  const cellWidth = (mosaicWidth - (cols - 1) * gap) / cols;
+  const cellHeight = (mosaicHeight - (rows - 1) * gap) / rows;
+
+  let html = '';
+  let imgIndex = 0;
+
+  for (let r = 0; r < rows && imgIndex < images.length; r++) {
+    for (let c = 0; c < cols && imgIndex < images.length; c++) {
+      const img = images[imgIndex];
+      const x = c * (cellWidth + gap);
+      const y = r * (cellHeight + gap);
+
+      html += `
+        <div class="month-mosaic-cell" style="left: ${x.toFixed(2)}cm; top: ${y.toFixed(2)}cm; width: ${cellWidth.toFixed(2)}cm; height: ${cellHeight.toFixed(2)}cm;">
+          <img src="data:${img.mimeType};base64,${img.base64}" alt="" />
+        </div>`;
+      imgIndex++;
+    }
+  }
+
+  return html;
+}
+
+/**
+ * Generate seasonal fruit emojis positioned around the page
+ * Fruits are chosen based on the month/season in France
+ */
+function generateSeasonalFruits(monthIndex) {
+  // Seasonal fruits for each month (0 = January, 11 = December)
+  // Using common fruits that are in season in France
+  const seasonalFruits = {
+    0: ['🍊', '🍋', '🥝', '🍐'],          // January - citrus, kiwi, pear
+    1: ['🍊', '🍋', '🥝', '🍐'],          // February - citrus, kiwi, pear
+    2: ['🍋', '🍐', '🍏'],                 // March - lemon, pear, apple
+    3: ['🍓', '🍋', '🍏'],                 // April - strawberry starts, citrus
+    4: ['🍓', '🍒', '🍑'],                 // May - strawberry, cherry starts
+    5: ['🍓', '🍒', '🍑', '🍉'],          // June - strawberry, cherry, peach, melon starts
+    6: ['🍑', '🍉', '🍇', '🍒'],          // July - peach, melon, grapes start, cherry
+    7: ['🍑', '🍉', '🍇', '🍐'],          // August - peach, melon, grapes, pear starts
+    8: ['🍇', '🍐', '🍎', '🍑'],          // September - grapes, pear, apple, late peach
+    9: ['🍎', '🍐', '🍇', '🥝'],          // October - apple, pear, grapes, kiwi starts
+    10: ['🍎', '🍐', '🥝', '🍊'],         // November - apple, pear, kiwi, citrus starts
+    11: ['🍊', '🍋', '🍎', '🍐']          // December - citrus, apple, pear
+  };
+
+  const fruits = seasonalFruits[monthIndex] || ['🍎', '🍐', '🍊'];
+
+  // Position fruits around the edges of the page
+  // Avoiding the center where the title will be
+  const positions = [
+    { x: 0.5, y: 1 },
+    { x: 16, y: 0.5 },
+    { x: 1, y: 24 },
+    { x: 15.5, y: 25 },
+    { x: 0.3, y: 12 },
+    { x: 17, y: 14 },
+    { x: 8, y: 0.8 },
+    { x: 10, y: 25.5 },
+    { x: 2, y: 5 },
+    { x: 15, y: 7 },
+    { x: 1.5, y: 20 },
+    { x: 16, y: 21 },
+  ];
+
+  let html = '';
+  for (let i = 0; i < positions.length; i++) {
+    const pos = positions[i];
+    const fruit = fruits[i % fruits.length];
+    // Vary the size and opacity slightly for visual interest
+    const sizeFactor = 0.8 + Math.random() * 0.4; // 0.8 to 1.2
+    const opacity = 0.4 + (i % 3) * 0.15; // Vary between 0.4 and 0.7
+
+    html += `<span class="fruit-icon" style="left: ${pos.x}cm; top: ${pos.y}cm; font-size: ${(2.2 * sizeFactor).toFixed(1)}cm; opacity: ${opacity.toFixed(2)};">${fruit}</span>`;
+  }
+
+  return html;
 }
 
 function formatDateFr(dateInput) {

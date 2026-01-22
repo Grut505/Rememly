@@ -54,4 +54,7 @@ export const articlesApi = {
 
   delete: (id: string) =>
     apiClient.get<{ id: string; deleted: boolean }>('articles/delete', { id }),
+
+  permanentDelete: (id: string) =>
+    apiClient.get<{ id: string; deleted: boolean }>('articles/permanent-delete', { id }),
 }

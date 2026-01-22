@@ -76,6 +76,7 @@ export function FamileoBrowser() {
 
     setLoading(true)
     setError(null)
+    setRefreshMessage(null)
     setPosts([])
     setSelectedIds(new Set())
     setImageCache({})
@@ -356,10 +357,10 @@ export function FamileoBrowser() {
           </div>
           <button
             onClick={handleGetPosts}
-            disabled={loading || bulkCreating || !startDate || !endDate || (!selectedFamilyId && families.length > 0)}
+            disabled={loading || bulkCreating || loadingFamilies || !startDate || !endDate || (!selectedFamilyId && families.length > 0)}
             className="w-full py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors touch-manipulation"
           >
-            {loading ? 'Loading...' : 'Get Posts'}
+            {loadingFamilies ? 'Loading families...' : loading ? 'Loading...' : 'Get Posts'}
           </button>
         </div>
       </div>

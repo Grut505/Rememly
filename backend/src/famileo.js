@@ -267,8 +267,9 @@ function handleFamileoPosts(params) {
  * Fetch a Famileo image and return as base64
  */
 function famileoFetchImage(imageUrl) {
-  if (!imageUrl || !imageUrl.includes('cloudfront.net')) {
-    throw new Error('Invalid Famileo image URL');
+  // Accept Famileo image URLs from cloudfront or direct famileo.com domains
+  if (!imageUrl || (!imageUrl.includes('cloudfront.net') && !imageUrl.includes('famileo.com') && !imageUrl.includes('famileo.'))) {
+    throw new Error('Invalid Famileo image URL: ' + (imageUrl || 'empty'));
   }
 
   const session = getFamileoSession();

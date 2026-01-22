@@ -37,19 +37,19 @@ sleep 3
 # Get the latest workflow run
 echo "🔍 Recherche du workflow..."
 
-# Try to get run ID using curl (works without gh CLI)
+# Helper functions using jq for reliable JSON parsing
 get_latest_run() {
-    curl -s "${GITHUB_API}?per_page=1" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*'
+    curl -s "${GITHUB_API}?per_page=1" | jq -r '.workflow_runs[0].id // empty'
 }
 
 get_run_status() {
     local run_id=$1
-    curl -s "${GITHUB_API}/${run_id}" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4
+    curl -s "${GITHUB_API}/${run_id}" | jq -r '.status // empty'
 }
 
 get_run_conclusion() {
     local run_id=$1
-    curl -s "${GITHUB_API}/${run_id}" | grep -o '"conclusion":"[^"]*"' | head -1 | cut -d'"' -f4
+    curl -s "${GITHUB_API}/${run_id}" | jq -r '.conclusion // empty'
 }
 
 RUN_ID=$(get_latest_run)

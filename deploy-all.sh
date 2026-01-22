@@ -73,19 +73,19 @@ sleep 3
 
 GITHUB_API="https://api.github.com/repos/${GITHUB_PAGES_REPO}/actions/runs"
 
-# Helper functions
+# Helper functions using jq for reliable JSON parsing
 get_latest_run() {
-    curl -s "${GITHUB_API}?per_page=1" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*'
+    curl -s "${GITHUB_API}?per_page=1" | jq -r '.workflow_runs[0].id // empty'
 }
 
 get_run_status() {
     local run_id=$1
-    curl -s "${GITHUB_API}/${run_id}" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4
+    curl -s "${GITHUB_API}/${run_id}" | jq -r '.status // empty'
 }
 
 get_run_conclusion() {
     local run_id=$1
-    curl -s "${GITHUB_API}/${run_id}" | grep -o '"conclusion":"[^"]*"' | head -1 | cut -d'"' -f4
+    curl -s "${GITHUB_API}/${run_id}" | jq -r '.conclusion // empty'
 }
 
 echo "🔍 Recherche du workflow..."

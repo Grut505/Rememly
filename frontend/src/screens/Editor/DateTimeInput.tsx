@@ -31,7 +31,7 @@ export function DateTimeInput({ value, onChange }: DateTimeInputProps) {
         type="datetime-local"
         value={toLocalDateTime(value)}
         onChange={handleChange}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        className="w-full max-w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent box-border"
       />
     </div>
   )

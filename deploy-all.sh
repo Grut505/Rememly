@@ -43,14 +43,6 @@ fi
 echo "✅ Backend déployé @$VERSION"
 echo ""
 
-# Frontend
-echo "🔨 Build du frontend..."
-cd frontend
-npm run build
-cd ..
-echo "✅ Frontend buildé"
-echo ""
-
 # Git commit and push
 echo "📦 Commit et push vers GitHub..."
 git add -A

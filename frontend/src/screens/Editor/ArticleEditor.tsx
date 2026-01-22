@@ -9,6 +9,7 @@ import { useUiStore } from '../../state/uiStore'
 import { Button } from '../../ui/Button'
 import { LoadingScreen } from '../../ui/Spinner'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
+import { AppHeader } from '../../ui/AppHeader'
 import { PhotoPicker } from './PhotoPicker'
 import { TextInput } from './TextInput'
 import { DateTimeInput } from './DateTimeInput'
@@ -195,9 +196,10 @@ export function ArticleEditor() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden fixed inset-0">
-      <div className="h-full flex flex-col max-w-content mx-auto w-full bg-white">
-      {/* Header */}
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <AppHeader />
+      <div className="flex-1 flex flex-col max-w-content mx-auto w-full bg-white">
+      {/* Sub-header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <button
           onClick={handleCancel}
@@ -213,7 +215,7 @@ export function ArticleEditor() {
       </header>
 
       {/* Content - scrollable */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-6 pb-4">
         <PhotoPicker
           onPhotoSelected={handlePhotoSelected}
           currentImage={previewUrl}

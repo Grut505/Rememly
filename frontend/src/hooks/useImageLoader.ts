@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '../api/client'
 
+// In-memory cache for loaded images (persists across component remounts)
+const imageCache = new Map<string, string>()
+
 // Extract file ID from Google Drive URL
 function extractFileId(url: string): string | null {
   if (!url) return null
@@ -23,12 +26,6 @@ function extractFileId(url: string): string | null {
   return null
 }
 
-// Detect if running in standalone PWA mode (iOS)
-function isStandalonePWA(): boolean {
-  return window.matchMedia('(display-mode: standalone)').matches ||
-         (window.navigator as any).standalone === true
-}
-
 interface UseImageLoaderResult {
   src: string
   isLoading: boolean
@@ -41,43 +38,21 @@ export function useImageLoader(driveUrl: string, fileId?: string): UseImageLoade
   const [error, setError] = useState<boolean>(false)
 
   useEffect(() => {
-    // Reset state when URL changes
-    setSrc('')
-    setIsLoading(true)
-    setError(false)
-
     if (!driveUrl) {
+      setSrc('')
       setIsLoading(false)
+      setError(false)
       return
     }
 
-    // If already a data URL, use it directly
-    if (driveUrl.startsWith('data:')) {
+    // If already a data URL or blob URL, use it directly
+    if (driveUrl.startsWith('data:') || driveUrl.startsWith('blob:')) {
       setSrc(driveUrl)
       setIsLoading(false)
+      setError(false)
       return
     }
 
-    // On standalone PWA mode (iOS), fetch via backend
-    if (isStandalonePWA()) {
-      fetchViaBackend()
-    } else {
-      // On other browsers (including Safari), use direct URL
-      const thumbnailUrl = convertToThumbnail(driveUrl)
-      setSrc(thumbnailUrl)
-      setIsLoading(false)
-    }
-  }, [driveUrl, fileId])
-
-  const convertToThumbnail = (url: string): string => {
-    const extractedFileId = extractFileId(url)
-    if (extractedFileId) {
-      return `https://drive.google.com/thumbnail?id=${extractedFileId}&sz=w2000`
-    }
-    return url
-  }
-
-  const fetchViaBackend = async () => {
     const finalFileId = fileId || extractFileId(driveUrl)
 
     if (!finalFileId) {
@@ -86,23 +61,41 @@ export function useImageLoader(driveUrl: string, fileId?: string): UseImageLoade
       return
     }
 
-    try {
-      const response = await apiClient.get<{ base64: string }>('image/fetch', { fileId: finalFileId })
+    // Check cache first
+    const cached = imageCache.get(finalFileId)
+    if (cached) {
+      setSrc(cached)
+      setIsLoading(false)
+      setError(false)
+      return
+    }
 
-      if (!response.base64) {
+    // Fetch via backend
+    setIsLoading(true)
+    setError(false)
+
+    const fetchImage = async () => {
+      try {
+        const response = await apiClient.get<{ base64: string }>('image/fetch', { fileId: finalFileId })
+
+        if (!response.base64) {
+          setError(true)
+          setIsLoading(false)
+          return
+        }
+
+        const dataUrl = `data:image/jpeg;base64,${response.base64}`
+        imageCache.set(finalFileId, dataUrl) // Cache the result
+        setSrc(dataUrl)
+        setIsLoading(false)
+      } catch (err) {
         setError(true)
         setIsLoading(false)
-        return
       }
-
-      const dataUrl = `data:image/jpeg;base64,${response.base64}`
-      setSrc(dataUrl)
-      setIsLoading(false)
-    } catch (err) {
-      setError(true)
-      setIsLoading(false)
     }
-  }
+
+    fetchImage()
+  }, [driveUrl, fileId])
 
   return { src, isLoading, error }
 }

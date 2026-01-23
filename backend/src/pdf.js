@@ -236,22 +236,16 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
     }
 
     .cover-title h1 {
-      font-size: 28pt;
-      margin: 0 0 0.3cm 0;
+      font-size: 26pt;
+      margin: 0 0 0.4cm 0;
       color: #333;
+      font-weight: bold;
     }
 
     .cover-title .dates {
-      font-size: 14pt;
-      color: #666;
-      margin: 0;
-    }
-
-    .cover-title .family-name {
-      font-size: 16pt;
+      font-size: 13pt;
       color: #555;
-      margin: 0 0 0.3cm 0;
-      font-style: italic;
+      margin: 0;
     }
 
     .mosaic-container {
@@ -263,15 +257,12 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
     .mosaic-cell {
       position: absolute;
       overflow: hidden;
-      border-radius: 3px;
-      background: #f0f0f0;
     }
 
     .mosaic-cell img {
       width: 100%;
       height: 100%;
-      object-fit: contain;
-      background: #e8e8e8;
+      object-fit: cover;
     }
 
     .articles-page {
@@ -279,7 +270,7 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
       height: 27.7cm; /* A4 height (29.7cm) - 2cm margins */
       display: flex;
       flex-direction: column;
-      gap: 0.6cm;
+      gap: 0.4cm;
     }
 
     .article {
@@ -288,7 +279,11 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      max-height: 13cm;
+      max-height: 13.5cm;
+    }
+
+    .article:nth-child(2) {
+      margin-top: 0.2cm;
     }
 
     .article-content {
@@ -306,14 +301,14 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
     .article-content.landscape .article-image {
       width: 100%;
       display: flex;
-      justify-content: flex-start;
+      justify-content: center;
     }
 
     .article-content.landscape .article-image img {
       width: 100%;
       max-height: 9.5cm;
       object-fit: contain;
-      object-position: left top;
+      object-position: center top;
     }
 
     .article-content.landscape .article-bottom {
@@ -454,7 +449,8 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
       margin: 0;
       padding: 0.5cm 1.5cm;
       background: rgba(255,255,255,0.85);
-      border-radius: 0.5cm;
+      border-radius: 0.15cm;
+      border: 2px solid rgba(51,51,51,0.3);
     }
 
     .month-subtitle {
@@ -504,7 +500,7 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
       transform: translateX(-50%);
       width: 12cm;
       height: 12cm;
-      border-radius: 0.5cm;
+      border-radius: 0.15cm;
       overflow: hidden;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
@@ -677,9 +673,9 @@ function getPngDimensions(bytes) {
 function generateCoverMosaic(articles, from, to) {
   // Get family name from config
   const familyName = getConfigValue('family_name');
-  const familyNameHtml = familyName
-    ? `<p class="family-name">Livre de souvenirs de ${escapeHtml(familyName)}</p>`
-    : '';
+  const titleText = familyName
+    ? `Livre de souvenir des ${escapeHtml(familyName)}`
+    : 'Livre de Souvenirs';
 
   // Collect all images with their dimensions
   const images = [];
@@ -709,20 +705,22 @@ function generateCoverMosaic(articles, from, to) {
     }
   }
 
+  // Format dates as "Du ... au ..."
+  const datesText = `Du ${formatDateFr(from)} au ${formatDateFr(to)}`;
+
   if (images.length === 0) {
     return `
   <div class="cover">
-    ${familyNameHtml}
-    <h1>Livre de Souvenirs</h1>
-    <p class="dates">${formatDateFr(from)} - ${formatDateFr(to)}</p>
+    <h1>${titleText}</h1>
+    <p class="dates">${datesText}</p>
   </div>
 `;
   }
 
-  // Available space
+  // Available space - no gaps for tighter mosaic
   const mosaicWidth = 19;  // cm
   const mosaicHeight = 22; // cm
-  const gap = 0.12;        // cm between images
+  const gap = 0;           // No gaps between images
 
   // Generate layout based on image count and orientations
   const cells = generateDynamicLayout(images, mosaicWidth, mosaicHeight, gap);
@@ -739,9 +737,8 @@ function generateCoverMosaic(articles, from, to) {
   return `
   <div class="cover-mosaic">
     <div class="cover-title">
-      ${familyNameHtml}
-      <h1>Livre de Souvenirs</h1>
-      <p class="dates">${formatDateFr(from)} - ${formatDateFr(to)}</p>
+      <h1>${titleText}</h1>
+      <p class="dates">${datesText}</p>
     </div>
     <div class="mosaic-container">
       ${mosaicHtml}
@@ -1071,10 +1068,13 @@ function generateEdgePositions(imageCount, pageWidth, pageHeight) {
   const baseSize = 2.0;  // Base size in cm
   const sizeVariation = 0.4;  // Random variation
 
+  // Reserve space for pagination in bottom-right corner
+  const paginationReserve = 4;  // cm from right edge
+
   // Distribute images across 4 edges
   const perEdge = Math.ceil(imageCount / 4);
 
-  // Top edge (y near 0)
+  // Top edge (y near 0) - full width
   for (let i = 0; i < perEdge && positions.length < imageCount; i++) {
     const progress = perEdge > 1 ? i / (perEdge - 1) : 0.5;
     positions.push({
@@ -1084,27 +1084,29 @@ function generateEdgePositions(imageCount, pageWidth, pageHeight) {
     });
   }
 
-  // Right edge (x near pageWidth)
+  // Right edge (x near pageWidth) - stop before bottom pagination
+  const rightEdgeHeight = pageHeight - 6 - paginationReserve;  // Leave room at bottom
   for (let i = 0; i < perEdge && positions.length < imageCount; i++) {
     const progress = perEdge > 1 ? i / (perEdge - 1) : 0.5;
     positions.push({
       x: pageWidth - baseSize - 0.2 + Math.random() * 0.3,
-      y: 3 + progress * (pageHeight - 6),
+      y: 3 + progress * rightEdgeHeight,
       size: baseSize + (Math.random() - 0.5) * sizeVariation
     });
   }
 
-  // Bottom edge (y near pageHeight)
+  // Bottom edge (y near pageHeight) - avoid right side for pagination
+  const bottomEdgeWidth = pageWidth - paginationReserve - baseSize;
   for (let i = 0; i < perEdge && positions.length < imageCount; i++) {
     const progress = perEdge > 1 ? i / (perEdge - 1) : 0.5;
     positions.push({
-      x: (1 - progress) * (pageWidth - baseSize),  // Reverse direction
+      x: (1 - progress) * bottomEdgeWidth,  // Reverse direction, limited width
       y: pageHeight - baseSize - 0.2 + Math.random() * 0.3,
       size: baseSize + (Math.random() - 0.5) * sizeVariation
     });
   }
 
-  // Left edge (x near 0)
+  // Left edge (x near 0) - full height
   for (let i = 0; i < perEdge && positions.length < imageCount; i++) {
     const progress = perEdge > 1 ? i / (perEdge - 1) : 0.5;
     positions.push({

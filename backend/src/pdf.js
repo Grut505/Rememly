@@ -467,12 +467,12 @@ function generatePdfHtml(articles, year, from, to) {
     const monthName = monthsFr[monthIndex];
     const monthYear = `${monthName} ${yearStr}`;
 
+    // Get articles for this month
+    const monthArticles = articlesByMonth[monthKey];
+
     // Month divider page
     currentPage++;
     html += generateMonthDivider(monthArticles, monthName, yearStr, monthIndex, currentPage, totalPages);
-
-    // Get articles for this month
-    const monthArticles = articlesByMonth[monthKey];
 
     // Process articles 2 by 2
     for (let i = 0; i < monthArticles.length; i += 2) {

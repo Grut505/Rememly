@@ -5,3 +5,30 @@
 -- Supprimer
 -- Filtre par date de génération
 - page de garde avec vraie gestion des photos payage, layout plus dynamique et intelligent
+- progress dans le scrapper avec petites anims ou anecdote sympas
+- chargement des datas mais visuels progressif
+
+
+- Restore article
+
+- le sous header au scroll
+
+- les dates from to, ne pas autoriser to > from, today
+
+- PDF
+-- Liste des PDFs générés
+-- Possibilités de Supprimer
+-- Sort par date tout ça
+-- et bouton pour ajouter un nouveau 
+--- interface qui reprend ce qu'on access
+--- cette interface sera ensuite en mode processing, avec une notif mais le reste de l'interface accessible
+
+- Liste des articles en mode
+-- Liste brute
+-- Mode mosaique
+--- Avec possibilité de zoomer sur cette mosaique et les items serait des boites comme actuellement
+--- On affiche les mois par catégories
+
+
+- statistique
+-- Ilf

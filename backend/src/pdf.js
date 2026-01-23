@@ -395,20 +395,26 @@ function generatePdfHtml(articles, year, from, to) {
       object-fit: cover;
     }
 
-    /* Seasonal fruits decoration */
-    .season-fruits {
+    /* Seasonal fruits/vegetables decoration */
+    .season-decorations {
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
       pointer-events: none;
+      z-index: 1;
     }
 
-    .fruit-icon {
+    .season-item {
       position: absolute;
-      font-size: 2.5cm;
-      opacity: 0.6;
+      opacity: 0.85;
+    }
+
+    .season-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
     }
 
     /* Month title overlay */
@@ -854,8 +860,8 @@ function generateMonthDivider(monthArticles, monthName, year, monthIndex, curren
       ${mosaicHtml}
     </div>
 
-    <!-- Seasonal fruit decorations -->
-    <div class="season-fruits">
+    <!-- Seasonal decorations (fruits/vegetables) -->
+    <div class="season-decorations">
       ${fruitsHtml}
     </div>
 
@@ -939,55 +945,70 @@ function generateMonthMosaic(monthArticles) {
 }
 
 /**
- * Generate seasonal fruit emojis positioned around the page
- * Fruits are chosen based on the month/season in France
+ * Generate seasonal fruits/vegetables images positioned around the page edges
+ * Images are positioned to frame the central content (title + mosaic)
+ * Uses actual PNG images from SEASONAL_IMAGES constant
  */
 function generateSeasonalFruits(monthIndex) {
-  // Seasonal fruits for each month (0 = January, 11 = December)
-  // Using common fruits that are in season in France
-  const seasonalFruits = {
-    0: ['🍊', '🍋', '🥝', '🍐'],          // January - citrus, kiwi, pear
-    1: ['🍊', '🍋', '🥝', '🍐'],          // February - citrus, kiwi, pear
-    2: ['🍋', '🍐', '🍏'],                 // March - lemon, pear, apple
-    3: ['🍓', '🍋', '🍏'],                 // April - strawberry starts, citrus
-    4: ['🍓', '🍒', '🍑'],                 // May - strawberry, cherry starts
-    5: ['🍓', '🍒', '🍑', '🍉'],          // June - strawberry, cherry, peach, melon starts
-    6: ['🍑', '🍉', '🍇', '🍒'],          // July - peach, melon, grapes start, cherry
-    7: ['🍑', '🍉', '🍇', '🍐'],          // August - peach, melon, grapes, pear starts
-    8: ['🍇', '🍐', '🍎', '🍑'],          // September - grapes, pear, apple, late peach
-    9: ['🍎', '🍐', '🍇', '🥝'],          // October - apple, pear, grapes, kiwi starts
-    10: ['🍎', '🍐', '🥝', '🍊'],         // November - apple, pear, kiwi, citrus starts
-    11: ['🍊', '🍋', '🍎', '🍐']          // December - citrus, apple, pear
-  };
+  // Month index is 0-based, SEASONAL_IMAGES uses 1-based keys
+  const monthKey = monthIndex + 1;
+  const images = SEASONAL_IMAGES[monthKey] || [];
 
-  const fruits = seasonalFruits[monthIndex] || ['🍎', '🍐', '🍊'];
+  if (images.length === 0) {
+    return '';
+  }
 
-  // Position fruits around the edges of the page
-  // Avoiding the center where the title will be
+  // Positions around the page edges, avoiding the center content area
+  // Page is 19cm wide x 27.7cm tall (after 1cm margins)
+  // Center area (title + mosaic) is roughly from x:4 to x:15 and y:8 to y:20
   const positions = [
-    { x: 0.5, y: 1 },
-    { x: 16, y: 0.5 },
-    { x: 1, y: 24 },
-    { x: 15.5, y: 25 },
-    { x: 0.3, y: 12 },
-    { x: 17, y: 14 },
-    { x: 8, y: 0.8 },
-    { x: 10, y: 25.5 },
-    { x: 2, y: 5 },
-    { x: 15, y: 7 },
-    { x: 1.5, y: 20 },
-    { x: 16, y: 21 },
+    // Top edge
+    { x: 0.3, y: 0.3, size: 2.2 },
+    { x: 3.5, y: 0.5, size: 1.8 },
+    { x: 7.5, y: 0.2, size: 2.0 },
+    { x: 11.5, y: 0.4, size: 1.9 },
+    { x: 15.5, y: 0.3, size: 2.1 },
+    // Right edge
+    { x: 16.8, y: 3.5, size: 2.0 },
+    { x: 17.0, y: 7.5, size: 1.7 },
+    { x: 16.5, y: 11.5, size: 2.2 },
+    { x: 17.0, y: 15.5, size: 1.8 },
+    { x: 16.8, y: 19.5, size: 2.0 },
+    { x: 16.5, y: 23.5, size: 1.9 },
+    // Bottom edge
+    { x: 0.5, y: 25.5, size: 2.0 },
+    { x: 4.0, y: 25.2, size: 1.8 },
+    { x: 8.0, y: 25.6, size: 2.1 },
+    { x: 12.0, y: 25.3, size: 1.9 },
+    { x: 15.5, y: 25.5, size: 2.0 },
+    // Left edge
+    { x: 0.2, y: 4.0, size: 1.9 },
+    { x: 0.5, y: 8.0, size: 2.0 },
+    { x: 0.3, y: 12.0, size: 1.8 },
+    { x: 0.5, y: 16.0, size: 2.1 },
+    { x: 0.2, y: 20.0, size: 1.9 },
+    // Corners (slightly larger)
+    { x: 16.0, y: 25.0, size: 2.3 },
+    { x: 0.0, y: 0.0, size: 2.4 },
+    { x: 16.5, y: 0.0, size: 2.3 },
   ];
 
-  let html = '';
-  for (let i = 0; i < positions.length; i++) {
-    const pos = positions[i];
-    const fruit = fruits[i % fruits.length];
-    // Vary the size and opacity slightly for visual interest
-    const sizeFactor = 0.8 + Math.random() * 0.4; // 0.8 to 1.2
-    const opacity = 0.4 + (i % 3) * 0.15; // Vary between 0.4 and 0.7
+  // Shuffle images to vary display
+  const shuffled = [...images].sort(() => Math.random() - 0.5);
 
-    html += `<span class="fruit-icon" style="left: ${pos.x}cm; top: ${pos.y}cm; font-size: ${(2.2 * sizeFactor).toFixed(1)}cm; opacity: ${opacity.toFixed(2)};">${fruit}</span>`;
+  let html = '';
+  const usedPositions = Math.min(positions.length, shuffled.length);
+
+  for (let i = 0; i < usedPositions; i++) {
+    const pos = positions[i];
+    const img = shuffled[i % shuffled.length];
+
+    // Add slight rotation for visual interest (-15 to +15 degrees)
+    const rotation = Math.floor(Math.random() * 30) - 15;
+
+    html += `<div class="season-item" style="left: ${pos.x}cm; top: ${pos.y}cm; width: ${pos.size}cm; height: ${pos.size}cm; transform: rotate(${rotation}deg);">
+      <img src="${img.data}" alt="${img.name}" />
+    </div>`;
   }
 
   return html;

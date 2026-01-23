@@ -48,3 +48,10 @@ scripts/famileo-refresh/node_modules/
 
 # Docs
 TODO.md
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+tools/venv/

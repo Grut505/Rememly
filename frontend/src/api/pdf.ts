@@ -4,6 +4,7 @@ import { PdfJob } from './types'
 export interface PdfOptions {
   mosaic_layout?: 'full' | 'centered'
   show_seasonal_fruits?: boolean
+  max_mosaic_photos?: number
 }
 
 export interface CreatePdfPayload {
@@ -35,6 +36,7 @@ export interface PdfListItem {
 
 export interface PdfListResponse {
   items: PdfListItem[]
+  authors: string[]
 }
 
 export const pdfApi = {
@@ -44,7 +46,7 @@ export const pdfApi = {
   status: (jobId: string) =>
     apiClient.get<PdfJob>('pdf/status', { job_id: jobId }),
 
-  list: (params?: { date_from?: string; date_to?: string }) =>
+  list: (params?: { date_from?: string; date_to?: string; author?: string }) =>
     apiClient.get<PdfListResponse>('pdf/list', params),
 
   delete: (jobId: string) =>

@@ -12,12 +12,14 @@ import { FamileoBrowser } from './screens/Famileo/FamileoBrowser'
 import { PdfExport } from './screens/PdfExport/PdfExport'
 import { Settings } from './screens/Settings/Settings'
 import { UpdatePrompt } from './components/UpdatePrompt'
+import { PdfGenerationNotification } from './components/PdfGenerationNotification'
 
 function App() {
   return (
     <AuthProvider>
       <ProfileProvider>
         <UpdatePrompt />
+        <PdfGenerationNotification />
         <div className="min-h-screen max-w-content mx-auto bg-white">
           <Routes>
           <Route path="/auth" element={<GoogleAuth />} />

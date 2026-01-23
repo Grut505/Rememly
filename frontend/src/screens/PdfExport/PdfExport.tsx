@@ -19,8 +19,10 @@ export function PdfExport() {
 
   // Filters
   const [filterYear, setFilterYear] = useState<string>('')
+  const [filterAuthor, setFilterAuthor] = useState<string>('')
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+  const [availableAuthors, setAvailableAuthors] = useState<string[]>([])
 
   // Selection mode for bulk delete
   const [selectionMode, setSelectionMode] = useState(false)
@@ -41,6 +43,7 @@ export function PdfExport() {
     try {
       const response = await pdfApi.list()
       setPdfList(response.items || [])
+      setAvailableAuthors(response.authors || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load PDF list')
     } finally {
@@ -60,12 +63,17 @@ export function PdfExport() {
   // Filter and sort list
   const filteredList = pdfList
     .filter(pdf => !filterYear || pdf.year === parseInt(filterYear))
+    .filter(pdf => !filterAuthor || pdf.created_by === filterAuthor)
     .sort((a, b) => {
       let comparison = 0
       if (sortField === 'created_at') {
-        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
+        comparison = dateA - dateB
       } else if (sortField === 'date_from') {
-        comparison = new Date(a.date_from).getTime() - new Date(b.date_from).getTime()
+        const dateA = a.date_from ? new Date(a.date_from).getTime() : 0
+        const dateB = b.date_from ? new Date(b.date_from).getTime() : 0
+        comparison = dateA - dateB
       }
       return sortOrder === 'desc' ? -comparison : comparison
     })
@@ -223,18 +231,32 @@ export function PdfExport() {
 
         {/* Filters */}
         {!selectionMode && (
-          <div className="flex items-center gap-3 mt-3">
+          <div className="flex flex-wrap items-center gap-2 mt-3">
             {/* Year filter */}
             <select
               value={filterYear}
               onChange={(e) => setFilterYear(e.target.value)}
               className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="">Toutes les années</option>
+              <option value="">Année</option>
               {availableYears.map(year => (
                 <option key={year} value={year}>{year}</option>
               ))}
             </select>
+
+            {/* Author filter */}
+            {availableAuthors.length > 1 && (
+              <select
+                value={filterAuthor}
+                onChange={(e) => setFilterAuthor(e.target.value)}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 max-w-32 truncate"
+              >
+                <option value="">Auteur</option>
+                {availableAuthors.map(author => (
+                  <option key={author} value={author}>{author.split('@')[0]}</option>
+                ))}
+              </select>
+            )}
 
             {/* Sort */}
             <select
@@ -248,8 +270,8 @@ export function PdfExport() {
             >
               <option value="created_at_desc">Plus récent</option>
               <option value="created_at_asc">Plus ancien</option>
-              <option value="date_from_desc">Période (récent)</option>
-              <option value="date_from_asc">Période (ancien)</option>
+              <option value="date_from_desc">Période ↓</option>
+              <option value="date_from_asc">Période ↑</option>
             </select>
 
             {/* Count */}

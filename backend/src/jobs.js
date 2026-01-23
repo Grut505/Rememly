@@ -87,9 +87,19 @@ function handlePdfStatus(jobId) {
 }
 
 /**
- * Get all PDF jobs, optionally filtered by date range
+ * Convert a value to ISO string if it's a Date
  */
-function getAllPdfJobs(dateFrom, dateTo) {
+function toIsoString(value) {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return value;
+}
+
+/**
+ * Get all PDF jobs, optionally filtered by date range and author
+ */
+function getAllPdfJobs(dateFrom, dateTo, author) {
   const sheet = getJobsSheet();
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
@@ -100,11 +110,15 @@ function getAllPdfJobs(dateFrom, dateTo) {
     const row = data[i];
     const job = {};
     headers.forEach((header, index) => {
-      job[header] = row[index];
+      // Convert dates to ISO strings for proper JSON serialization
+      job[header] = toIsoString(row[index]);
     });
 
     // Only include DONE jobs with a PDF URL
     if (job.status !== 'DONE' || !job.pdf_url) continue;
+
+    // Apply author filter if provided
+    if (author && job.created_by !== author) continue;
 
     // Apply date filters if provided
     if (dateFrom && job.created_at) {
@@ -133,10 +147,17 @@ function getAllPdfJobs(dateFrom, dateTo) {
 }
 
 function handlePdfList(params) {
-  const jobs = getAllPdfJobs(params.date_from, params.date_to);
+  const jobs = getAllPdfJobs(params.date_from, params.date_to, params.author);
+
+  // Get unique authors for filter dropdown
+  const authors = [...new Set(jobs.map(j => j.created_by).filter(Boolean))];
+
   return createResponse({
     ok: true,
-    data: { items: jobs },
+    data: {
+      items: jobs,
+      authors: authors
+    },
   });
 }
 

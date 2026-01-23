@@ -74,3 +74,41 @@ Pour la page de garde
 - Ce titre uniquement doit être présent et en gras et gros comme actuellement 
 - Des les dates, tu mets "Du " ... " au " ...
 - Enfin la mosaïque, il faut que les images soient collés, je ne veux pas plein d'espace blanc entre en colonne. Donc débrouilles toi pour faire un algo qui fasse tout bien, en gérant les différentes tailles d'images et en les affichant en entier
+
+
+
+---
+
+
+Alors tu m'as pété le progress dans la génération de pdf
+Et je t'ai demandé d'avoir un truc qui permette de continuer à naviguer dans l'application
+
+Autre point, le sort ne fonctionne pas dans cette liste de PDF
+Il manque les auteurs
+Et y'a pas de filtre
+
+Enfin dans le PDF pour la mosaique de la page de garde, les images se font encore coupées, faut revoir ça, il faut pour rappel
+- Toutes les utilisées 1 fois et 1 seule
+- Que cela forme un carré harmonieu
+- Qu'il y a est 2 px de marge entre les photos mais pas plus
+- Qu'elles ne soient pas coupées
+- On peut s'autoriser à avoir des lignes et/ou des colonnes de tailles différentes
+--> Il faut vraiment avoir un algo intelligent qui construise dynamiquement  cette mosaique toujours en respectant les contraintes et en utilisant toutes les photos
+On va ajouter dans les paramètres une limite de nombre de photos à utiliser pour la mosaique au cas où
+On va mettre ça dans l'assistant, de base, y'aura comme valeur le nombre de photos qu'on a dans les articles qui serviront à créer le pdf et on pourra donc sélectionné un chiffre plus petit
+
+Et toutes les images des fruits et légumes ne sont pas utilisées
+En décembre par exemple, y'a 23 fichiers, là j'en vois que 12
+Et il faut mieux les répartir sur tous les bords et ne pas en avoir l'un sur l'autre
+
+--
+
+Corriger le tri et ajouter filtres dans la liste PDF
+
+Ajouter option limite photos mosaïque dans modal
+
+Implémenter algo mosaïque intelligent (pas de crop, 2px gap)
+
+Corriger affichage fruits/légumes (tous, bien répartis)
+
+Ajouter génération en background avec notification globale

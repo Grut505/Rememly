@@ -22,7 +22,8 @@ function handlePdfCreate(body, user) {
     // PDF generation options
     const pdfOptions = {
       mosaicLayout: body.options?.mosaic_layout || 'full',
-      showSeasonalFruits: body.options?.show_seasonal_fruits !== false
+      showSeasonalFruits: body.options?.show_seasonal_fruits !== false,
+      maxMosaicPhotos: body.options?.max_mosaic_photos || undefined
     };
 
     // Generate HTML with embedded images
@@ -153,7 +154,7 @@ function getArticlesInRange(from, to) {
 }
 
 function generatePdfHtml(articles, year, from, to, options = {}) {
-  const { mosaicLayout = 'full', showSeasonalFruits = true } = options;
+  const { mosaicLayout = 'full', showSeasonalFruits = true, maxMosaicPhotos } = options;
 
   const monthsFr = [
     'Janvier',
@@ -518,7 +519,7 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
 </head>
 <body>
   <!-- Cover Page with Mosaic -->
-  ${generateCoverMosaic(articles, from, to)}
+  ${generateCoverMosaic(articles, from, to, maxMosaicPhotos)}
 `;
 
   // Calculate total pages: 1 cover + (month dividers + article pages)
@@ -668,9 +669,13 @@ function getPngDimensions(bytes) {
 
 /**
  * Generate a mosaic cover page with all article images
- * Uses a dynamic "masonry-style" layout that respects image orientations
+ * Uses a smart bin-packing algorithm that:
+ * - Uses all images exactly once (up to maxPhotos limit)
+ * - Shows full images without cropping
+ * - Uses 2px gap between images
+ * - Creates harmonious rows with variable heights
  */
-function generateCoverMosaic(articles, from, to) {
+function generateCoverMosaic(articles, from, to, maxPhotos) {
   // Get family name from config
   const familyName = getConfigValue('family_name');
   const titleText = familyName
@@ -679,9 +684,10 @@ function generateCoverMosaic(articles, from, to) {
 
   // Collect all images with their dimensions
   const images = [];
+  const photoLimit = maxPhotos || articles.length;
 
   for (const article of articles) {
-    if (article.image_file_id) {
+    if (article.image_file_id && images.length < photoLimit) {
       try {
         const file = DriveApp.getFileById(article.image_file_id);
         const blob = file.getBlob();
@@ -690,14 +696,13 @@ function generateCoverMosaic(articles, from, to) {
         const imageBytes = blob.getBytes();
         const dimensions = getImageDimensions(imageBytes, mimeType);
 
-        const isPortrait = dimensions && dimensions.height > dimensions.width;
-        const aspectRatio = dimensions ? dimensions.width / dimensions.height : 1;
+        // Default to 4:3 if dimensions unknown
+        const aspectRatio = dimensions ? dimensions.width / dimensions.height : 4/3;
 
         images.push({
           base64,
           mimeType,
-          isPortrait,
-          aspectRatio
+          aspectRatio: aspectRatio
         });
       } catch (e) {
         // Skip failed images
@@ -717,13 +722,13 @@ function generateCoverMosaic(articles, from, to) {
 `;
   }
 
-  // Available space - no gaps for tighter mosaic
+  // Available space
   const mosaicWidth = 19;  // cm
   const mosaicHeight = 22; // cm
-  const gap = 0;           // No gaps between images
+  const gap = 0.07;        // ~2px gap in cm
 
-  // Generate layout based on image count and orientations
-  const cells = generateDynamicLayout(images, mosaicWidth, mosaicHeight, gap);
+  // Generate smart layout
+  const cells = generateSmartMosaicLayout(images, mosaicWidth, mosaicHeight, gap);
 
   // Generate HTML for cells
   let mosaicHtml = '';
@@ -748,162 +753,89 @@ function generateCoverMosaic(articles, from, to) {
 }
 
 /**
- * Generate a dynamic layout that adapts to image orientations
- * Uses a row-based approach where each row's height adapts to its content
+ * Smart mosaic layout algorithm using justified rows
+ * Each row is scaled to fit the container width exactly
+ * Row heights vary based on the images they contain
  */
-function generateDynamicLayout(images, totalWidth, totalHeight, gap) {
+function generateSmartMosaicLayout(images, totalWidth, totalHeight, gap) {
   const n = images.length;
   if (n === 0) return [];
 
-  // Special cases for small counts
+  // Special case for single image
   if (n === 1) {
-    return [{ img: images[0], x: 0, y: 0, w: totalWidth, h: totalHeight }];
-  }
-
-  if (n === 2) {
-    // Side by side, respecting orientations
-    const w1 = images[0].isPortrait ? totalWidth * 0.4 : totalWidth * 0.55;
-    const w2 = totalWidth - w1 - gap;
-    return [
-      { img: images[0], x: 0, y: 0, w: w1, h: totalHeight },
-      { img: images[1], x: w1 + gap, y: 0, w: w2, h: totalHeight }
-    ];
-  }
-
-  if (n === 3) {
-    // One large + two stacked, or three in row depending on orientations
-    const portraitCount = images.filter(i => i.isPortrait).length;
-    if (portraitCount >= 2) {
-      // Big landscape on top, two portraits below
-      const topH = totalHeight * 0.5;
-      const botH = totalHeight - topH - gap;
-      const halfW = (totalWidth - gap) / 2;
-      return [
-        { img: images[0], x: 0, y: 0, w: totalWidth, h: topH },
-        { img: images[1], x: 0, y: topH + gap, w: halfW, h: botH },
-        { img: images[2], x: halfW + gap, y: topH + gap, w: halfW, h: botH }
-      ];
+    const img = images[0];
+    // Center the image while maintaining aspect ratio
+    let w, h;
+    if (img.aspectRatio > totalWidth / totalHeight) {
+      w = totalWidth;
+      h = w / img.aspectRatio;
     } else {
-      // One portrait left, two landscapes stacked right
-      const leftW = totalWidth * 0.4;
-      const rightW = totalWidth - leftW - gap;
-      const halfH = (totalHeight - gap) / 2;
-      return [
-        { img: images[0], x: 0, y: 0, w: leftW, h: totalHeight },
-        { img: images[1], x: leftW + gap, y: 0, w: rightW, h: halfH },
-        { img: images[2], x: leftW + gap, y: halfH + gap, w: rightW, h: halfH }
-      ];
+      h = totalHeight;
+      w = h * img.aspectRatio;
+    }
+    return [{ img, x: (totalWidth - w) / 2, y: (totalHeight - h) / 2, w, h }];
+  }
+
+  // Calculate optimal row count based on image count
+  const containerAspect = totalWidth / totalHeight;
+
+  // Estimate ideal number of rows
+  // Formula based on: total_aspect_sum / container_aspect ≈ rows²
+  const totalAspectSum = images.reduce((sum, img) => sum + img.aspectRatio, 0);
+  let numRows = Math.round(Math.sqrt(totalAspectSum / containerAspect));
+  numRows = Math.max(1, Math.min(numRows, Math.ceil(n / 2))); // At least 2 images per row
+
+  // Distribute images into rows using a greedy algorithm
+  // Try to balance the aspect ratio sum across rows
+  const targetAspectPerRow = totalAspectSum / numRows;
+  const rows = [];
+  let currentRow = [];
+  let currentRowAspect = 0;
+
+  for (const img of images) {
+    if (currentRow.length > 0 &&
+        currentRowAspect >= targetAspectPerRow * 0.8 &&
+        rows.length < numRows - 1) {
+      // Start new row if current has enough content
+      rows.push(currentRow);
+      currentRow = [img];
+      currentRowAspect = img.aspectRatio;
+    } else {
+      currentRow.push(img);
+      currentRowAspect += img.aspectRatio;
     }
   }
-
-  if (n === 4) {
-    // 2x2 grid with size variations based on orientation
-    const cells = [];
-    const halfW = (totalWidth - gap) / 2;
-    const halfH = (totalHeight - gap) / 2;
-
-    cells.push({ img: images[0], x: 0, y: 0, w: halfW, h: halfH });
-    cells.push({ img: images[1], x: halfW + gap, y: 0, w: halfW, h: halfH });
-    cells.push({ img: images[2], x: 0, y: halfH + gap, w: halfW, h: halfH });
-    cells.push({ img: images[3], x: halfW + gap, y: halfH + gap, w: halfW, h: halfH });
-    return cells;
+  if (currentRow.length > 0) {
+    rows.push(currentRow);
   }
 
-  if (n === 5) {
-    // Big one + 4 smaller, or 2 + 3 rows
-    const topH = totalHeight * 0.55;
-    const botH = totalHeight - topH - gap;
-    const bigW = totalWidth * 0.55;
-    const smallW = totalWidth - bigW - gap;
-    const halfSmallH = (topH - gap) / 2;
-    const thirdW = (totalWidth - 2 * gap) / 3;
-
-    return [
-      { img: images[0], x: 0, y: 0, w: bigW, h: topH },
-      { img: images[1], x: bigW + gap, y: 0, w: smallW, h: halfSmallH },
-      { img: images[2], x: bigW + gap, y: halfSmallH + gap, w: smallW, h: halfSmallH },
-      { img: images[3], x: 0, y: topH + gap, w: (totalWidth - gap) / 2, h: botH },
-      { img: images[4], x: (totalWidth - gap) / 2 + gap, y: topH + gap, w: (totalWidth - gap) / 2, h: botH }
-    ];
-  }
-
-  if (n === 6) {
-    // 2 rows of 3
-    const halfH = (totalHeight - gap) / 2;
-    const thirdW = (totalWidth - 2 * gap) / 3;
-    const cells = [];
-    for (let i = 0; i < 3; i++) {
-      cells.push({ img: images[i], x: i * (thirdW + gap), y: 0, w: thirdW, h: halfH });
-    }
-    for (let i = 0; i < 3; i++) {
-      cells.push({ img: images[3 + i], x: i * (thirdW + gap), y: halfH + gap, w: thirdW, h: halfH });
-    }
-    return cells;
-  }
-
-  // For 7+ images: use adaptive row-based layout
-  return generateRowBasedLayout(images, totalWidth, totalHeight, gap);
-}
-
-/**
- * Row-based layout for larger image counts
- * Distributes images in rows, adapting cell widths to aspect ratios
- */
-function generateRowBasedLayout(images, totalWidth, totalHeight, gap) {
-  const n = images.length;
-
-  // Determine number of rows based on image count
-  let numRows;
-  if (n <= 9) numRows = 3;
-  else if (n <= 16) numRows = 4;
-  else if (n <= 25) numRows = 5;
-  else if (n <= 36) numRows = 6;
-  else numRows = Math.ceil(Math.sqrt(n * (totalHeight / totalWidth)));
-
-  // Distribute images to rows as evenly as possible
-  const imagesPerRow = [];
-  const basePerRow = Math.floor(n / numRows);
-  let extra = n % numRows;
-
-  for (let r = 0; r < numRows; r++) {
-    imagesPerRow.push(basePerRow + (extra > 0 ? 1 : 0));
-    if (extra > 0) extra--;
-  }
-
-  // Calculate row height
-  const rowHeight = (totalHeight - (numRows - 1) * gap) / numRows;
+  // Calculate row heights
+  // Each row's height is proportional to 1 / (sum of aspect ratios in that row)
+  // This ensures all images in a row have the same height when justified
+  const rowWeights = rows.map(row => {
+    const aspectSum = row.reduce((sum, img) => sum + img.aspectRatio, 0);
+    return 1 / aspectSum;
+  });
+  const totalWeight = rowWeights.reduce((sum, w) => sum + w, 0);
+  const availableHeight = totalHeight - (rows.length - 1) * gap;
 
   // Generate cells
   const cells = [];
-  let imageIndex = 0;
   let currentY = 0;
 
-  for (let r = 0; r < numRows; r++) {
-    const rowImages = [];
-    for (let i = 0; i < imagesPerRow[r] && imageIndex < n; i++) {
-      rowImages.push(images[imageIndex++]);
-    }
-
-    if (rowImages.length === 0) continue;
-
-    // Calculate width for each image in this row based on aspect ratios
-    // Give portrait images slightly less width, landscape more
-    const totalAspect = rowImages.reduce((sum, img) => {
-      // Normalize: portrait gets weight ~0.7, landscape ~1.3, square ~1.0
-      const weight = img.isPortrait ? 0.7 : (img.aspectRatio > 1.2 ? 1.3 : 1.0);
-      return sum + weight;
-    }, 0);
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    const rowHeight = (rowWeights[r] / totalWeight) * availableHeight;
+    const rowAspectSum = row.reduce((sum, img) => sum + img.aspectRatio, 0);
+    const availableRowWidth = totalWidth - (row.length - 1) * gap;
 
     let currentX = 0;
-    const availableWidth = totalWidth - (rowImages.length - 1) * gap;
-
-    for (let i = 0; i < rowImages.length; i++) {
-      const img = rowImages[i];
-      const weight = img.isPortrait ? 0.7 : (img.aspectRatio > 1.2 ? 1.3 : 1.0);
-      const cellWidth = (weight / totalAspect) * availableWidth;
+    for (let i = 0; i < row.length; i++) {
+      const img = row[i];
+      const cellWidth = (img.aspectRatio / rowAspectSum) * availableRowWidth;
 
       cells.push({
-        img: img,
+        img,
         x: currentX,
         y: currentY,
         w: cellWidth,
@@ -1056,69 +988,9 @@ function generateMonthMosaic(monthArticles, layout = 'full') {
 
 /**
  * Generate seasonal fruits/vegetables images positioned around the page edges
- * Images are positioned to frame the central content (title + mosaic)
- * Uses actual PNG images from SEASONAL_IMAGES constant
+ * Uses ALL images from SEASONAL_IMAGES for the month
+ * Positions are calculated to avoid overlap and pagination area
  */
-/**
- * Generate positions around page edges for seasonal images
- * Distributes images evenly across top, right, bottom, and left edges
- */
-function generateEdgePositions(imageCount, pageWidth, pageHeight) {
-  const positions = [];
-  const baseSize = 2.0;  // Base size in cm
-  const sizeVariation = 0.4;  // Random variation
-
-  // Reserve space for pagination in bottom-right corner
-  const paginationReserve = 4;  // cm from right edge
-
-  // Distribute images across 4 edges
-  const perEdge = Math.ceil(imageCount / 4);
-
-  // Top edge (y near 0) - full width
-  for (let i = 0; i < perEdge && positions.length < imageCount; i++) {
-    const progress = perEdge > 1 ? i / (perEdge - 1) : 0.5;
-    positions.push({
-      x: progress * (pageWidth - baseSize),
-      y: 0.2 + Math.random() * 0.5,
-      size: baseSize + (Math.random() - 0.5) * sizeVariation
-    });
-  }
-
-  // Right edge (x near pageWidth) - stop before bottom pagination
-  const rightEdgeHeight = pageHeight - 6 - paginationReserve;  // Leave room at bottom
-  for (let i = 0; i < perEdge && positions.length < imageCount; i++) {
-    const progress = perEdge > 1 ? i / (perEdge - 1) : 0.5;
-    positions.push({
-      x: pageWidth - baseSize - 0.2 + Math.random() * 0.3,
-      y: 3 + progress * rightEdgeHeight,
-      size: baseSize + (Math.random() - 0.5) * sizeVariation
-    });
-  }
-
-  // Bottom edge (y near pageHeight) - avoid right side for pagination
-  const bottomEdgeWidth = pageWidth - paginationReserve - baseSize;
-  for (let i = 0; i < perEdge && positions.length < imageCount; i++) {
-    const progress = perEdge > 1 ? i / (perEdge - 1) : 0.5;
-    positions.push({
-      x: (1 - progress) * bottomEdgeWidth,  // Reverse direction, limited width
-      y: pageHeight - baseSize - 0.2 + Math.random() * 0.3,
-      size: baseSize + (Math.random() - 0.5) * sizeVariation
-    });
-  }
-
-  // Left edge (x near 0) - full height
-  for (let i = 0; i < perEdge && positions.length < imageCount; i++) {
-    const progress = perEdge > 1 ? i / (perEdge - 1) : 0.5;
-    positions.push({
-      x: 0.2 + Math.random() * 0.3,
-      y: 3 + (1 - progress) * (pageHeight - 6),  // Reverse direction
-      size: baseSize + (Math.random() - 0.5) * sizeVariation
-    });
-  }
-
-  return positions;
-}
-
 function generateSeasonalFruits(monthIndex) {
   // Month index is 0-based, SEASONAL_IMAGES uses 1-based keys
   const monthKey = monthIndex + 1;
@@ -1132,21 +1004,84 @@ function generateSeasonalFruits(monthIndex) {
   const pageWidth = 19;   // cm
   const pageHeight = 27.7; // cm
 
-  // Generate dynamic positions based on image count
-  // Distribute evenly across all 4 edges
-  const positions = generateEdgePositions(images.length, pageWidth, pageHeight);
+  // Calculate image size based on count - smaller if more images
+  // Target: fit all images around edges without overlap
+  const perimeter = 2 * (pageWidth + pageHeight - 4); // -4 for pagination reserve
+  const idealSize = Math.min(2.2, perimeter / images.length * 0.8);
+  const imgSize = Math.max(1.4, idealSize); // Minimum 1.4cm
 
-  // Shuffle images to vary display
+  // Define edge segments for placement (avoiding center and pagination)
+  const positions = [];
+  const paginationReserve = 4; // cm reserved for pagination in bottom-right
+
+  // Calculate how many images per edge proportionally
+  const topLength = pageWidth;
+  const rightLength = pageHeight - 5; // Leave top and bottom margins
+  const bottomLength = pageWidth - paginationReserve;
+  const leftLength = pageHeight - 5;
+  const totalLength = topLength + rightLength + bottomLength + leftLength;
+
+  const topCount = Math.round(images.length * topLength / totalLength);
+  const rightCount = Math.round(images.length * rightLength / totalLength);
+  const bottomCount = Math.round(images.length * bottomLength / totalLength);
+  const leftCount = images.length - topCount - rightCount - bottomCount;
+
+  // Top edge - evenly spaced
+  for (let i = 0; i < topCount; i++) {
+    const spacing = topCount > 1 ? (pageWidth - imgSize) / (topCount - 1) : (pageWidth - imgSize) / 2;
+    positions.push({
+      x: topCount > 1 ? i * spacing : spacing,
+      y: 0.1,
+      size: imgSize
+    });
+  }
+
+  // Right edge - evenly spaced, stopping before pagination area
+  for (let i = 0; i < rightCount; i++) {
+    const startY = 2.5;
+    const endY = pageHeight - paginationReserve - 1;
+    const spacing = rightCount > 1 ? (endY - startY - imgSize) / (rightCount - 1) : 0;
+    positions.push({
+      x: pageWidth - imgSize - 0.1,
+      y: startY + (rightCount > 1 ? i * spacing : (endY - startY - imgSize) / 2),
+      size: imgSize
+    });
+  }
+
+  // Bottom edge - evenly spaced, avoiding pagination area
+  for (let i = 0; i < bottomCount; i++) {
+    const availableWidth = pageWidth - paginationReserve - imgSize;
+    const spacing = bottomCount > 1 ? availableWidth / (bottomCount - 1) : availableWidth / 2;
+    positions.push({
+      x: bottomCount > 1 ? i * spacing : spacing,
+      y: pageHeight - imgSize - 0.1,
+      size: imgSize
+    });
+  }
+
+  // Left edge - evenly spaced
+  for (let i = 0; i < leftCount; i++) {
+    const startY = 2.5;
+    const endY = pageHeight - 3;
+    const spacing = leftCount > 1 ? (endY - startY - imgSize) / (leftCount - 1) : 0;
+    positions.push({
+      x: 0.1,
+      y: startY + (leftCount > 1 ? i * spacing : (endY - startY - imgSize) / 2),
+      size: imgSize
+    });
+  }
+
+  // Shuffle images to randomize which image goes where
   const shuffled = [...images].sort(() => Math.random() - 0.5);
 
   let html = '';
 
-  for (let i = 0; i < positions.length; i++) {
+  for (let i = 0; i < Math.min(positions.length, shuffled.length); i++) {
     const pos = positions[i];
-    const img = shuffled[i % shuffled.length];
+    const img = shuffled[i];
 
-    // Add slight rotation for visual interest (-15 to +15 degrees)
-    const rotation = Math.floor(Math.random() * 30) - 15;
+    // Add slight rotation for visual interest (-12 to +12 degrees)
+    const rotation = Math.floor(Math.random() * 24) - 12;
 
     html += `<div class="season-item" style="left: ${pos.x.toFixed(2)}cm; top: ${pos.y.toFixed(2)}cm; width: ${pos.size.toFixed(2)}cm; height: ${pos.size.toFixed(2)}cm; transform: rotate(${rotation}deg);">
       <img src="${img.data}" alt="${img.name}" />

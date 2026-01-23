@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Button } from '../../ui/Button'
 import { articlesApi } from '../../api/articles'
-import { pdfApi } from '../../api/pdf'
 import { Article } from '../../api/types'
 import { getMonthYear } from '../../utils/date'
+import { usePdfGenerationStore } from '../../stores/pdfGenerationStore'
 
 interface PdfGenerateModalProps {
   isOpen: boolean
@@ -17,9 +17,11 @@ interface MonthCount {
   count: number
 }
 
-type Step = 'dates' | 'preview' | 'options' | 'generating' | 'done'
+type Step = 'dates' | 'preview' | 'options'
 
 export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateModalProps) {
+  const { startGeneration, isGenerating } = usePdfGenerationStore()
+
   // Step state
   const [step, setStep] = useState<Step>('dates')
 
@@ -36,9 +38,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   // Options
   const [mosaicLayout, setMosaicLayout] = useState<'full' | 'centered'>('full')
   const [showSeasonalFruits, setShowSeasonalFruits] = useState(true)
-
-  // Generation result
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [maxMosaicPhotos, setMaxMosaicPhotos] = useState<number>(0) // 0 = all photos
 
   const reset = () => {
     setStep('dates')
@@ -47,13 +47,12 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     setMonthCounts([])
     setTotalArticles(0)
     setError(null)
-    setPdfUrl(null)
     setMosaicLayout('full')
     setShowSeasonalFruits(true)
+    setMaxMosaicPhotos(0)
   }
 
   const handleClose = () => {
-    if (step === 'generating') return // Don't allow closing during generation
     reset()
     onClose()
   }
@@ -109,6 +108,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
 
       setMonthCounts(sorted)
       setTotalArticles(allArticles.length)
+      setMaxMosaicPhotos(allArticles.length) // Default to all photos
 
       if (allArticles.length === 0) {
         setError('Aucun article trouvé pour cette période')
@@ -122,45 +122,18 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     }
   }
 
-  const handleGenerate = async () => {
-    setStep('generating')
-    setError(null)
+  const handleGenerate = () => {
+    // Start generation in background using the global store
+    startGeneration(startDate, endDate, {
+      mosaic_layout: mosaicLayout,
+      show_seasonal_fruits: showSeasonalFruits,
+      max_mosaic_photos: maxMosaicPhotos > 0 ? maxMosaicPhotos : undefined,
+    })
 
-    try {
-      const response = await pdfApi.create({
-        from: startDate,
-        to: endDate,
-        options: {
-          mosaic_layout: mosaicLayout,
-          show_seasonal_fruits: showSeasonalFruits,
-        },
-      })
-
-      if (response.status === 'DONE' && response.pdf_url) {
-        setPdfUrl(response.pdf_url)
-        setStep('done')
-      } else if (response.status === 'ERROR') {
-        setError('La génération du PDF a échoué')
-        setStep('options')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de la génération')
-      setStep('options')
-    }
-  }
-
-  const handleViewPdf = () => {
-    if (pdfUrl) {
-      window.open(pdfUrl, '_blank')
-    }
-  }
-
-  const handleFinish = () => {
-    if (pdfUrl) {
-      onComplete(pdfUrl)
-    }
+    // Close modal immediately - progress will show in global notification
     reset()
     onClose()
+    onComplete('')
   }
 
   if (!isOpen) return null
@@ -181,10 +154,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
             {step === 'dates' && 'Sélectionner la période'}
             {step === 'preview' && 'Aperçu des articles'}
             {step === 'options' && 'Options de génération'}
-            {step === 'generating' && 'Génération en cours'}
-            {step === 'done' && 'PDF prêt !'}
           </h3>
-          {step !== 'generating' && (
+          {(
             <button
               onClick={handleClose}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -269,6 +240,29 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
           {/* Step: Options */}
           {step === 'options' && (
             <div className="space-y-5">
+              {/* Mosaic photo limit */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Photos sur la couverture
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={1}
+                    max={totalArticles}
+                    value={maxMosaicPhotos || totalArticles}
+                    onChange={(e) => setMaxMosaicPhotos(parseInt(e.target.value))}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                  />
+                  <span className="text-sm font-medium text-gray-700 min-w-12 text-right">
+                    {maxMosaicPhotos || totalArticles}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Nombre de photos pour la mosaïque de couverture
+                </p>
+              </div>
+
               {/* Month divider layout */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -320,106 +314,57 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
               </div>
             </div>
           )}
-
-          {/* Step: Generating */}
-          {step === 'generating' && (
-            <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-100 mb-4">
-                <svg className="w-8 h-8 text-primary-600 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              </div>
-              <h4 className="text-lg font-medium text-gray-900 mb-2">Génération en cours...</h4>
-              <p className="text-sm text-gray-500">
-                Compilation de {totalArticles} articles en PDF.<br />
-                Cela peut prendre quelques instants.
-              </p>
-            </div>
-          )}
-
-          {/* Step: Done */}
-          {step === 'done' && (
-            <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
-                <svg className="w-8 h-8 text-green-600" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-              </div>
-              <h4 className="text-lg font-medium text-gray-900 mb-2">PDF généré avec succès !</h4>
-              <p className="text-sm text-gray-500 mb-4">
-                Votre livre de souvenirs est prêt.
-              </p>
-              <Button onClick={handleViewPdf} fullWidth>
-                <svg className="w-5 h-5 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                  <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                </svg>
-                Voir le PDF
-              </Button>
-            </div>
-          )}
         </div>
 
         {/* Footer with navigation buttons */}
-        {step !== 'generating' && step !== 'done' && (
-          <div className="px-4 py-3 border-t border-gray-200 flex gap-3">
-            {step === 'dates' && (
-              <>
-                <Button variant="secondary" onClick={handleClose} fullWidth>
-                  Annuler
-                </Button>
-                <Button
-                  onClick={handleSearchArticles}
-                  disabled={!startDate || !endDate || loading}
-                  fullWidth
-                >
-                  {loading ? (
-                    <>
-                      <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Recherche...
-                    </>
-                  ) : (
-                    'Suivant'
-                  )}
-                </Button>
-              </>
-            )}
+        <div className="px-4 py-3 border-t border-gray-200 flex gap-3">
+          {step === 'dates' && (
+            <>
+              <Button variant="secondary" onClick={handleClose} fullWidth>
+                Annuler
+              </Button>
+              <Button
+                onClick={handleSearchArticles}
+                disabled={!startDate || !endDate || loading}
+                fullWidth
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Recherche...
+                  </>
+                ) : (
+                  'Suivant'
+                )}
+              </Button>
+            </>
+          )}
 
-            {step === 'preview' && (
-              <>
-                <Button variant="secondary" onClick={() => setStep('dates')} fullWidth>
-                  Retour
-                </Button>
-                <Button onClick={() => setStep('options')} fullWidth>
-                  Suivant
-                </Button>
-              </>
-            )}
+          {step === 'preview' && (
+            <>
+              <Button variant="secondary" onClick={() => setStep('dates')} fullWidth>
+                Retour
+              </Button>
+              <Button onClick={() => setStep('options')} fullWidth>
+                Suivant
+              </Button>
+            </>
+          )}
 
-            {step === 'options' && (
-              <>
-                <Button variant="secondary" onClick={() => setStep('preview')} fullWidth>
-                  Retour
-                </Button>
-                <Button onClick={handleGenerate} fullWidth>
-                  <svg className="w-5 h-5 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                    <path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                  </svg>
-                  Générer le PDF
-                </Button>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Footer for done state */}
-        {step === 'done' && (
-          <div className="px-4 py-3 border-t border-gray-200">
-            <Button variant="secondary" onClick={handleFinish} fullWidth>
-              Fermer
-            </Button>
-          </div>
-        )}
+          {step === 'options' && (
+            <>
+              <Button variant="secondary" onClick={() => setStep('preview')} fullWidth>
+                Retour
+              </Button>
+              <Button onClick={handleGenerate} disabled={isGenerating} fullWidth>
+                <svg className="w-5 h-5 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Générer le PDF
+              </Button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -34,9 +34,6 @@ def get_display_name(filename: str) -> str:
     return name
 
 
-MAX_IMAGES_PER_MONTH = 12  # Limite pour garder le fichier léger
-
-
 def main():
     seasonal_images = {}
 
@@ -49,7 +46,7 @@ def main():
         month_images = []
         image_files = sorted(month_dir.iterdir())
 
-        for img_file in image_files[:MAX_IMAGES_PER_MONTH]:
+        for img_file in image_files:
             if img_file.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
                 continue
 

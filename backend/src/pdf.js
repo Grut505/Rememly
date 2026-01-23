@@ -5,27 +5,35 @@ function handlePdfCreate(body, user) {
 
   // Generate PDF synchronously (no trigger needed)
   try {
-    updateJobStatus(jobId, 'RUNNING', 10);
+    updateJobStatus(jobId, 'RUNNING', 5, undefined, undefined, undefined, 'Initialisation...');
 
     const job = getJobStatus(jobId);
     if (!job) {
       throw new Error('Job not found');
     }
 
+    updateJobStatus(jobId, 'RUNNING', 10, undefined, undefined, undefined, 'Chargement des articles...');
+
     // Get articles in date range
     const articles = getArticlesInRange(job.date_from, job.date_to);
 
-    updateJobStatus(jobId, 'RUNNING', 30);
+    updateJobStatus(jobId, 'RUNNING', 20, undefined, undefined, undefined, `${articles.length} articles trouvés`);
+
+    // PDF generation options
+    const pdfOptions = {
+      mosaicLayout: body.options?.mosaic_layout || 'full',
+      showSeasonalFruits: body.options?.show_seasonal_fruits !== false
+    };
 
     // Generate HTML with embedded images
-    const html = generatePdfHtml(articles, job.year, job.date_from, job.date_to);
+    const html = generatePdfHtml(articles, job.year, job.date_from, job.date_to, pdfOptions);
 
-    updateJobStatus(jobId, 'RUNNING', 60);
+    updateJobStatus(jobId, 'RUNNING', 70, undefined, undefined, undefined, 'Conversion en PDF...');
 
     // Convert to PDF
     const pdfBlob = convertHtmlToPdf(html);
 
-    updateJobStatus(jobId, 'RUNNING', 80);
+    updateJobStatus(jobId, 'RUNNING', 85, undefined, undefined, undefined, 'Sauvegarde sur Drive...');
 
     // Save to Drive - convert dates to strings in case they were parsed as Date objects by Sheets
     const dateFrom = typeof job.date_from === 'string' ? job.date_from : Utilities.formatDate(job.date_from, 'Europe/Paris', 'yyyy-MM-dd');
@@ -35,7 +43,7 @@ function handlePdfCreate(body, user) {
     const pdfData = savePdfToFolder(pdfBlob, job.year, fileName);
 
     // Update job status
-    updateJobStatus(jobId, 'DONE', 100, pdfData.fileId, pdfData.url);
+    updateJobStatus(jobId, 'DONE', 100, pdfData.fileId, pdfData.url, undefined, 'Terminé !');
 
     return createResponse({
       ok: true,
@@ -45,10 +53,11 @@ function handlePdfCreate(body, user) {
         progress: 100,
         pdf_file_id: pdfData.fileId,
         pdf_url: pdfData.url,
+        progress_message: 'Terminé !',
       },
     });
   } catch (error) {
-    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error));
+    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error), 'Erreur');
     return createResponse({
       ok: false,
       error: { code: 'PDF_GENERATION_ERROR', message: String(error) },
@@ -143,7 +152,9 @@ function getArticlesInRange(from, to) {
   return articles;
 }
 
-function generatePdfHtml(articles, year, from, to) {
+function generatePdfHtml(articles, year, from, to, options = {}) {
+  const { mosaicLayout = 'full', showSeasonalFruits = true } = options;
+
   const monthsFr = [
     'Janvier',
     'Février',
@@ -236,6 +247,13 @@ function generatePdfHtml(articles, year, from, to) {
       margin: 0;
     }
 
+    .cover-title .family-name {
+      font-size: 16pt;
+      color: #555;
+      margin: 0 0 0.3cm 0;
+      font-style: italic;
+    }
+
     .mosaic-container {
       flex: 1;
       position: relative;
@@ -252,7 +270,8 @@ function generatePdfHtml(articles, year, from, to) {
     .mosaic-cell img {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: contain;
+      background: #e8e8e8;
     }
 
     .articles-page {
@@ -444,6 +463,61 @@ function generatePdfHtml(articles, year, from, to) {
       margin-top: 0.3cm;
       text-shadow: 1px 1px 4px rgba(255,255,255,0.9);
     }
+
+    /* Centered layout mode for month divider */
+    .month-divider-centered {
+      background: #f5f5f5;
+    }
+
+    .month-divider-centered .month-mosaic-bg {
+      display: none;
+    }
+
+    .month-title-container-centered {
+      position: absolute;
+      top: 12%;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      z-index: 5;
+    }
+
+    .month-title-container-centered .month-title {
+      font-size: 42pt;
+      font-weight: bold;
+      color: #333;
+      margin: 0;
+      padding: 0.5cm 1.5cm;
+      background: none;
+    }
+
+    .month-title-container-centered .month-subtitle {
+      font-size: 14pt;
+      color: #666;
+      margin-top: 0.3cm;
+    }
+
+    .month-mosaic-centered {
+      position: absolute;
+      top: 32%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 12cm;
+      height: 12cm;
+      border-radius: 0.5cm;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .month-mosaic-centered .month-mosaic-cell {
+      position: absolute;
+    }
+
+    .month-mosaic-centered .month-mosaic-cell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
   </style>
 </head>
 <body>
@@ -472,7 +546,7 @@ function generatePdfHtml(articles, year, from, to) {
 
     // Month divider page
     currentPage++;
-    html += generateMonthDivider(monthArticles, monthName, yearStr, monthIndex, currentPage, totalPages);
+    html += generateMonthDivider(monthArticles, monthName, yearStr, monthIndex, currentPage, totalPages, { mosaicLayout, showSeasonalFruits });
 
     // Process articles 2 by 2
     for (let i = 0; i < monthArticles.length; i += 2) {
@@ -601,6 +675,12 @@ function getPngDimensions(bytes) {
  * Uses a dynamic "masonry-style" layout that respects image orientations
  */
 function generateCoverMosaic(articles, from, to) {
+  // Get family name from config
+  const familyName = getConfigValue('family_name');
+  const familyNameHtml = familyName
+    ? `<p class="family-name">Livre de souvenirs de ${escapeHtml(familyName)}</p>`
+    : '';
+
   // Collect all images with their dimensions
   const images = [];
 
@@ -632,6 +712,7 @@ function generateCoverMosaic(articles, from, to) {
   if (images.length === 0) {
     return `
   <div class="cover">
+    ${familyNameHtml}
     <h1>Livre de Souvenirs</h1>
     <p class="dates">${formatDateFr(from)} - ${formatDateFr(to)}</p>
   </div>
@@ -658,6 +739,7 @@ function generateCoverMosaic(articles, from, to) {
   return `
   <div class="cover-mosaic">
     <div class="cover-title">
+      ${familyNameHtml}
       <h1>Livre de Souvenirs</h1>
       <p class="dates">${formatDateFr(from)} - ${formatDateFr(to)}</p>
     </div>
@@ -842,17 +924,45 @@ function generateRowBasedLayout(images, totalWidth, totalHeight, gap) {
 
 /**
  * Generate a month divider page with mosaic background, seasonal fruits, and title
+ * Supports two layout modes: 'full' (background mosaic) and 'centered' (smaller mosaic below title)
  */
-function generateMonthDivider(monthArticles, monthName, year, monthIndex, currentPage, totalPages) {
+function generateMonthDivider(monthArticles, monthName, year, monthIndex, currentPage, totalPages, options = {}) {
+  const { mosaicLayout = 'full', showSeasonalFruits = true } = options;
   const monthYear = `${monthName} ${year}`;
   const articleCount = monthArticles.length;
 
   // Generate mini mosaic from month's images
-  const mosaicHtml = generateMonthMosaic(monthArticles);
+  const mosaicHtml = generateMonthMosaic(monthArticles, mosaicLayout);
 
-  // Get seasonal fruits for this month
-  const fruitsHtml = generateSeasonalFruits(monthIndex);
+  // Get seasonal fruits for this month (if enabled)
+  const fruitsHtml = showSeasonalFruits ? generateSeasonalFruits(monthIndex) : '';
 
+  if (mosaicLayout === 'centered') {
+    // Centered mode: title at top, smaller opaque mosaic below
+    return `
+  <div class="month-divider month-divider-centered">
+    <!-- Seasonal decorations (fruits/vegetables) -->
+    <div class="season-decorations">
+      ${fruitsHtml}
+    </div>
+
+    <!-- Month title (raised position) -->
+    <div class="month-title-container-centered">
+      <h2 class="month-title">${monthYear}</h2>
+      <p class="month-subtitle">${articleCount} souvenir${articleCount > 1 ? 's' : ''}</p>
+    </div>
+
+    <!-- Centered mosaic (smaller, below title) -->
+    <div class="month-mosaic-centered">
+      ${mosaicHtml}
+    </div>
+
+    <div class="page-number">${currentPage} / ${totalPages}</div>
+  </div>
+`;
+  }
+
+  // Full mode (default): background mosaic with overlay title
   return `
   <div class="month-divider">
     <!-- Background mosaic from month's photos -->
@@ -878,8 +988,9 @@ function generateMonthDivider(monthArticles, monthName, year, monthIndex, curren
 
 /**
  * Generate a small mosaic of images for the month divider background
+ * @param {string} layout - 'full' for full page background, 'centered' for smaller centered mosaic
  */
-function generateMonthMosaic(monthArticles) {
+function generateMonthMosaic(monthArticles, layout = 'full') {
   // Collect images from articles
   const images = [];
 
@@ -912,9 +1023,11 @@ function generateMonthMosaic(monthArticles) {
     return '';
   }
 
-  // Generate a simple grid layout
-  const mosaicWidth = 19;  // cm
-  const mosaicHeight = 27.7; // cm
+  // Adjust dimensions based on layout
+  // Full mode: entire page (19cm x 27.7cm)
+  // Centered mode: smaller area (12cm x 12cm)
+  const mosaicWidth = layout === 'centered' ? 12 : 19;  // cm
+  const mosaicHeight = layout === 'centered' ? 12 : 27.7; // cm
   const gap = 0.1;
 
   // Calculate grid dimensions
@@ -949,6 +1062,61 @@ function generateMonthMosaic(monthArticles) {
  * Images are positioned to frame the central content (title + mosaic)
  * Uses actual PNG images from SEASONAL_IMAGES constant
  */
+/**
+ * Generate positions around page edges for seasonal images
+ * Distributes images evenly across top, right, bottom, and left edges
+ */
+function generateEdgePositions(imageCount, pageWidth, pageHeight) {
+  const positions = [];
+  const baseSize = 2.0;  // Base size in cm
+  const sizeVariation = 0.4;  // Random variation
+
+  // Distribute images across 4 edges
+  const perEdge = Math.ceil(imageCount / 4);
+
+  // Top edge (y near 0)
+  for (let i = 0; i < perEdge && positions.length < imageCount; i++) {
+    const progress = perEdge > 1 ? i / (perEdge - 1) : 0.5;
+    positions.push({
+      x: progress * (pageWidth - baseSize),
+      y: 0.2 + Math.random() * 0.5,
+      size: baseSize + (Math.random() - 0.5) * sizeVariation
+    });
+  }
+
+  // Right edge (x near pageWidth)
+  for (let i = 0; i < perEdge && positions.length < imageCount; i++) {
+    const progress = perEdge > 1 ? i / (perEdge - 1) : 0.5;
+    positions.push({
+      x: pageWidth - baseSize - 0.2 + Math.random() * 0.3,
+      y: 3 + progress * (pageHeight - 6),
+      size: baseSize + (Math.random() - 0.5) * sizeVariation
+    });
+  }
+
+  // Bottom edge (y near pageHeight)
+  for (let i = 0; i < perEdge && positions.length < imageCount; i++) {
+    const progress = perEdge > 1 ? i / (perEdge - 1) : 0.5;
+    positions.push({
+      x: (1 - progress) * (pageWidth - baseSize),  // Reverse direction
+      y: pageHeight - baseSize - 0.2 + Math.random() * 0.3,
+      size: baseSize + (Math.random() - 0.5) * sizeVariation
+    });
+  }
+
+  // Left edge (x near 0)
+  for (let i = 0; i < perEdge && positions.length < imageCount; i++) {
+    const progress = perEdge > 1 ? i / (perEdge - 1) : 0.5;
+    positions.push({
+      x: 0.2 + Math.random() * 0.3,
+      y: 3 + (1 - progress) * (pageHeight - 6),  // Reverse direction
+      size: baseSize + (Math.random() - 0.5) * sizeVariation
+    });
+  }
+
+  return positions;
+}
+
 function generateSeasonalFruits(monthIndex) {
   // Month index is 0-based, SEASONAL_IMAGES uses 1-based keys
   const monthKey = monthIndex + 1;
@@ -958,55 +1126,27 @@ function generateSeasonalFruits(monthIndex) {
     return '';
   }
 
-  // Positions around the page edges, avoiding the center content area
-  // Page is 19cm wide x 27.7cm tall (after 1cm margins)
-  // Center area (title + mosaic) is roughly from x:4 to x:15 and y:8 to y:20
-  const positions = [
-    // Top edge
-    { x: 0.3, y: 0.3, size: 2.2 },
-    { x: 3.5, y: 0.5, size: 1.8 },
-    { x: 7.5, y: 0.2, size: 2.0 },
-    { x: 11.5, y: 0.4, size: 1.9 },
-    { x: 15.5, y: 0.3, size: 2.1 },
-    // Right edge
-    { x: 16.8, y: 3.5, size: 2.0 },
-    { x: 17.0, y: 7.5, size: 1.7 },
-    { x: 16.5, y: 11.5, size: 2.2 },
-    { x: 17.0, y: 15.5, size: 1.8 },
-    { x: 16.8, y: 19.5, size: 2.0 },
-    { x: 16.5, y: 23.5, size: 1.9 },
-    // Bottom edge
-    { x: 0.5, y: 25.5, size: 2.0 },
-    { x: 4.0, y: 25.2, size: 1.8 },
-    { x: 8.0, y: 25.6, size: 2.1 },
-    { x: 12.0, y: 25.3, size: 1.9 },
-    { x: 15.5, y: 25.5, size: 2.0 },
-    // Left edge
-    { x: 0.2, y: 4.0, size: 1.9 },
-    { x: 0.5, y: 8.0, size: 2.0 },
-    { x: 0.3, y: 12.0, size: 1.8 },
-    { x: 0.5, y: 16.0, size: 2.1 },
-    { x: 0.2, y: 20.0, size: 1.9 },
-    // Corners (slightly larger)
-    { x: 16.0, y: 25.0, size: 2.3 },
-    { x: 0.0, y: 0.0, size: 2.4 },
-    { x: 16.5, y: 0.0, size: 2.3 },
-  ];
+  // Page dimensions (after margins)
+  const pageWidth = 19;   // cm
+  const pageHeight = 27.7; // cm
+
+  // Generate dynamic positions based on image count
+  // Distribute evenly across all 4 edges
+  const positions = generateEdgePositions(images.length, pageWidth, pageHeight);
 
   // Shuffle images to vary display
   const shuffled = [...images].sort(() => Math.random() - 0.5);
 
   let html = '';
-  const usedPositions = Math.min(positions.length, shuffled.length);
 
-  for (let i = 0; i < usedPositions; i++) {
+  for (let i = 0; i < positions.length; i++) {
     const pos = positions[i];
     const img = shuffled[i % shuffled.length];
 
     // Add slight rotation for visual interest (-15 to +15 degrees)
     const rotation = Math.floor(Math.random() * 30) - 15;
 
-    html += `<div class="season-item" style="left: ${pos.x}cm; top: ${pos.y}cm; width: ${pos.size}cm; height: ${pos.size}cm; transform: rotate(${rotation}deg);">
+    html += `<div class="season-item" style="left: ${pos.x.toFixed(2)}cm; top: ${pos.y.toFixed(2)}cm; width: ${pos.size.toFixed(2)}cm; height: ${pos.size.toFixed(2)}cm; transform: rotate(${rotation}deg);">
       <img src="${img.data}" alt="${img.name}" />
     </div>`;
   }

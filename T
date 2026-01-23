@@ -1,17 +1,26 @@
-- Listes des PDFS
--- voir forme de liste
---- Nom
---- Date start
--- Supprimer
--- Filtre par date de génération
-- page de garde avec vraie gestion des photos payage, layout plus dynamique et intelligent
+Famileo
 - progress dans le scrapper avec petites anims ou anecdote sympas
 - chargement des datas mais visuels progressif
 
 
-- Restore article
+- Restore article 
 
 - le sous header au scroll
+
+- masquer les posts en FR
+
+- refresh cookie
+
+- dans la liste, identication de si article importé ou local
+
+- un refresh lmode pull down dans la liste
+- voir un truc ou ça pop tout seul avec notif (native ?)
+
+- Le filtre, avec un petit slider ça ne peut pas le faire ?
+
+- Dans les sous header, nombre d'articles présents
+- Idem dans le header
+- Un sort, par date, auteur
 
 - les dates from to, ne pas autoriser to > from, today
 
@@ -31,4 +40,18 @@
 
 
 - statistique
--- Ilf
+-- Il faut un truc mode drill down année -> mois avec le compteur correspondant
+-- distinction articles actifs ou supprimés
+-- raccourcis vers la vue des articles préfiltrées
+-- il faut virer le bouton export pdf
+
+- Le post vers famileo
+
+- dans le pdf, si premiere ou deuxime image contient bcp de texte, il dépasse un peu en bas
+-- AUgmenter un peu la hauteur de la boite principale
+-- Donc aussi celle du dessous pour que cela reste homogène
+-- Gagner un peu de place en bas, la deuxième boite peur descendre un peu
+
+-- centré l'image du mode paysage
+
+-- le module d'assemblage à revoir

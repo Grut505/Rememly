@@ -1,12 +1,12 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../../ui/AppHeader'
 import { Button } from '../../ui/Button'
+import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { articlesApi } from '../../api/articles'
-import { pdfApi } from '../../api/pdf'
+import { pdfApi, PdfListItem } from '../../api/pdf'
 import { Article } from '../../api/types'
 import { getMonthYear } from '../../utils/date'
-import { CONSTANTS } from '../../utils/constants'
 
 interface MonthCount {
   key: string
@@ -16,6 +16,11 @@ interface MonthCount {
 
 export function PdfExport() {
   const navigate = useNavigate()
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'generate' | 'history'>('generate')
+
+  // Generate tab state
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [loading, setLoading] = useState(false)
@@ -26,18 +31,74 @@ export function PdfExport() {
   // PDF generation state
   const [generating, setGenerating] = useState(false)
   const [pdfProgress, setPdfProgress] = useState(0)
+  const [pdfProgressMessage, setPdfProgressMessage] = useState('')
   const [pdfStatus, setPdfStatus] = useState<string | null>(null)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
-  const progressIntervalRef = useRef<number | null>(null)
 
-  // Cleanup progress interval on unmount
+  // PDF options
+  const [mosaicLayout, setMosaicLayout] = useState<'full' | 'centered'>('full')
+  const [showSeasonalFruits, setShowSeasonalFruits] = useState(true)
+
+  // History tab state
+  const [pdfList, setPdfList] = useState<PdfListItem[]>([])
+  const [loadingList, setLoadingList] = useState(false)
+  const [deleteJobId, setDeleteJobId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  // Load PDF list when switching to history tab
   useEffect(() => {
-    return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current)
-      }
+    if (activeTab === 'history') {
+      loadPdfList()
     }
-  }, [])
+  }, [activeTab])
+
+  const loadPdfList = async () => {
+    setLoadingList(true)
+    try {
+      const response = await pdfApi.list()
+      setPdfList(response.items || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load PDF list')
+    } finally {
+      setLoadingList(false)
+    }
+  }
+
+  const handleDeletePdf = async () => {
+    if (!deleteJobId) return
+
+    setDeleting(true)
+    try {
+      await pdfApi.delete(deleteJobId)
+      setPdfList(prev => prev.filter(p => p.job_id !== deleteJobId))
+      setDeleteJobId(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete PDF')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const formatDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr)
+      return date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch {
+      return dateStr
+    }
+  }
+
+  const getPdfName = (pdf: PdfListItem) => {
+    const from = pdf.date_from?.substring(0, 10) || ''
+    const to = pdf.date_to?.substring(0, 10) || ''
+    return `${from} → ${to}`
+  }
 
   const handleBack = () => {
     navigate('/')
@@ -109,54 +170,27 @@ export function PdfExport() {
     }
   }
 
-  const startProgressSimulation = () => {
-    // Clear any existing interval
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current)
-    }
-
-    setPdfProgress(0)
-    let currentProgress = 0
-
-    // Simulate progress: fast at first, then slower as it approaches 90%
-    progressIntervalRef.current = window.setInterval(() => {
-      if (currentProgress < 90) {
-        // Increment by decreasing amounts as we get closer to 90
-        const increment = Math.max(1, Math.floor((90 - currentProgress) / 10))
-        currentProgress = Math.min(90, currentProgress + increment)
-        setPdfProgress(currentProgress)
-      }
-    }, 500)
-  }
-
-  const stopProgressSimulation = (finalProgress: number) => {
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current)
-      progressIntervalRef.current = null
-    }
-    setPdfProgress(finalProgress)
-  }
-
   const pollJobStatus = async (jobId: string) => {
     try {
       const job = await pdfApi.status(jobId)
 
+      // Update progress from real backend data
+      setPdfProgress(job.progress || 0)
+      setPdfProgressMessage(job.progress_message || '')
+
       if (job.status === 'DONE') {
-        stopProgressSimulation(100)
         setPdfStatus('done')
         setPdfUrl(job.pdf_url || null)
         setGenerating(false)
       } else if (job.status === 'ERROR') {
-        stopProgressSimulation(0)
         setPdfStatus('error')
         setError(job.error_message || 'PDF generation failed')
         setGenerating(false)
       } else {
-        // Still running, poll again
-        setTimeout(() => pollJobStatus(jobId), CONSTANTS.PDF_POLL_INTERVAL_MS)
+        // Still running, poll more frequently for responsiveness
+        setTimeout(() => pollJobStatus(jobId), 1000)
       }
     } catch (err) {
-      stopProgressSimulation(0)
       setPdfStatus('error')
       setError(err instanceof Error ? err.message : 'Failed to check PDF status')
       setGenerating(false)
@@ -168,22 +202,29 @@ export function PdfExport() {
 
     setGenerating(true)
     setPdfStatus('generating')
+    setPdfProgress(0)
+    setPdfProgressMessage('Démarrage...')
     setPdfUrl(null)
     setError(null)
-
-    // Start simulated progress
-    startProgressSimulation()
 
     try {
       // Start PDF generation
       const response = await pdfApi.create({
         from: startDate,
         to: endDate,
+        options: {
+          mosaic_layout: mosaicLayout,
+          show_seasonal_fruits: showSeasonalFruits,
+        },
       })
+
+      // Update with response data
+      setPdfProgress(response.progress || 0)
+      setPdfProgressMessage(response.progress_message || '')
 
       // If response already has PDF URL (sync generation), we're done
       if (response.status === 'DONE' && response.pdf_url) {
-        stopProgressSimulation(100)
+        setPdfProgress(100)
         setPdfStatus('done')
         setPdfUrl(response.pdf_url)
         setGenerating(false)
@@ -192,7 +233,6 @@ export function PdfExport() {
         pollJobStatus(response.job_id)
       }
     } catch (err) {
-      stopProgressSimulation(0)
       setPdfStatus('error')
       setError(err instanceof Error ? err.message : 'Failed to start PDF generation')
       setGenerating(false)
@@ -223,8 +263,95 @@ export function PdfExport() {
           </button>
           <h2 className="text-lg font-semibold text-gray-900">PDF Export</h2>
         </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mt-3">
+          <button
+            onClick={() => setActiveTab('generate')}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'generate'
+                ? 'bg-primary-100 text-primary-700'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Générer
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'history'
+                ? 'bg-primary-100 text-primary-700'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Historique
+          </button>
+        </div>
       </div>
 
+      {/* HISTORY TAB */}
+      {activeTab === 'history' && (
+        <div className="flex-1 p-4 pb-20">
+          {loadingList ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            </div>
+          ) : pdfList.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              Aucun PDF généré
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pdfList.map((pdf) => (
+                <div
+                  key={pdf.job_id}
+                  className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">
+                        {getPdfName(pdf)}
+                      </p>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Créé le {formatDate(pdf.created_at)}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        par {pdf.created_by}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <a
+                        href={pdf.pdf_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                        title="Voir le PDF"
+                      >
+                        <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                          <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                      </a>
+                      <button
+                        onClick={() => setDeleteJobId(pdf.job_id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Supprimer"
+                      >
+                        <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                          <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* GENERATE TAB - Date filters */}
+      {activeTab === 'generate' && (
+        <>
       {/* Date filters */}
       <div className="bg-white border-b border-gray-200 px-4 py-4">
         <div className="flex flex-col gap-4">
@@ -308,17 +435,65 @@ export function PdfExport() {
             </ul>
           </div>
 
+          {/* PDF Options */}
+          {!generating && pdfStatus !== 'done' && (
+            <div className="bg-white rounded-lg shadow-md p-4 mt-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Options</h3>
+
+              {/* Month divider layout */}
+              <div className="mb-4">
+                <label className="block text-sm text-gray-600 mb-2">Style des intercalaires de mois</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setMosaicLayout('full')}
+                    className={`flex-1 py-2 px-3 rounded-lg border text-sm transition-colors ${
+                      mosaicLayout === 'full'
+                        ? 'border-primary-500 bg-primary-50 text-primary-700'
+                        : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Mosaïque pleine
+                  </button>
+                  <button
+                    onClick={() => setMosaicLayout('centered')}
+                    className={`flex-1 py-2 px-3 rounded-lg border text-sm transition-colors ${
+                      mosaicLayout === 'centered'
+                        ? 'border-primary-500 bg-primary-50 text-primary-700'
+                        : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Mosaïque centrée
+                  </button>
+                </div>
+              </div>
+
+              {/* Seasonal fruits toggle */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showSeasonalFruits}
+                  onChange={(e) => setShowSeasonalFruits(e.target.checked)}
+                  className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700">Afficher fruits/légumes de saison</span>
+              </label>
+            </div>
+          )}
+
           {/* PDF Generation Progress */}
           {generating && (
             <div className="bg-white rounded-lg shadow-md p-4 mt-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Generating PDF...</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Génération du PDF...</h3>
               <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
                 <div
                   className="bg-primary-600 h-3 rounded-full transition-all duration-300"
                   style={{ width: `${pdfProgress}%` }}
                 ></div>
               </div>
-              <p className="text-sm text-gray-500 text-center">{pdfProgress}%</p>
+              <p className="text-sm text-gray-600 text-center font-medium">{pdfProgress}%</p>
+              {pdfProgressMessage && (
+                <p className="text-xs text-gray-500 text-center mt-1">{pdfProgressMessage}</p>
+              )}
             </div>
           )}
 
@@ -340,7 +515,7 @@ export function PdfExport() {
       )}
 
       {/* Bottom buttons */}
-      {!loading && monthCounts.length > 0 && (
+      {activeTab === 'generate' && !loading && monthCounts.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-20">
           <div className="max-w-content mx-auto space-y-2">
             {pdfStatus === 'done' && pdfUrl ? (
@@ -389,6 +564,21 @@ export function PdfExport() {
           </div>
         </div>
       )}
+        </>
+      )}
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        isOpen={!!deleteJobId}
+        title="Supprimer le PDF ?"
+        message="Le PDF sera définitivement supprimé de Google Drive."
+        confirmLabel="Supprimer"
+        cancelLabel="Annuler"
+        onConfirm={handleDeletePdf}
+        onCancel={() => setDeleteJobId(null)}
+        variant="danger"
+        isLoading={deleting}
+      />
     </div>
   )
 }

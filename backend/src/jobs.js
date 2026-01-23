@@ -18,6 +18,7 @@ function createJob(from, to, userEmail) {
     '',
     '',
     '',
+    '',
   ];
 
   sheet.appendRow(row);
@@ -49,22 +50,24 @@ function updateJobStatus(
   progress,
   pdfFileId,
   pdfUrl,
-  errorMessage
+  errorMessage,
+  progressMessage
 ) {
   const sheet = getJobsSheet();
   const rowIndex = findRowById(sheet, jobId);
 
   if (rowIndex === -1) return;
 
-  const row = sheet.getRange(rowIndex, 1, 1, 11).getValues()[0];
+  const row = sheet.getRange(rowIndex, 1, 1, 12).getValues()[0];
 
   row[6] = status;
   if (progress !== undefined) row[7] = progress;
   if (pdfFileId !== undefined) row[8] = pdfFileId;
   if (pdfUrl !== undefined) row[9] = pdfUrl;
   if (errorMessage !== undefined) row[10] = errorMessage;
+  if (progressMessage !== undefined) row[11] = progressMessage;
 
-  sheet.getRange(rowIndex, 1, 1, 11).setValues([row]);
+  sheet.getRange(rowIndex, 1, 1, 12).setValues([row]);
 }
 
 function handlePdfStatus(jobId) {
@@ -80,5 +83,114 @@ function handlePdfStatus(jobId) {
   return createResponse({
     ok: true,
     data: job,
+  });
+}
+
+/**
+ * Get all PDF jobs, optionally filtered by date range
+ */
+function getAllPdfJobs(dateFrom, dateTo) {
+  const sheet = getJobsSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+
+  const jobs = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const job = {};
+    headers.forEach((header, index) => {
+      job[header] = row[index];
+    });
+
+    // Only include DONE jobs with a PDF URL
+    if (job.status !== 'DONE' || !job.pdf_url) continue;
+
+    // Apply date filters if provided
+    if (dateFrom && job.created_at) {
+      const createdDate = new Date(job.created_at);
+      const filterFrom = new Date(dateFrom);
+      if (createdDate < filterFrom) continue;
+    }
+    if (dateTo && job.created_at) {
+      const createdDate = new Date(job.created_at);
+      const filterTo = new Date(dateTo);
+      filterTo.setDate(filterTo.getDate() + 1); // Include the whole day
+      if (createdDate >= filterTo) continue;
+    }
+
+    jobs.push(job);
+  }
+
+  // Sort by created_at DESC (newest first)
+  jobs.sort((a, b) => {
+    const dateA = new Date(a.created_at || 0);
+    const dateB = new Date(b.created_at || 0);
+    return dateB - dateA;
+  });
+
+  return jobs;
+}
+
+function handlePdfList(params) {
+  const jobs = getAllPdfJobs(params.date_from, params.date_to);
+  return createResponse({
+    ok: true,
+    data: { items: jobs },
+  });
+}
+
+/**
+ * Delete a PDF job and its associated file from Drive
+ */
+function deletePdfJob(jobId) {
+  const sheet = getJobsSheet();
+  const rowIndex = findRowById(sheet, jobId);
+
+  if (rowIndex === -1) {
+    return { ok: false, error: 'Job not found' };
+  }
+
+  // Get the job data to find the file ID
+  const row = sheet.getRange(rowIndex, 1, 1, 12).getValues()[0];
+  const pdfFileId = row[8]; // pdf_file_id is at index 8
+
+  // Delete the file from Drive if it exists
+  if (pdfFileId) {
+    try {
+      const file = DriveApp.getFileById(pdfFileId);
+      file.setTrashed(true);
+    } catch (e) {
+      // File might already be deleted, continue anyway
+    }
+  }
+
+  // Delete the row from the sheet
+  sheet.deleteRow(rowIndex);
+
+  return { ok: true };
+}
+
+function handlePdfDelete(body) {
+  const jobId = body.job_id;
+  if (!jobId) {
+    return createResponse({
+      ok: false,
+      error: { code: 'MISSING_JOB_ID', message: 'Job ID is required' },
+    });
+  }
+
+  const result = deletePdfJob(jobId);
+
+  if (!result.ok) {
+    return createResponse({
+      ok: false,
+      error: { code: 'NOT_FOUND', message: result.error },
+    });
+  }
+
+  return createResponse({
+    ok: true,
+    data: { deleted: true },
   });
 }

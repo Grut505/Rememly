@@ -30,6 +30,7 @@ export interface PdfJob {
   job_id: string
   status: 'PENDING' | 'RUNNING' | 'DONE' | 'ERROR'
   progress: number
+  progress_message?: string
   pdf_file_id?: string
   pdf_url?: string
   error_message?: string

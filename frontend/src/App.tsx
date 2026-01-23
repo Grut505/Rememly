@@ -10,6 +10,7 @@ import { PhotoAssemblyScreen } from './screens/PhotoAssembly/PhotoAssemblyScreen
 import { Profile } from './screens/Profile/Profile'
 import { FamileoBrowser } from './screens/Famileo/FamileoBrowser'
 import { PdfExport } from './screens/PdfExport/PdfExport'
+import { Settings } from './screens/Settings/Settings'
 import { UpdatePrompt } from './components/UpdatePrompt'
 
 function App() {
@@ -81,6 +82,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <PdfExport />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
               </ProtectedRoute>
             }
           />

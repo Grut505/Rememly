@@ -104,6 +104,7 @@ function getJobsSheet() {
       'pdf_file_id',
       'pdf_url',
       'error_message',
+      'progress_message',
     ]);
   }
 

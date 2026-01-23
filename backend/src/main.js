@@ -57,6 +57,12 @@ function doPost(e) {
       case 'pdf/status':
         return handlePdfStatus(params.job_id);
 
+      case 'pdf/list':
+        return handlePdfList(params);
+
+      case 'pdf/delete':
+        return handlePdfDelete(body);
+
       case 'profile/get':
         return handleProfileGet(authResult.user.email);
 
@@ -83,6 +89,12 @@ function doPost(e) {
 
       case 'famileo/imported-ids':
         return handleFamileoImportedIds();
+
+      case 'config/get':
+        return handleConfigGet(params.key);
+
+      case 'config/set':
+        return handleConfigSet(body);
 
       default:
         return createResponse({
@@ -117,4 +129,27 @@ function createResponse(data) {
 
   // Add CORS headers
   return output;
+}
+
+function handleConfigGet(key) {
+  if (!key) {
+    return createResponse({
+      ok: false,
+      error: { code: 'MISSING_KEY', message: 'Config key is required' }
+    });
+  }
+  const value = getConfigValue(key);
+  return createResponse({ ok: true, data: { key, value } });
+}
+
+function handleConfigSet(body) {
+  const { key, value } = body || {};
+  if (!key) {
+    return createResponse({
+      ok: false,
+      error: { code: 'MISSING_KEY', message: 'Config key is required' }
+    });
+  }
+  setConfigValue(key, value || '');
+  return createResponse({ ok: true, data: { key, value: value || '' } });
 }

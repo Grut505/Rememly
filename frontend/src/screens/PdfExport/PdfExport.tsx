@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { Switch } from '../../ui/Switch'
 import { pdfApi, PdfListItem } from '../../api/pdf'
 import { PdfGenerateModal } from './PdfGenerateModal'
+import { usePdfGenerationStore } from '../../stores/pdfGenerationStore'
 
 type SortField = 'created_at' | 'date_from' | 'created_by'
 type SortOrder = 'asc' | 'desc'
@@ -55,6 +56,14 @@ export function PdfExport() {
   useEffect(() => {
     loadPdfList()
   }, [loadPdfList])
+
+  // Refresh list when PDF generation completes
+  const showSuccess = usePdfGenerationStore((state) => state.showSuccess)
+  useEffect(() => {
+    if (showSuccess) {
+      loadPdfList()
+    }
+  }, [showSuccess, loadPdfList])
 
   // Get unique years from list
   const availableYears = Array.from(
@@ -389,12 +398,24 @@ export function PdfExport() {
                   )}
 
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900">
-                      {formatDateRange(pdf.date_from, pdf.date_to)}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-gray-900">
+                        {formatDateRange(pdf.date_from, pdf.date_to)}
+                      </p>
+                      {pdf.status === 'ERROR' && (
+                        <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
+                          Erreur
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-500 mt-1">
                       Créé le {formatDate(pdf.created_at)}
                     </p>
+                    {pdf.status === 'ERROR' && pdf.error_message && (
+                      <p className="text-xs text-red-500 mt-0.5 truncate" title={pdf.error_message}>
+                        {pdf.error_message}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-400 mt-0.5">
                       par {pdf.created_by}
                     </p>
@@ -403,18 +424,20 @@ export function PdfExport() {
                   {/* Actions (only in normal mode) */}
                   {!selectionMode && (
                     <div className="flex gap-1 flex-shrink-0">
-                      <a
-                        href={pdf.pdf_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                        title="Voir le PDF"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                          <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                        </svg>
-                      </a>
+                      {pdf.pdf_url && (
+                        <a
+                          href={pdf.pdf_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                          title="Voir le PDF"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                            <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                          </svg>
+                        </a>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation()

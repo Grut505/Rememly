@@ -30,8 +30,9 @@ export interface PdfListItem {
   date_from: string
   date_to: string
   status: string
-  pdf_url: string
-  pdf_file_id: string
+  pdf_url?: string
+  pdf_file_id?: string
+  error_message?: string
 }
 
 export interface PdfListResponse {
@@ -42,6 +43,10 @@ export interface PdfListResponse {
 export const pdfApi = {
   create: (payload: CreatePdfPayload) =>
     apiClient.post<CreatePdfResponse>('pdf/create', payload),
+
+  // Fire and forget - triggers the actual PDF generation
+  process: (jobId: string) =>
+    apiClient.get<{ processed: boolean }>('pdf/process', { job_id: jobId }),
 
   status: (jobId: string) =>
     apiClient.get<PdfJob>('pdf/status', { job_id: jobId }),

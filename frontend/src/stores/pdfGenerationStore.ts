@@ -13,12 +13,15 @@ interface PdfGenerationState {
   pdfUrl: string | null
   showSuccess: boolean
 
+  // Callback when generation completes
+  onCompleteCallback: (() => void) | null
+
   // Actions
   startGeneration: (from: string, to: string, options: {
     mosaic_layout?: 'full' | 'centered'
     show_seasonal_fruits?: boolean
     max_mosaic_photos?: number
-  }) => Promise<void>
+  }, onComplete?: () => void) => Promise<void>
   pollJobStatus: (jobId: string) => Promise<void>
   dismissSuccess: () => void
   dismissError: () => void
@@ -33,8 +36,9 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
   error: null,
   pdfUrl: null,
   showSuccess: false,
+  onCompleteCallback: null,
 
-  startGeneration: async (from, to, options) => {
+  startGeneration: async (from, to, options, onComplete) => {
     set({
       isGenerating: true,
       jobId: null,
@@ -43,6 +47,7 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
       error: null,
       pdfUrl: null,
       showSuccess: false,
+      onCompleteCallback: onComplete || null,
     })
 
     try {
@@ -67,13 +72,21 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
           progressMessage: '',
         })
       } else {
-        // Job started (PENDING or RUNNING), poll for completion
+        // Job started (PENDING), start polling and trigger processing
         set({
           jobId: response.job_id,
           progress: response.progress || 0,
           progressMessage: response.progress_message || 'En attente...',
         })
+
+        // Start polling for status updates
         get().pollJobStatus(response.job_id)
+
+        // Fire and forget: trigger the actual PDF generation
+        // We don't await this - it will run in the background
+        pdfApi.process(response.job_id).catch(() => {
+          // Ignore errors here - polling will catch any issues
+        })
       }
     } catch (err) {
       set({
@@ -94,11 +107,16 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
       })
 
       if (job.status === 'DONE') {
+        const callback = get().onCompleteCallback
         set({
           isGenerating: false,
           pdfUrl: job.pdf_url || null,
           showSuccess: true,
         })
+        // Call the callback to refresh the list
+        if (callback) {
+          callback()
+        }
       } else if (job.status === 'ERROR') {
         set({
           isGenerating: false,
@@ -133,6 +151,7 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
       error: null,
       pdfUrl: null,
       showSuccess: false,
+      onCompleteCallback: null,
     })
   },
 }))

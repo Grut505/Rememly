@@ -54,6 +54,9 @@ function doPost(e) {
       case 'pdf/create':
         return handlePdfCreate(body, authResult.user);
 
+      case 'pdf/process':
+        return handlePdfProcess(params);
+
       case 'pdf/status':
         return handlePdfStatus(params.job_id);
 

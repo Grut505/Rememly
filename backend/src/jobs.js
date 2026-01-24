@@ -114,8 +114,9 @@ function getAllPdfJobs(dateFrom, dateTo, author) {
       job[header] = toIsoString(row[index]);
     });
 
-    // Only include DONE jobs with a PDF URL
-    if (job.status !== 'DONE' || !job.pdf_url) continue;
+    // Only include DONE jobs (with PDF URL) and ERROR jobs
+    if (job.status === 'DONE' && !job.pdf_url) continue;
+    if (job.status !== 'DONE' && job.status !== 'ERROR') continue;
 
     // Apply author filter if provided
     if (author && job.created_by !== author) continue;

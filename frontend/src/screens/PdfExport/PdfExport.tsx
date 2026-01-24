@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../../ui/AppHeader'
 import { Button } from '../../ui/Button'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
+import { Switch } from '../../ui/Switch'
 import { pdfApi, PdfListItem } from '../../api/pdf'
 import { PdfGenerateModal } from './PdfGenerateModal'
 
-type SortField = 'created_at' | 'date_from'
+type SortField = 'created_at' | 'date_from' | 'created_by'
 type SortOrder = 'asc' | 'desc'
 
 export function PdfExport() {
@@ -60,6 +61,13 @@ export function PdfExport() {
     new Set(pdfList.map(p => p.year).filter(Boolean))
   ).sort((a, b) => b - a)
 
+  // Helper to safely parse dates
+  const parseDate = (dateStr: string | undefined | null): number => {
+    if (!dateStr) return 0
+    const d = new Date(dateStr)
+    return isNaN(d.getTime()) ? 0 : d.getTime()
+  }
+
   // Filter and sort list
   const filteredList = pdfList
     .filter(pdf => !filterYear || pdf.year === parseInt(filterYear))
@@ -67,24 +75,17 @@ export function PdfExport() {
     .sort((a, b) => {
       let comparison = 0
       if (sortField === 'created_at') {
-        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
-        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
-        comparison = dateA - dateB
+        comparison = parseDate(a.created_at) - parseDate(b.created_at)
       } else if (sortField === 'date_from') {
-        const dateA = a.date_from ? new Date(a.date_from).getTime() : 0
-        const dateB = b.date_from ? new Date(b.date_from).getTime() : 0
-        comparison = dateA - dateB
+        comparison = parseDate(a.date_from) - parseDate(b.date_from)
+      } else if (sortField === 'created_by') {
+        comparison = (a.created_by || '').localeCompare(b.created_by || '')
       }
       return sortOrder === 'desc' ? -comparison : comparison
     })
 
   const handleBack = () => {
-    if (selectionMode) {
-      setSelectionMode(false)
-      setSelectedIds(new Set())
-    } else {
-      navigate('/')
-    }
+    navigate('/')
   }
 
   const formatDate = (dateStr: string) => {
@@ -176,62 +177,54 @@ export function PdfExport() {
 
       {/* Header bar */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-14 z-20">
+        {/* Row 1: Title and actions */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleBack}
-            className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation"
-          >
-            <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-              <path d="M15 19l-7-7 7-7"></path>
-            </svg>
-          </button>
+          {!selectionMode ? (
+            <button
+              onClick={handleBack}
+              className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation"
+            >
+              <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M15 19l-7-7 7-7"></path>
+              </svg>
+            </button>
+          ) : (
+            <div className="w-9 h-9" />
+          )}
           <h2 className="text-lg font-semibold text-gray-900 flex-1">
             {selectionMode ? `${selectedIds.size} sélectionné(s)` : 'PDFs générés'}
           </h2>
 
-          {selectionMode ? (
-            <>
+          <div className="flex items-center gap-4">
+            {selectionMode && (
               <button
                 onClick={selectAll}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                className="text-primary-600 hover:text-primary-700 touch-manipulation text-sm font-medium"
               >
-                {selectedIds.size === filteredList.length ? (
-                  <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                    <path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path>
-                  </svg>
-                )}
+                {selectedIds.size === filteredList.length ? 'Deselect all' : 'Select all'}
               </button>
-              {selectedIds.size > 0 && (
-                <button
-                  onClick={() => setDeleteBulk(true)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                    <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                  </svg>
-                </button>
-              )}
-            </>
-          ) : (
-            <button
-              onClick={() => setSelectionMode(true)}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Mode sélection"
-            >
-              <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
-              </svg>
-            </button>
-          )}
+            )}
+            {filteredList.length > 0 && (
+              <Switch
+                checked={selectionMode}
+                onChange={(checked) => {
+                  setSelectionMode(checked)
+                  if (!checked) setSelectedIds(new Set())
+                }}
+                label="Select"
+              />
+            )}
+          </div>
         </div>
 
-        {/* Filters */}
-        {!selectionMode && (
-          <div className="flex flex-wrap items-center gap-2 mt-3">
+        {/* Row 2: Filters or selection info - fixed height to prevent layout shift */}
+        <div className="flex items-center gap-2 mt-3 h-11 overflow-x-auto">
+          {selectionMode ? (
+            <span className="text-sm text-gray-500">
+              Sélectionnez les PDFs à supprimer
+            </span>
+          ) : (
+            <>
             {/* Year filter */}
             <select
               value={filterYear}
@@ -258,28 +251,77 @@ export function PdfExport() {
               </select>
             )}
 
-            {/* Sort */}
-            <select
-              value={`${sortField}_${sortOrder}`}
-              onChange={(e) => {
-                const [field, order] = e.target.value.split('_') as [SortField, SortOrder]
-                setSortField(field)
-                setSortOrder(order)
-              }}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="created_at_desc">Plus récent</option>
-              <option value="created_at_asc">Plus ancien</option>
-              <option value="date_from_desc">Période ↓</option>
-              <option value="date_from_asc">Période ↑</option>
-            </select>
+            {/* Sort toggle */}
+            <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
+              <button
+                onClick={() => {
+                  if (sortField === 'created_at') {
+                    setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
+                  } else {
+                    setSortField('created_at')
+                    setSortOrder('desc')
+                  }
+                }}
+                className={`px-3 py-2.5 font-medium transition-colors flex items-center gap-1 ${
+                  sortField === 'created_at'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                Création
+                {sortField === 'created_at' && (
+                  <span className="text-[10px]">{sortOrder === 'desc' ? '↓' : '↑'}</span>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  if (sortField === 'date_from') {
+                    setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
+                  } else {
+                    setSortField('date_from')
+                    setSortOrder('desc')
+                  }
+                }}
+                className={`px-3 py-2.5 font-medium border-l border-gray-300 transition-colors flex items-center gap-1 ${
+                  sortField === 'date_from'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                Période
+                {sortField === 'date_from' && (
+                  <span className="text-[10px]">{sortOrder === 'desc' ? '↓' : '↑'}</span>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  if (sortField === 'created_by') {
+                    setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
+                  } else {
+                    setSortField('created_by')
+                    setSortOrder('asc')
+                  }
+                }}
+                className={`px-3 py-2.5 font-medium border-l border-gray-300 transition-colors flex items-center gap-1 ${
+                  sortField === 'created_by'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                Auteur
+                {sortField === 'created_by' && (
+                  <span className="text-[10px]">{sortOrder === 'desc' ? '↓' : '↑'}</span>
+                )}
+              </button>
+            </div>
 
             {/* Count */}
             <span className="text-sm text-gray-500 ml-auto">
               {filteredList.length} PDF{filteredList.length > 1 ? 's' : ''}
             </span>
-          </div>
+          </>
         )}
+        </div>
       </div>
 
       {/* Error message */}
@@ -393,6 +435,23 @@ export function PdfExport() {
           </div>
         )}
       </div>
+
+      {/* Selection Mode Action Bar */}
+      {selectionMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 p-4 z-50 shadow-lg">
+          <div className="max-w-content mx-auto flex items-center justify-between gap-4">
+            <span className="text-sm text-gray-600">
+              {selectedIds.size} PDF{selectedIds.size > 1 ? 's' : ''} sélectionné{selectedIds.size > 1 ? 's' : ''}
+            </span>
+            <button
+              onClick={() => setDeleteBulk(true)}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+            >
+              Supprimer
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* FAB to create new PDF */}
       {!selectionMode && (

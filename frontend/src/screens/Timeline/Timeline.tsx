@@ -69,6 +69,7 @@ export function Timeline() {
         to: filters.to,
         limit: String(CONSTANTS.ARTICLES_PER_PAGE),
         status_filter: filters.statusFilter || 'active',
+        source_filter: filters.sourceFilter || 'all',
       })
       console.log('Received articles:', response.items.length, 'cursor:', response.next_cursor)
       setArticles(response.items, response.next_cursor)
@@ -96,6 +97,7 @@ export function Timeline() {
         cursor: currentCursor,
         limit: String(CONSTANTS.ARTICLES_PER_PAGE),
         status_filter: filters.statusFilter || 'active',
+        source_filter: filters.sourceFilter || 'all',
       })
       console.log('Loaded more articles:', response.items.length, 'next cursor:', response.next_cursor)
       // Update cursorRef immediately to prevent duplicate requests
@@ -107,7 +109,7 @@ export function Timeline() {
       loadingRef.current = false
       setIsLoadingMore(false)
     }
-  }, [filters.year, filters.month, filters.from, filters.to, filters.statusFilter, addArticles, setError])
+  }, [filters.year, filters.month, filters.from, filters.to, filters.statusFilter, filters.sourceFilter, addArticles, setError])
 
   const sentinelRef = useCallback(
     (node: HTMLDivElement) => {
@@ -139,6 +141,7 @@ export function Timeline() {
       from: filterValues.dateFrom,
       to: filterValues.dateTo,
       statusFilter: filterValues.statusFilter,
+      sourceFilter: filterValues.sourceFilter,
     })
   }
 
@@ -151,6 +154,19 @@ export function Timeline() {
       const article = articles.find(a => a.id === id)
       if (article) {
         useArticlesStore.getState().updateArticle({ ...article, status: 'DELETED' })
+      }
+    }
+  }
+
+  const handleArticleRestored = (id: string) => {
+    // If showing only deleted articles, remove from the list
+    if (filters.statusFilter === 'deleted') {
+      useArticlesStore.getState().deleteArticle(id)
+    } else {
+      // Otherwise (all or active), update the article status locally
+      const article = articles.find(a => a.id === id)
+      if (article) {
+        useArticlesStore.getState().updateArticle({ ...article, status: 'ACTIVE' })
       }
     }
   }
@@ -250,7 +266,8 @@ export function Timeline() {
     filters.month ||
     filters.from ||
     filters.to ||
-    (filters.statusFilter && filters.statusFilter !== 'active')
+    (filters.statusFilter && filters.statusFilter !== 'active') ||
+    (filters.sourceFilter && filters.sourceFilter !== 'all')
 
   // Convert store filters to FilterPanel format
   const currentFilterValues: FilterValues = {
@@ -259,12 +276,13 @@ export function Timeline() {
     dateFrom: filters.from || '',
     dateTo: filters.to || '',
     statusFilter: filters.statusFilter || 'active',
+    sourceFilter: filters.sourceFilter || 'all',
   }
 
   useEffect(() => {
     console.log('Filters changed, reloading articles:', filters)
     loadArticles()
-  }, [filters.year, filters.month, filters.from, filters.to, filters.statusFilter])
+  }, [filters.year, filters.month, filters.from, filters.to, filters.statusFilter, filters.sourceFilter])
 
   if (isLoading && articles.length === 0) {
     return <LoadingScreen message="Loading articles..." />
@@ -349,6 +367,7 @@ export function Timeline() {
                     <ArticleCard
                       article={article}
                       onDeleted={handleArticleDeleted}
+                      onRestored={handleArticleRestored}
                       selectionMode={selectionMode}
                       selected={selectedIds.has(article.id)}
                       onSelectionChange={handleSelectionChange}

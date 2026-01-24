@@ -67,8 +67,12 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
           progressMessage: '',
         })
       } else {
-        // Job started, poll for completion
-        set({ jobId: response.job_id })
+        // Job started (PENDING or RUNNING), poll for completion
+        set({
+          jobId: response.job_id,
+          progress: response.progress || 0,
+          progressMessage: response.progress_message || 'En attente...',
+        })
         get().pollJobStatus(response.job_id)
       }
     } catch (err) {

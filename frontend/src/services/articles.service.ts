@@ -55,6 +55,10 @@ class ArticlesService {
   async deleteArticle(id: string): Promise<void> {
     await articlesApi.delete(id)
   }
+
+  async restoreArticle(id: string): Promise<Article> {
+    return articlesApi.update({ id, status: 'ACTIVE' })
+  }
 }
 
 export const articlesService = new ArticlesService()

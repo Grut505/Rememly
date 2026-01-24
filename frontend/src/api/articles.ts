@@ -37,6 +37,7 @@ export interface ListArticlesFilters {
   limit?: string
   cursor?: string
   status_filter?: 'active' | 'all' | 'deleted'
+  source_filter?: 'all' | 'famileo' | 'local'
 }
 
 export const articlesApi = {

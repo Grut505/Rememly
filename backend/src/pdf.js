@@ -3,7 +3,54 @@
 function handlePdfCreate(body, user) {
   const jobId = createJob(body.from, body.to, user.email);
 
-  // Generate PDF synchronously (no trigger needed)
+  // Store job ID and options in script properties for async processing
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('CURRENT_PDF_JOB', jobId);
+  props.setProperty('CURRENT_PDF_OPTIONS', JSON.stringify({
+    mosaicLayout: body.options?.mosaic_layout || 'full',
+    showSeasonalFruits: body.options?.show_seasonal_fruits !== false,
+    maxMosaicPhotos: body.options?.max_mosaic_photos || undefined
+  }));
+
+  // Delete any existing triggers for generatePdfAsync to avoid duplicates
+  const triggers = ScriptApp.getProjectTriggers();
+  for (const trigger of triggers) {
+    if (trigger.getHandlerFunction() === 'generatePdfAsync') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  }
+
+  // Create a time-based trigger to run immediately (1 second delay)
+  ScriptApp.newTrigger('generatePdfAsync')
+    .timeBased()
+    .after(1000)
+    .create();
+
+  // Return immediately with PENDING status
+  return createResponse({
+    ok: true,
+    data: {
+      job_id: jobId,
+      status: 'PENDING',
+      progress: 0,
+      progress_message: 'En attente...',
+    },
+  });
+}
+
+function generatePdfAsync() {
+  const props = PropertiesService.getScriptProperties();
+  const jobId = props.getProperty('CURRENT_PDF_JOB');
+  if (!jobId) return;
+
+  // Delete the trigger that called this function
+  const triggers = ScriptApp.getProjectTriggers();
+  for (const trigger of triggers) {
+    if (trigger.getHandlerFunction() === 'generatePdfAsync') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  }
+
   try {
     updateJobStatus(jobId, 'RUNNING', 5, undefined, undefined, undefined, 'Initialisation...');
 
@@ -12,19 +59,19 @@ function handlePdfCreate(body, user) {
       throw new Error('Job not found');
     }
 
+    // Get options from properties
+    const optionsJson = props.getProperty('CURRENT_PDF_OPTIONS');
+    const pdfOptions = optionsJson ? JSON.parse(optionsJson) : {
+      mosaicLayout: 'full',
+      showSeasonalFruits: true
+    };
+
     updateJobStatus(jobId, 'RUNNING', 10, undefined, undefined, undefined, 'Chargement des articles...');
 
     // Get articles in date range
     const articles = getArticlesInRange(job.date_from, job.date_to);
 
     updateJobStatus(jobId, 'RUNNING', 20, undefined, undefined, undefined, `${articles.length} articles trouvés`);
-
-    // PDF generation options
-    const pdfOptions = {
-      mosaicLayout: body.options?.mosaic_layout || 'full',
-      showSeasonalFruits: body.options?.show_seasonal_fruits !== false,
-      maxMosaicPhotos: body.options?.max_mosaic_photos || undefined
-    };
 
     // Generate HTML with embedded images
     const html = generatePdfHtml(articles, job.year, job.date_from, job.date_to, pdfOptions);
@@ -46,66 +93,13 @@ function handlePdfCreate(body, user) {
     // Update job status
     updateJobStatus(jobId, 'DONE', 100, pdfData.fileId, pdfData.url, undefined, 'Terminé !');
 
-    return createResponse({
-      ok: true,
-      data: {
-        job_id: jobId,
-        status: 'DONE',
-        progress: 100,
-        pdf_file_id: pdfData.fileId,
-        pdf_url: pdfData.url,
-        progress_message: 'Terminé !',
-      },
-    });
+    // Clean up properties
+    props.deleteProperty('CURRENT_PDF_JOB');
+    props.deleteProperty('CURRENT_PDF_OPTIONS');
   } catch (error) {
     updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error), 'Erreur');
-    return createResponse({
-      ok: false,
-      error: { code: 'PDF_GENERATION_ERROR', message: String(error) },
-    });
-  }
-}
-
-function generatePdfAsync() {
-  const jobId = PropertiesService.getScriptProperties().getProperty('CURRENT_PDF_JOB');
-  if (!jobId) return;
-
-  try {
-    updateJobStatus(jobId, 'RUNNING', 10);
-
-    const job = getJobStatus(jobId);
-    if (!job) return;
-
-    // Get articles in date range
-    const articles = getArticlesInRange(job.date_from, job.date_to);
-
-    updateJobStatus(jobId, 'RUNNING', 30);
-
-    // Generate HTML
-    const html = generatePdfHtml(articles, job.year, job.date_from, job.date_to);
-
-    updateJobStatus(jobId, 'RUNNING', 60);
-
-    // Convert to PDF
-    const pdfBlob = convertHtmlToPdf(html);
-
-    updateJobStatus(jobId, 'RUNNING', 80);
-
-    // Save to Drive - convert dates to strings in case they were parsed as Date objects by Sheets
-    const dateFrom = typeof job.date_from === 'string' ? job.date_from : Utilities.formatDate(job.date_from, 'Europe/Paris', 'yyyy-MM-dd');
-    const dateTo = typeof job.date_to === 'string' ? job.date_to : Utilities.formatDate(job.date_to, 'Europe/Paris', 'yyyy-MM-dd');
-    const fileName = `Livre_${job.year}_${dateFrom}-${dateTo}_gen-${formatTimestamp()}_v01.pdf`;
-
-    const pdfData = savePdfToFolder(pdfBlob, job.year, fileName);
-
-    // Update job status
-    updateJobStatus(jobId, 'DONE', 100, pdfData.fileId, pdfData.url);
-
-    // Clean up
-    PropertiesService.getScriptProperties().deleteProperty('CURRENT_PDF_JOB');
-  } catch (error) {
-    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error));
-    PropertiesService.getScriptProperties().deleteProperty('CURRENT_PDF_JOB');
+    props.deleteProperty('CURRENT_PDF_JOB');
+    props.deleteProperty('CURRENT_PDF_OPTIONS');
   }
 }
 

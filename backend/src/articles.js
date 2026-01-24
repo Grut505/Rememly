@@ -13,6 +13,7 @@ function handleArticlesList(params) {
   const limit = params.limit ? parseInt(params.limit) : 40;
   const cursor = params.cursor ? parseInt(params.cursor) : 0; // Offset-based cursor
   const statusFilter = params.status_filter || 'active'; // 'active', 'all', or 'deleted'
+  const sourceFilter = params.source_filter || 'all'; // 'all', 'famileo', or 'local'
 
   // Build a cache of email -> pseudo for all users
   const userPseudoCache = buildUserPseudoCache();
@@ -35,6 +36,14 @@ function handleArticlesList(params) {
       continue;
     }
     if (statusFilter === 'deleted' && article.status !== 'DELETED') {
+      continue;
+    }
+
+    // Filter by source
+    if (sourceFilter === 'famileo' && !article.famileo_post_id) {
+      continue;
+    }
+    if (sourceFilter === 'local' && article.famileo_post_id) {
       continue;
     }
 

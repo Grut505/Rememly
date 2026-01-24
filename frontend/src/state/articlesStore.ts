@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { Article } from '../api/types'
-import { StatusFilter } from '../screens/Filters/FiltersPanel'
+import { StatusFilter, SourceFilter } from '../screens/Filters/FiltersPanel'
 
 export interface ArticleFilters {
   year?: string
@@ -8,6 +8,7 @@ export interface ArticleFilters {
   from?: string
   to?: string
   statusFilter?: StatusFilter
+  sourceFilter?: SourceFilter
 }
 
 const defaultFilters: ArticleFilters = {
@@ -16,6 +17,7 @@ const defaultFilters: ArticleFilters = {
   from: '',
   to: '',
   statusFilter: 'active',
+  sourceFilter: 'all',
 }
 
 interface ArticlesState {

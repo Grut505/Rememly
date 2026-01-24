@@ -70,18 +70,21 @@ function getAvatarOrInitials(author: string, avatarUrl?: string): JSX.Element {
 interface ArticleCardProps {
   article: Article
   onDeleted?: (id: string) => void
+  onRestored?: (id: string) => void
   selectionMode?: boolean
   selected?: boolean
   onSelectionChange?: (id: string, selected: boolean) => void
 }
 
-export function ArticleCard({ article, onDeleted, selectionMode, selected, onSelectionChange }: ArticleCardProps) {
+export function ArticleCard({ article, onDeleted, onRestored, selectionMode, selected, onSelectionChange }: ArticleCardProps) {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { profile, avatarBlobUrl } = useProfile()
   const { src: imageSrc, isLoading: imageLoading, error: imageError } = useImageLoader(article.image_url, article.image_file_id)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(false)
 
   const isDeleted = article.status === 'DELETED'
 
@@ -112,6 +115,24 @@ export function ArticleCard({ article, onDeleted, selectionMode, selected, onSel
     }
   }
 
+  const handleRestoreClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowRestoreConfirm(true)
+  }
+
+  const handleConfirmRestore = async () => {
+    setIsRestoring(true)
+    try {
+      await articlesService.restoreArticle(article.id)
+      setShowRestoreConfirm(false)
+      onRestored?.(article.id)
+    } catch (err) {
+      console.error('Failed to restore article:', err)
+    } finally {
+      setIsRestoring(false)
+    }
+  }
+
   // Use author_pseudo from backend (enriched with user profile)
   const displayName = article.author_pseudo || 'Unknown'
 
@@ -136,9 +157,19 @@ export function ArticleCard({ article, onDeleted, selectionMode, selected, onSel
       >
 
         {/* Header: Avatar, Author, Date, Edit/Delete buttons */}
-        {isDeleted && (
-          <div className="bg-red-500 text-white text-xs font-semibold px-2 py-1 text-center">
-            Deleted
+        {/* Status badges */}
+        {(isDeleted || article.famileo_post_id) && (
+          <div className="flex">
+            {article.famileo_post_id && (
+              <div className="flex-1 bg-purple-500 text-white text-xs font-semibold px-2 py-1 text-center">
+                Famileo
+              </div>
+            )}
+            {isDeleted && (
+              <div className="flex-1 bg-red-500 text-white text-xs font-semibold px-2 py-1 text-center">
+                Deleted
+              </div>
+            )}
           </div>
         )}
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
@@ -170,7 +201,17 @@ export function ArticleCard({ article, onDeleted, selectionMode, selected, onSel
                 <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
               </svg>
             </button>
-            {!isDeleted && (
+            {isDeleted ? (
+              <button
+                onClick={handleRestoreClick}
+                className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors flex-shrink-0 touch-manipulation"
+                aria-label="Restore article"
+              >
+                <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+              </button>
+            ) : (
               <button
                 onClick={handleDeleteClick}
                 className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0 touch-manipulation"
@@ -233,6 +274,18 @@ export function ArticleCard({ article, onDeleted, selectionMode, selected, onSel
         onCancel={() => setShowDeleteConfirm(false)}
         variant="danger"
         isLoading={isDeleting}
+      />
+
+      {/* Restore Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showRestoreConfirm}
+        title="Restore article?"
+        message="The article will be restored and visible again in your timeline."
+        confirmLabel="Restore"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmRestore}
+        onCancel={() => setShowRestoreConfirm(false)}
+        isLoading={isRestoring}
       />
     </div>
   )

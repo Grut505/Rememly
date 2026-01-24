@@ -10,6 +10,7 @@ const DEFAULT_FILTERS: FilterValues = {
   dateFrom: '',
   dateTo: '',
   statusFilter: 'active',
+  sourceFilter: 'all',
 }
 
 interface FiltersPanelProps {
@@ -19,6 +20,7 @@ interface FiltersPanelProps {
 }
 
 export type StatusFilter = 'active' | 'all' | 'deleted'
+export type SourceFilter = 'all' | 'famileo' | 'local'
 
 export interface FilterValues {
   year: string
@@ -26,6 +28,7 @@ export interface FilterValues {
   dateFrom: string
   dateTo: string
   statusFilter: StatusFilter
+  sourceFilter: SourceFilter
 }
 
 export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelProps) {
@@ -34,6 +37,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
   const [dateFrom, setDateFrom] = useState(initialFilters?.dateFrom ?? DEFAULT_FILTERS.dateFrom)
   const [dateTo, setDateTo] = useState(initialFilters?.dateTo ?? DEFAULT_FILTERS.dateTo)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilters?.statusFilter ?? DEFAULT_FILTERS.statusFilter)
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialFilters?.sourceFilter ?? DEFAULT_FILTERS.sourceFilter)
 
   useEffect(() => {
     if (initialFilters) {
@@ -42,11 +46,12 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
       setDateFrom(initialFilters.dateFrom ?? DEFAULT_FILTERS.dateFrom)
       setDateTo(initialFilters.dateTo ?? DEFAULT_FILTERS.dateTo)
       setStatusFilter(initialFilters.statusFilter ?? DEFAULT_FILTERS.statusFilter)
+      setSourceFilter(initialFilters.sourceFilter ?? DEFAULT_FILTERS.sourceFilter)
     }
   }, [initialFilters])
 
   const handleApply = () => {
-    onApply({ year, month, dateFrom, dateTo, statusFilter })
+    onApply({ year, month, dateFrom, dateTo, statusFilter, sourceFilter })
     onClose()
   }
 
@@ -56,6 +61,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
     setDateFrom(DEFAULT_FILTERS.dateFrom)
     setDateTo(DEFAULT_FILTERS.dateTo)
     setStatusFilter(DEFAULT_FILTERS.statusFilter)
+    setSourceFilter(DEFAULT_FILTERS.sourceFilter)
     onApply(DEFAULT_FILTERS)
     onClose()
   }
@@ -171,6 +177,48 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
               }`}
             >
               Deleted
+            </button>
+          </div>
+        </div>
+
+        {/* Source Filter */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Source
+          </label>
+          <div className="flex rounded-lg border border-gray-300 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setSourceFilter('all')}
+              className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                sourceFilter === 'all'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceFilter('famileo')}
+              className={`flex-1 px-3 py-2 text-sm font-medium border-x border-gray-300 transition-colors ${
+                sourceFilter === 'famileo'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Famileo
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceFilter('local')}
+              className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                sourceFilter === 'local'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Local
             </button>
           </div>
         </div>

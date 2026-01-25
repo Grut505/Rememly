@@ -18,7 +18,7 @@ echo ""
 # Backend
 echo "📤 Push et déploiement du backend vers Google Apps Script..."
 cd backend
-npx clasp push
+npx clasp push --force
 
 DEPLOY_OUTPUT=$(npx clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "Deploy $(date '+%Y-%m-%d %H:%M:%S')" 2>&1)
 echo "$DEPLOY_OUTPUT"

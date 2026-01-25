@@ -66,24 +66,66 @@ function processOnePdfJob(jobId) {
     // Get articles in date range
     const articles = getArticlesInRange(job.date_from, job.date_to);
 
-    updateJobStatus(jobId, 'RUNNING', 20, undefined, undefined, undefined, `${articles.length} articles trouvés`);
+    updateJobStatus(jobId, 'RUNNING', 15, undefined, undefined, undefined, `${articles.length} articles trouvés`);
 
-    // Generate HTML with embedded images
-    const html = generatePdfHtml(articles, job.year, job.date_from, job.date_to, pdfOptions);
+    // Group articles by month
+    const articlesByMonth = groupArticlesByMonth(articles);
+    const monthKeys = Object.keys(articlesByMonth).sort();
 
-    updateJobStatus(jobId, 'RUNNING', 70, undefined, undefined, undefined, 'Conversion en PDF...');
+    // Calculate total pages for page numbering
+    let totalPages = 1; // cover page
+    for (const monthKey of monthKeys) {
+      totalPages += 1; // month divider
+      totalPages += Math.ceil(articlesByMonth[monthKey].length / 2); // article pages
+    }
 
-    // Convert to PDF
-    const pdfBlob = convertHtmlToPdf(html);
+    const monthsFr = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+                      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
-    updateJobStatus(jobId, 'RUNNING', 85, undefined, undefined, undefined, 'Sauvegarde sur Drive...');
+    // Generate PDFs by chunks (cover + each month separately)
+    const pdfBlobs = [];
 
-    // Save to Drive - convert dates to strings in case they were parsed as Date objects by Sheets
+    // 1. Generate cover page PDF
+    updateJobStatus(jobId, 'RUNNING', 20, undefined, undefined, undefined, 'Génération de la couverture...');
+    const coverHtml = generateCoverOnlyHtml(articles, job.date_from, job.date_to, pdfOptions.maxMosaicPhotos);
+    pdfBlobs.push(convertHtmlToPdf(coverHtml));
+
+    // 2. Generate one PDF per month
+    let currentPage = 1; // After cover
+    const progressPerMonth = 60 / Math.max(monthKeys.length, 1); // 60% of progress for months (20-80%)
+
+    for (let m = 0; m < monthKeys.length; m++) {
+      const monthKey = monthKeys[m];
+      const [yearStr, monthStr] = monthKey.split('-');
+      const monthIndex = parseInt(monthStr);
+      const monthName = monthsFr[monthIndex];
+
+      const progress = Math.round(20 + (m * progressPerMonth));
+      updateJobStatus(jobId, 'RUNNING', progress, undefined, undefined, undefined, `Génération de ${monthName} ${yearStr}...`);
+
+      const monthArticles = articlesByMonth[monthKey];
+
+      // Generate month PDF (divider + articles)
+      const monthHtml = generateMonthOnlyHtml(monthArticles, monthName, yearStr, monthIndex, currentPage, totalPages, pdfOptions);
+      pdfBlobs.push(convertHtmlToPdf(monthHtml));
+
+      // Update page counter for next month
+      currentPage += 1 + Math.ceil(monthArticles.length / 2);
+    }
+
+    updateJobStatus(jobId, 'RUNNING', 85, undefined, undefined, undefined, 'Fusion des PDFs...');
+
+    // 3. Merge all PDFs
+    const mergedPdf = mergePdfBlobs(pdfBlobs);
+
+    updateJobStatus(jobId, 'RUNNING', 92, undefined, undefined, undefined, 'Sauvegarde sur Drive...');
+
+    // Save to Drive
     const dateFrom = typeof job.date_from === 'string' ? job.date_from : Utilities.formatDate(job.date_from, 'Europe/Paris', 'yyyy-MM-dd');
     const dateTo = typeof job.date_to === 'string' ? job.date_to : Utilities.formatDate(job.date_to, 'Europe/Paris', 'yyyy-MM-dd');
     const fileName = `Livre_${job.year}_${dateFrom}-${dateTo}_gen-${formatTimestamp()}_v01.pdf`;
 
-    const pdfData = savePdfToFolder(pdfBlob, job.year, fileName);
+    const pdfData = savePdfToFolder(mergedPdf, job.year, fileName);
 
     // Update job status
     updateJobStatus(jobId, 'DONE', 100, pdfData.fileId, pdfData.url, undefined, 'Terminé !');
@@ -94,6 +136,410 @@ function processOnePdfJob(jobId) {
     updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error), 'Erreur');
     props.deleteProperty('PDF_OPTIONS_' + jobId);
   }
+}
+
+/**
+ * Group articles by month-year key
+ */
+function groupArticlesByMonth(articles) {
+  const articlesByMonth = {};
+  articles.forEach((article) => {
+    const date = new Date(article.date);
+    const key = `${date.getFullYear()}-${String(date.getMonth()).padStart(2, '0')}`;
+    if (!articlesByMonth[key]) {
+      articlesByMonth[key] = [];
+    }
+    articlesByMonth[key].push(article);
+  });
+  return articlesByMonth;
+}
+
+/**
+ * Generate HTML for cover page only
+ */
+function generateCoverOnlyHtml(articles, from, to, maxMosaicPhotos) {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+${getPdfStyles()}
+  </style>
+</head>
+<body>
+  ${generateCoverMosaic(articles, from, to, maxMosaicPhotos)}
+</body>
+</html>
+`;
+}
+
+/**
+ * Generate HTML for a single month (divider + articles)
+ */
+function generateMonthOnlyHtml(monthArticles, monthName, year, monthIndex, startPage, totalPages, options = {}) {
+  const { mosaicLayout = 'full', showSeasonalFruits = true } = options;
+
+  let currentPage = startPage;
+  let html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+${getPdfStyles()}
+  </style>
+</head>
+<body>
+`;
+
+  // Month divider page (no page-break-before for first element)
+  currentPage++;
+  const dividerHtml = generateMonthDivider(monthArticles, monthName, year, monthIndex, currentPage, totalPages, { mosaicLayout, showSeasonalFruits });
+  // Remove page-break-before from first element
+  html += dividerHtml.replace('page-break-before: always;', '').replace('class="month-divider"', 'class="month-divider" style="page-break-before: auto;"');
+
+  // Process articles 2 by 2
+  for (let i = 0; i < monthArticles.length; i += 2) {
+    currentPage++;
+    html += `  <div class="articles-page">\n`;
+
+    // First article
+    html += renderArticle(monthArticles[i]);
+
+    // Second article (if exists)
+    if (i + 1 < monthArticles.length) {
+      html += renderArticle(monthArticles[i + 1]);
+    }
+
+    html += `    <div class="page-number">${currentPage} / ${totalPages}</div>\n`;
+    html += `  </div>\n`;
+  }
+
+  html += `
+</body>
+</html>
+`;
+
+  return html;
+}
+
+/**
+ * Get common PDF styles
+ */
+function getPdfStyles() {
+  return `
+    @page {
+      size: A4;
+      margin: 1cm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .cover {
+      page-break-after: always;
+      text-align: center;
+      padding-top: 8cm;
+    }
+
+    .cover h1 {
+      font-size: 36pt;
+      margin-bottom: 1cm;
+    }
+
+    .cover .dates {
+      font-size: 18pt;
+      color: #666;
+    }
+
+    /* Mosaic cover page */
+    .cover-mosaic {
+      height: 27.7cm;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .cover-title {
+      text-align: center;
+      padding: 0.5cm 0 0.8cm 0;
+      flex-shrink: 0;
+    }
+
+    .cover-title h1 {
+      font-size: 26pt;
+      margin: 0 0 0.4cm 0;
+      color: #333;
+      font-weight: bold;
+    }
+
+    .cover-title .dates {
+      font-size: 13pt;
+      color: #555;
+      margin: 0;
+    }
+
+    .mosaic-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mosaic-cell {
+      position: absolute;
+      overflow: hidden;
+    }
+
+    .mosaic-cell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .articles-page {
+      page-break-before: always;
+      height: 27.7cm;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4cm;
+    }
+
+    .article {
+      flex: 1;
+      border: 1px solid #ccc;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      max-height: 13.5cm;
+    }
+
+    .article:nth-child(2) {
+      margin-top: 0.2cm;
+    }
+
+    .article-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .article-content.landscape {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .article-content.landscape .article-image {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+
+    .article-content.landscape .article-image img {
+      width: 100%;
+      max-height: 9.5cm;
+      object-fit: contain;
+      object-position: center top;
+    }
+
+    .article-content.landscape .article-bottom {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 0.5cm;
+      padding: 0.3cm;
+    }
+
+    .article-content.landscape .article-date {
+      flex-shrink: 0;
+    }
+
+    .article-content.landscape .article-text {
+      flex: 1;
+    }
+
+    .article-content.portrait {
+      flex-direction: row;
+      align-items: stretch;
+    }
+
+    .article-content.portrait .article-image {
+      flex-shrink: 0;
+      display: flex;
+      align-items: stretch;
+      margin-right: 0.4cm;
+    }
+
+    .article-content.portrait .article-image img {
+      height: 100%;
+      max-width: 10cm;
+      object-fit: contain;
+      object-position: left top;
+    }
+
+    .article-content.portrait .article-right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 0.3cm;
+      padding: 0.3cm 0.3cm 0.3cm 0;
+    }
+
+    .article-date {
+      font-size: 11pt;
+      color: #3366cc;
+      font-weight: 500;
+    }
+
+    .article-text {
+      font-size: 13pt;
+      line-height: 1.4;
+    }
+
+    .page-number {
+      text-align: right;
+      font-size: 10pt;
+      color: #666;
+      padding-top: 0.3cm;
+    }
+
+    .month-divider {
+      page-break-before: always;
+      position: relative;
+      height: 27.7cm;
+      overflow: hidden;
+    }
+
+    .month-divider .page-number {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      z-index: 10;
+    }
+
+    .month-mosaic-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      opacity: 0.15;
+    }
+
+    .month-mosaic-cell {
+      position: absolute;
+      overflow: hidden;
+    }
+
+    .month-mosaic-cell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .month-title-container {
+      position: absolute;
+      top: 40%;
+      left: 0;
+      right: 0;
+      text-align: center;
+      transform: translateY(-50%);
+      z-index: 5;
+    }
+
+    .month-title {
+      font-size: 42pt;
+      font-weight: bold;
+      color: #333;
+      margin: 0 0 0.5cm 0;
+      text-shadow: 2px 2px 4px rgba(255,255,255,0.8);
+    }
+
+    .month-subtitle {
+      font-size: 16pt;
+      color: #666;
+      margin: 0;
+    }
+
+    .month-divider-centered .month-title-container-centered {
+      position: absolute;
+      top: 8%;
+      left: 0;
+      right: 0;
+      text-align: center;
+      z-index: 5;
+    }
+
+    .season-decorations {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    .season-item {
+      position: absolute;
+    }
+
+    .season-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .month-mosaic-centered {
+      position: absolute;
+      top: 32%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 12cm;
+      height: 12cm;
+      border-radius: 0.15cm;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .month-mosaic-centered .month-mosaic-cell {
+      position: absolute;
+    }
+
+    .month-mosaic-centered .month-mosaic-cell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+`;
+}
+
+/**
+ * Merge multiple PDF blobs into one using PDFApp library
+ * https://github.com/tanaikech/MergePDFs
+ */
+function mergePdfBlobs(pdfBlobs) {
+  if (pdfBlobs.length === 0) {
+    throw new Error('No PDFs to merge');
+  }
+
+  if (pdfBlobs.length === 1) {
+    return pdfBlobs[0];
+  }
+
+  // Use PDFApp library to merge PDFs
+  // The library handles all the complex PDF structure manipulation
+  const mergedBlob = PDFApp.mergePdfs(pdfBlobs);
+  mergedBlob.setName('merged.pdf');
+
+  return mergedBlob;
 }
 
 function getArticlesInRange(from, to) {

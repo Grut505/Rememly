@@ -1,14 +1,6 @@
 {
   "timeZone": "Europe/Paris",
-  "dependencies": {
-    "libraries": [
-      {
-        "userSymbol": "PDFApp",
-        "libraryId": "1Xmtr5XXEakVql7N6FqwdCNdpdijsJOxgqH173JSB0UOwdb0GJYJbnJLk",
-        "version": "7"
-      }
-    ]
-  },
+  "dependencies": {},
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "oauthScopes": [

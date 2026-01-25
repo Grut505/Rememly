@@ -24,9 +24,8 @@ function handlePdfCreate(body, user) {
   });
 }
 
-// Called by frontend to trigger the actual PDF generation
-// Note: Must be async to properly handle PDFApp's Promise-based merge
-async function handlePdfProcess(params) {
+// Called by frontend "fire and forget" to trigger the actual PDF generation
+function handlePdfProcess(params) {
   const jobId = params.job_id;
   if (!jobId) {
     return createResponse({
@@ -35,8 +34,8 @@ async function handlePdfProcess(params) {
     });
   }
 
-  // Process the job - must await for PDFApp Promises to resolve
-  await processOnePdfJob(jobId);
+  // Process the job (this will take time but frontend doesn't wait)
+  processOnePdfJob(jobId);
 
   return createResponse({
     ok: true,
@@ -44,7 +43,7 @@ async function handlePdfProcess(params) {
   });
 }
 
-async function processOnePdfJob(jobId) {
+function processOnePdfJob(jobId) {
   const props = PropertiesService.getScriptProperties();
 
   try {
@@ -67,66 +66,25 @@ async function processOnePdfJob(jobId) {
     // Get articles in date range
     const articles = getArticlesInRange(job.date_from, job.date_to);
 
-    updateJobStatus(jobId, 'RUNNING', 15, undefined, undefined, undefined, `${articles.length} articles trouvés`);
+    updateJobStatus(jobId, 'RUNNING', 20, undefined, undefined, undefined, `${articles.length} articles trouvés`);
 
-    // Group articles by month
-    const articlesByMonth = groupArticlesByMonth(articles);
-    const monthKeys = Object.keys(articlesByMonth).sort();
+    // Generate HTML with embedded images (single monolithic approach)
+    updateJobStatus(jobId, 'RUNNING', 30, undefined, undefined, undefined, 'Génération du document...');
+    const html = generatePdfHtml(articles, job.year, job.date_from, job.date_to, pdfOptions);
 
-    // Calculate total pages for page numbering
-    let totalPages = 1; // cover page
-    for (const monthKey of monthKeys) {
-      totalPages += 1; // month divider
-      totalPages += Math.ceil(articlesByMonth[monthKey].length / 2); // article pages
-    }
+    updateJobStatus(jobId, 'RUNNING', 70, undefined, undefined, undefined, 'Conversion en PDF...');
 
-    const monthsFr = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-                      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    // Convert to PDF
+    const pdfBlob = convertHtmlToPdf(html);
 
-    // Generate PDFs by chunks (cover + each month separately)
-    const pdfBlobs = [];
-
-    // 1. Generate cover page PDF
-    updateJobStatus(jobId, 'RUNNING', 20, undefined, undefined, undefined, 'Génération de la couverture...');
-    const coverHtml = generateCoverOnlyHtml(articles, job.date_from, job.date_to, pdfOptions.maxMosaicPhotos);
-    pdfBlobs.push(convertHtmlToPdf(coverHtml));
-
-    // 2. Generate one PDF per month
-    let currentPage = 1; // After cover
-    const progressPerMonth = 60 / Math.max(monthKeys.length, 1); // 60% of progress for months (20-80%)
-
-    for (let m = 0; m < monthKeys.length; m++) {
-      const monthKey = monthKeys[m];
-      const [yearStr, monthStr] = monthKey.split('-');
-      const monthIndex = parseInt(monthStr);
-      const monthName = monthsFr[monthIndex];
-
-      const progress = Math.round(20 + (m * progressPerMonth));
-      updateJobStatus(jobId, 'RUNNING', progress, undefined, undefined, undefined, `Génération de ${monthName} ${yearStr}...`);
-
-      const monthArticles = articlesByMonth[monthKey];
-
-      // Generate month PDF (divider + articles)
-      const monthHtml = generateMonthOnlyHtml(monthArticles, monthName, yearStr, monthIndex, currentPage, totalPages, pdfOptions);
-      pdfBlobs.push(convertHtmlToPdf(monthHtml));
-
-      // Update page counter for next month
-      currentPage += 1 + Math.ceil(monthArticles.length / 2);
-    }
-
-    updateJobStatus(jobId, 'RUNNING', 85, undefined, undefined, undefined, 'Fusion des PDFs...');
-
-    // 3. Merge all PDFs (async)
-    const mergedPdf = await mergePdfBlobs(pdfBlobs);
-
-    updateJobStatus(jobId, 'RUNNING', 92, undefined, undefined, undefined, 'Sauvegarde sur Drive...');
+    updateJobStatus(jobId, 'RUNNING', 85, undefined, undefined, undefined, 'Sauvegarde sur Drive...');
 
     // Save to Drive
     const dateFrom = typeof job.date_from === 'string' ? job.date_from : Utilities.formatDate(job.date_from, 'Europe/Paris', 'yyyy-MM-dd');
     const dateTo = typeof job.date_to === 'string' ? job.date_to : Utilities.formatDate(job.date_to, 'Europe/Paris', 'yyyy-MM-dd');
     const fileName = `Livre_${job.year}_${dateFrom}-${dateTo}_gen-${formatTimestamp()}_v01.pdf`;
 
-    const pdfData = savePdfToFolder(mergedPdf, job.year, fileName);
+    const pdfData = savePdfToFolder(pdfBlob, job.year, fileName);
 
     // Update job status
     updateJobStatus(jobId, 'DONE', 100, pdfData.fileId, pdfData.url, undefined, 'Terminé !');

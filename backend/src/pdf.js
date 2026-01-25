@@ -24,8 +24,9 @@ function handlePdfCreate(body, user) {
   });
 }
 
-// Called by frontend "fire and forget" to trigger the actual PDF generation
-function handlePdfProcess(params) {
+// Called by frontend to trigger the actual PDF generation
+// Note: Must be async to properly handle PDFApp's Promise-based merge
+async function handlePdfProcess(params) {
   const jobId = params.job_id;
   if (!jobId) {
     return createResponse({
@@ -34,8 +35,8 @@ function handlePdfProcess(params) {
     });
   }
 
-  // Process the job (this will take time but frontend doesn't wait)
-  processOnePdfJob(jobId);
+  // Process the job - must await for PDFApp Promises to resolve
+  await processOnePdfJob(jobId);
 
   return createResponse({
     ok: true,

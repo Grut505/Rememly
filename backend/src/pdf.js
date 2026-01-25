@@ -43,7 +43,7 @@ function handlePdfProcess(params) {
   });
 }
 
-function processOnePdfJob(jobId) {
+async function processOnePdfJob(jobId) {
   const props = PropertiesService.getScriptProperties();
 
   try {
@@ -115,8 +115,8 @@ function processOnePdfJob(jobId) {
 
     updateJobStatus(jobId, 'RUNNING', 85, undefined, undefined, undefined, 'Fusion des PDFs...');
 
-    // 3. Merge all PDFs
-    const mergedPdf = mergePdfBlobs(pdfBlobs);
+    // 3. Merge all PDFs (async)
+    const mergedPdf = await mergePdfBlobs(pdfBlobs);
 
     updateJobStatus(jobId, 'RUNNING', 92, undefined, undefined, undefined, 'Sauvegarde sur Drive...');
 
@@ -523,9 +523,10 @@ function getPdfStyles() {
 
 /**
  * Merge multiple PDF blobs into one using PDFApp library
- * https://github.com/tanaikech/MergePDFs
+ * https://github.com/tanaikech/PDFApp
+ * Returns a Promise (use with async/await)
  */
-function mergePdfBlobs(pdfBlobs) {
+async function mergePdfBlobs(pdfBlobs) {
   if (pdfBlobs.length === 0) {
     throw new Error('No PDFs to merge');
   }
@@ -534,9 +535,8 @@ function mergePdfBlobs(pdfBlobs) {
     return pdfBlobs[0];
   }
 
-  // Use PDFApp library to merge PDFs
-  // The library handles all the complex PDF structure manipulation
-  const mergedBlob = PDFApp.mergePdfs(pdfBlobs);
+  // Use PDFApp library to merge PDFs (async)
+  const mergedBlob = await PDFApp.mergePDFs(pdfBlobs);
   mergedBlob.setName('merged.pdf');
 
   return mergedBlob;

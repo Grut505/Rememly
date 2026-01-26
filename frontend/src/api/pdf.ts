@@ -29,7 +29,7 @@ export interface PdfListItem {
   year: number
   date_from: string
   date_to: string
-  status: 'PENDING' | 'RUNNING' | 'DONE' | 'ERROR'
+  status: 'PENDING' | 'RUNNING' | 'DONE' | 'ERROR' | 'CANCELLED'
   progress?: number
   progress_message?: string
   pdf_url?: string
@@ -66,4 +66,7 @@ export const pdfApi = {
 
   delete: (jobId: string) =>
     apiClient.post<{ deleted: boolean }>('pdf/delete', { job_id: jobId }),
+
+  cancel: (jobId: string) =>
+    apiClient.post<{ cancelled: boolean; job_id: string }>('pdf/cancel', { job_id: jobId }),
 }

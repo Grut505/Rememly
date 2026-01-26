@@ -66,6 +66,9 @@ function doPost(e) {
       case 'pdf/delete':
         return handlePdfDelete(body);
 
+      case 'pdf/cancel':
+        return handlePdfCancel(body);
+
       case 'profile/get':
         return handleProfileGet(authResult.user.email);
 

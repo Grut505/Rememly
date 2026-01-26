@@ -38,20 +38,69 @@ function handlePdfProcess(params) {
   // Initialize the batch state and start processing
   initializeBatchState(jobId);
 
-  // Create a trigger to process the first chunk
+  // Add job to the processing queue
+  const props = PropertiesService.getScriptProperties();
+  const queue = JSON.parse(props.getProperty('PDF_JOB_QUEUE') || '[]');
+  if (!queue.includes(jobId)) {
+    queue.push(jobId);
+    props.setProperty('PDF_JOB_QUEUE', JSON.stringify(queue));
+  }
+
+  // Create a trigger to process the queue
   // This allows the request to return immediately
   const trigger = ScriptApp.newTrigger('processPdfBatchTrigger')
     .timeBased()
     .after(1000) // 1 second delay
     .create();
 
-  // Store trigger ID with job ID for cleanup
-  const props = PropertiesService.getScriptProperties();
-  props.setProperty('PDF_TRIGGER_' + trigger.getUniqueId(), jobId);
+  Logger.log('Created trigger for job ' + jobId + ', trigger ID: ' + trigger.getUniqueId());
 
   return createResponse({
     ok: true,
-    data: { processed: true, trigger_id: trigger.getUniqueId() },
+    data: { processed: true, job_id: jobId },
+  });
+}
+
+/**
+ * Cancel a PDF generation job
+ * Sets status to CANCELLED and cleans up batch state
+ */
+function handlePdfCancel(params) {
+  const jobId = params.job_id;
+  if (!jobId) {
+    return createResponse({
+      ok: false,
+      error: { code: 'MISSING_JOB_ID', message: 'Job ID is required' },
+    });
+  }
+
+  const job = getJobStatus(jobId);
+  if (!job) {
+    return createResponse({
+      ok: false,
+      error: { code: 'NOT_FOUND', message: 'Job not found' },
+    });
+  }
+
+  // Only allow cancelling PENDING or RUNNING jobs
+  if (job.status !== 'PENDING' && job.status !== 'RUNNING') {
+    return createResponse({
+      ok: false,
+      error: { code: 'INVALID_STATUS', message: 'Job cannot be cancelled' },
+    });
+  }
+
+  // Update status to CANCELLED
+  updateJobStatus(jobId, 'CANCELLED', 0, undefined, undefined, undefined, 'Annulé');
+
+  // Clean up batch state and temp files
+  cleanupBatchState(jobId);
+
+  Logger.log('Job cancelled: ' + jobId);
+
+  return createResponse({
+    ok: true,
+    data: { cancelled: true, job_id: jobId },
   });
 }
 
@@ -107,27 +156,44 @@ function initializeBatchState(jobId) {
  */
 function processPdfBatchTrigger(e) {
   const props = PropertiesService.getScriptProperties();
+  let jobId = null;
 
-  // Find which job this trigger is for
-  const triggerId = e.triggerUid;
-  const jobId = props.getProperty('PDF_TRIGGER_' + triggerId);
+  // Delete the trigger itself first
+  if (e && e.triggerUid) {
+    const triggerId = e.triggerUid;
 
-  // Clean up trigger reference
-  props.deleteProperty('PDF_TRIGGER_' + triggerId);
+    // Method 1: Check if this trigger has an associated job ID (set by processNextPdfChunk)
+    jobId = props.getProperty('PDF_TRIGGER_' + triggerId);
+    if (jobId) {
+      props.deleteProperty('PDF_TRIGGER_' + triggerId);
+    }
 
-  // Delete the trigger itself
-  const triggers = ScriptApp.getProjectTriggers();
-  for (const trigger of triggers) {
-    if (trigger.getUniqueId() === triggerId) {
-      ScriptApp.deleteTrigger(trigger);
-      break;
+    // Delete the trigger
+    const triggers = ScriptApp.getProjectTriggers();
+    for (const trigger of triggers) {
+      if (trigger.getUniqueId() === triggerId) {
+        ScriptApp.deleteTrigger(trigger);
+        break;
+      }
+    }
+  }
+
+  // Method 2: Fall back to queue if no job ID found (initial trigger from handlePdfProcess)
+  if (!jobId) {
+    const queue = JSON.parse(props.getProperty('PDF_JOB_QUEUE') || '[]');
+    if (queue.length > 0) {
+      jobId = queue.shift(); // Take first job from queue
+      props.setProperty('PDF_JOB_QUEUE', JSON.stringify(queue));
+      Logger.log('Got job from queue: ' + jobId);
     }
   }
 
   if (!jobId) {
-    Logger.log('No job ID found for trigger ' + triggerId);
+    Logger.log('No job ID found in trigger or queue');
     return;
   }
+
+  Logger.log('Processing job: ' + jobId);
 
   // Process the next chunk
   processNextPdfChunk(jobId);
@@ -150,6 +216,13 @@ function processNextPdfChunk(jobId) {
     const job = getJobStatus(jobId);
     if (!job) {
       throw new Error('Job not found');
+    }
+
+    // Check if job has been cancelled
+    if (job.status === 'CANCELLED') {
+      Logger.log('Job ' + jobId + ' has been cancelled, stopping processing');
+      cleanupBatchState(jobId);
+      return;
     }
 
     // Get options
@@ -553,6 +626,15 @@ function cleanupBatchState(jobId) {
     }
   } catch (e) {
     // Ignore cleanup errors
+  }
+
+  // Remove job from queue if still there
+  try {
+    const queue = JSON.parse(props.getProperty('PDF_JOB_QUEUE') || '[]');
+    const filteredQueue = queue.filter(id => id !== jobId);
+    props.setProperty('PDF_JOB_QUEUE', JSON.stringify(filteredQueue));
+  } catch (e) {
+    // Ignore queue cleanup errors
   }
 
   // Delete properties

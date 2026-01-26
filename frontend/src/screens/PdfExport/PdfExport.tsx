@@ -35,6 +35,9 @@ export function PdfExport() {
   const [deleteBulk, setDeleteBulk] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  // Cancel state
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null)
+
   // Generate modal
   const [showGenerateModal, setShowGenerateModal] = useState(false)
 
@@ -63,18 +66,44 @@ export function PdfExport() {
 
   // Separate in-progress and completed jobs
   const inProgressJobs = pdfList.filter(p => p.status === 'PENDING' || p.status === 'RUNNING')
-  const completedJobs = pdfList.filter(p => p.status === 'DONE' || p.status === 'ERROR')
+  const completedJobs = pdfList.filter(p => p.status === 'DONE' || p.status === 'ERROR' || p.status === 'CANCELLED')
 
-  // Poll when there are in-progress jobs
+  // Poll only in-progress jobs (not the whole list)
   useEffect(() => {
     if (inProgressJobs.length === 0) return
 
-    const interval = setInterval(() => {
-      loadPdfList()
+    const interval = setInterval(async () => {
+      // Fetch status for each in-progress job individually
+      const updates = await Promise.all(
+        inProgressJobs.map(async (job) => {
+          try {
+            const status = await pdfApi.status(job.job_id)
+            return { ...status, job_id: job.job_id }
+          } catch {
+            return null
+          }
+        })
+      )
+
+      // Update the list with new statuses
+      setPdfList(prev => prev.map(pdf => {
+        const update = updates.find(u => u && u.job_id === pdf.job_id)
+        if (update) {
+          return {
+            ...pdf,
+            status: update.status,
+            progress: update.progress,
+            progress_message: update.progress_message,
+            pdf_url: update.pdf_url,
+            error_message: update.error_message,
+          }
+        }
+        return pdf
+      }))
     }, 2000) // Poll every 2 seconds
 
     return () => clearInterval(interval)
-  }, [inProgressJobs.length, loadPdfList])
+  }, [inProgressJobs.length])
 
   // Detect when a job completes
   useEffect(() => {
@@ -216,6 +245,21 @@ export function PdfExport() {
   const handleGenerateComplete = () => {
     setShowGenerateModal(false)
     loadPdfList()
+  }
+
+  const handleCancelJob = async (jobId: string) => {
+    setCancellingJobId(jobId)
+    try {
+      await pdfApi.cancel(jobId)
+      // Update the local list to reflect cancelled status
+      setPdfList(prev => prev.map(p =>
+        p.job_id === jobId ? { ...p, status: 'CANCELLED' as const, progress_message: 'Annulé' } : p
+      ))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel PDF generation')
+    } finally {
+      setCancellingJobId(null)
+    }
   }
 
   return (
@@ -448,6 +492,24 @@ export function PdfExport() {
                             par {pdf.created_by}
                           </p>
                         </div>
+                        {/* Cancel button */}
+                        <button
+                          onClick={() => handleCancelJob(pdf.job_id)}
+                          disabled={cancellingJobId === pdf.job_id}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                          title="Annuler"
+                        >
+                          {cancellingJobId === pdf.job_id ? (
+                            <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                          ) : (
+                            <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                              <path d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                          )}
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -500,6 +562,11 @@ export function PdfExport() {
                             {pdf.status === 'ERROR' && (
                               <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
                                 Erreur
+                              </span>
+                            )}
+                            {pdf.status === 'CANCELLED' && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded">
+                                Annulé
                               </span>
                             )}
                           </div>

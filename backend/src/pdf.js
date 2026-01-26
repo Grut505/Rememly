@@ -1,4 +1,5 @@
-// PDF Generation
+// PDF Generation - Batch Architecture with Triggers
+// Generates PDFs in chunks using time-driven triggers to avoid timeouts
 
 function handlePdfCreate(body, user) {
   const jobId = createJob(body.from, body.to, user.email);
@@ -24,7 +25,7 @@ function handlePdfCreate(body, user) {
   });
 }
 
-// Called by frontend "fire and forget" to trigger the actual PDF generation
+// Called by frontend "fire and forget" to trigger the batch processing
 function handlePdfProcess(params) {
   const jobId = params.job_id;
   if (!jobId) {
@@ -34,67 +35,536 @@ function handlePdfProcess(params) {
     });
   }
 
-  // Process the job (this will take time but frontend doesn't wait)
-  processOnePdfJob(jobId);
+  // Initialize the batch state and start processing
+  initializeBatchState(jobId);
+
+  // Create a trigger to process the first chunk
+  // This allows the request to return immediately
+  const trigger = ScriptApp.newTrigger('processPdfBatchTrigger')
+    .timeBased()
+    .after(1000) // 1 second delay
+    .create();
+
+  // Store trigger ID with job ID for cleanup
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('PDF_TRIGGER_' + trigger.getUniqueId(), jobId);
 
   return createResponse({
     ok: true,
-    data: { processed: true },
+    data: { processed: true, trigger_id: trigger.getUniqueId() },
   });
 }
 
-function processOnePdfJob(jobId) {
+/**
+ * Initialize the batch state for a PDF job
+ */
+function initializeBatchState(jobId) {
+  const props = PropertiesService.getScriptProperties();
+
+  updateJobStatus(jobId, 'RUNNING', 5, undefined, undefined, undefined, 'Initialisation...');
+
+  const job = getJobStatus(jobId);
+  if (!job) {
+    throw new Error('Job not found');
+  }
+
+  // Get articles and group by month
+  const articles = getArticlesInRange(job.date_from, job.date_to);
+  const articlesByMonth = groupArticlesByMonth(articles);
+  const monthKeys = Object.keys(articlesByMonth).sort();
+
+  // Calculate total pages for page numbering
+  let totalPages = 1; // cover page
+  for (const monthKey of monthKeys) {
+    totalPages += 1; // month divider
+    totalPages += Math.ceil(articlesByMonth[monthKey].length / 2);
+  }
+
+  // Create temp folder for partial PDFs
+  const tempFolder = DriveApp.createFolder('_pdf_batch_' + jobId);
+
+  // Store batch state
+  const batchState = {
+    jobId: jobId,
+    currentChunk: 0, // 0 = cover, 1+ = months
+    totalChunks: monthKeys.length + 1, // cover + all months
+    monthKeys: monthKeys,
+    totalPages: totalPages,
+    currentPage: 1,
+    tempFolderId: tempFolder.getId(),
+    partialPdfIds: [],
+    articlesCount: articles.length
+  };
+
+  props.setProperty('PDF_BATCH_STATE_' + jobId, JSON.stringify(batchState));
+
+  updateJobStatus(jobId, 'RUNNING', 10, undefined, undefined, undefined, `${articles.length} articles trouvés`);
+}
+
+/**
+ * Trigger function that processes one chunk at a time
+ * Called by time-driven triggers
+ */
+function processPdfBatchTrigger(e) {
+  const props = PropertiesService.getScriptProperties();
+
+  // Find which job this trigger is for
+  const triggerId = e.triggerUid;
+  const jobId = props.getProperty('PDF_TRIGGER_' + triggerId);
+
+  // Clean up trigger reference
+  props.deleteProperty('PDF_TRIGGER_' + triggerId);
+
+  // Delete the trigger itself
+  const triggers = ScriptApp.getProjectTriggers();
+  for (const trigger of triggers) {
+    if (trigger.getUniqueId() === triggerId) {
+      ScriptApp.deleteTrigger(trigger);
+      break;
+    }
+  }
+
+  if (!jobId) {
+    Logger.log('No job ID found for trigger ' + triggerId);
+    return;
+  }
+
+  // Process the next chunk
+  processNextPdfChunk(jobId);
+}
+
+/**
+ * Process the next chunk of the PDF batch
+ */
+function processNextPdfChunk(jobId) {
   const props = PropertiesService.getScriptProperties();
 
   try {
-    updateJobStatus(jobId, 'RUNNING', 5, undefined, undefined, undefined, 'Initialisation...');
+    // Get batch state
+    const stateJson = props.getProperty('PDF_BATCH_STATE_' + jobId);
+    if (!stateJson) {
+      throw new Error('Batch state not found');
+    }
+    const state = JSON.parse(stateJson);
 
     const job = getJobStatus(jobId);
     if (!job) {
       throw new Error('Job not found');
     }
 
-    // Get options from properties
+    // Get options
     const optionsJson = props.getProperty('PDF_OPTIONS_' + jobId);
     const pdfOptions = optionsJson ? JSON.parse(optionsJson) : {
       mosaicLayout: 'full',
       showSeasonalFruits: true
     };
 
-    updateJobStatus(jobId, 'RUNNING', 10, undefined, undefined, undefined, 'Chargement des articles...');
+    const monthsFr = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+                      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
-    // Get articles in date range
-    const articles = getArticlesInRange(job.date_from, job.date_to);
+    const tempFolder = DriveApp.getFolderById(state.tempFolderId);
 
-    updateJobStatus(jobId, 'RUNNING', 20, undefined, undefined, undefined, `${articles.length} articles trouvés`);
+    if (state.currentChunk === 0) {
+      // Generate cover page
+      const progress = 15;
+      updateJobStatus(jobId, 'RUNNING', progress, undefined, undefined, undefined, 'Génération de la couverture...');
 
-    // Generate HTML with embedded images (single monolithic approach)
-    updateJobStatus(jobId, 'RUNNING', 30, undefined, undefined, undefined, 'Génération du document...');
-    const html = generatePdfHtml(articles, job.year, job.date_from, job.date_to, pdfOptions);
+      const articles = getArticlesInRange(job.date_from, job.date_to);
+      const coverHtml = generateCoverOnlyHtml(articles, job.date_from, job.date_to, pdfOptions.maxMosaicPhotos);
+      const coverPdf = convertHtmlToPdf(coverHtml);
 
-    updateJobStatus(jobId, 'RUNNING', 70, undefined, undefined, undefined, 'Conversion en PDF...');
+      // Save to temp folder
+      const coverFile = tempFolder.createFile(coverPdf);
+      coverFile.setName('chunk_000_cover.pdf');
+      state.partialPdfIds.push(coverFile.getId());
 
-    // Convert to PDF
-    const pdfBlob = convertHtmlToPdf(html);
+      state.currentChunk = 1;
+      state.currentPage = 1;
 
-    updateJobStatus(jobId, 'RUNNING', 85, undefined, undefined, undefined, 'Sauvegarde sur Drive...');
+    } else if (state.currentChunk <= state.monthKeys.length) {
+      // Generate month chunk
+      const monthIndex = state.currentChunk - 1;
+      const monthKey = state.monthKeys[monthIndex];
+      const [yearStr, monthStr] = monthKey.split('-');
+      const monthIdx = parseInt(monthStr);
+      const monthName = monthsFr[monthIdx];
 
-    // Save to Drive
+      const progress = Math.round(15 + (state.currentChunk / state.totalChunks) * 65);
+      updateJobStatus(jobId, 'RUNNING', progress, undefined, undefined, undefined, `Génération de ${monthName} ${yearStr}...`);
+
+      // Get articles for this month
+      const articles = getArticlesInRange(job.date_from, job.date_to);
+      const articlesByMonth = groupArticlesByMonth(articles);
+      const monthArticles = articlesByMonth[monthKey];
+
+      // Generate month PDF
+      const monthHtml = generateMonthOnlyHtml(monthArticles, monthName, yearStr, monthIdx, state.currentPage, state.totalPages, pdfOptions);
+      const monthPdf = convertHtmlToPdf(monthHtml);
+
+      // Save to temp folder
+      const monthFile = tempFolder.createFile(monthPdf);
+      monthFile.setName(`chunk_${String(state.currentChunk).padStart(3, '0')}_${monthKey}.pdf`);
+      state.partialPdfIds.push(monthFile.getId());
+
+      // Update page counter for next chunk
+      state.currentPage += 1 + Math.ceil(monthArticles.length / 2);
+      state.currentChunk++;
+    }
+
+    // Save updated state
+    props.setProperty('PDF_BATCH_STATE_' + jobId, JSON.stringify(state));
+
+    // Check if all chunks are done
+    if (state.currentChunk > state.monthKeys.length) {
+      // All chunks generated, proceed to merge
+      mergePdfChunksAndFinish(jobId);
+    } else {
+      // Schedule next chunk
+      const trigger = ScriptApp.newTrigger('processPdfBatchTrigger')
+        .timeBased()
+        .after(1000) // 1 second delay
+        .create();
+      props.setProperty('PDF_TRIGGER_' + trigger.getUniqueId(), jobId);
+    }
+
+  } catch (error) {
+    Logger.log('Error processing chunk: ' + error.message);
+    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error), 'Erreur');
+    cleanupBatchState(jobId);
+  }
+}
+
+/**
+ * Merge all PDF chunks and finish the job
+ */
+function mergePdfChunksAndFinish(jobId) {
+  const props = PropertiesService.getScriptProperties();
+
+  try {
+    updateJobStatus(jobId, 'RUNNING', 85, undefined, undefined, undefined, 'Fusion des PDFs...');
+
+    const stateJson = props.getProperty('PDF_BATCH_STATE_' + jobId);
+    const state = JSON.parse(stateJson);
+    const job = getJobStatus(jobId);
+
+    // Get all partial PDFs
+    const pdfBlobs = state.partialPdfIds.map(fileId => {
+      const file = DriveApp.getFileById(fileId);
+      return file.getBlob();
+    });
+
+    // Merge PDFs
+    const mergedPdf = mergePdfBlobsNative(pdfBlobs);
+
+    updateJobStatus(jobId, 'RUNNING', 92, undefined, undefined, undefined, 'Sauvegarde sur Drive...');
+
+    // Save final PDF
     const dateFrom = typeof job.date_from === 'string' ? job.date_from : Utilities.formatDate(job.date_from, 'Europe/Paris', 'yyyy-MM-dd');
     const dateTo = typeof job.date_to === 'string' ? job.date_to : Utilities.formatDate(job.date_to, 'Europe/Paris', 'yyyy-MM-dd');
     const fileName = `Livre_${job.year}_${dateFrom}-${dateTo}_gen-${formatTimestamp()}_v01.pdf`;
 
-    const pdfData = savePdfToFolder(pdfBlob, job.year, fileName);
+    const pdfData = savePdfToFolder(mergedPdf, job.year, fileName);
 
     // Update job status
     updateJobStatus(jobId, 'DONE', 100, pdfData.fileId, pdfData.url, undefined, 'Terminé !');
 
-    // Clean up options property
-    props.deleteProperty('PDF_OPTIONS_' + jobId);
+    // Send email notification
+    sendPdfReadyEmail(jobId, pdfData.url);
+
+    // Cleanup
+    cleanupBatchState(jobId);
+
   } catch (error) {
-    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error), 'Erreur');
-    props.deleteProperty('PDF_OPTIONS_' + jobId);
+    Logger.log('Error merging PDFs: ' + error.message);
+    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error), 'Erreur lors de la fusion');
+    cleanupBatchState(jobId);
   }
+}
+
+/**
+ * Native PDF merge using byte manipulation
+ * Works for Google-generated PDFs which have a consistent structure
+ *
+ * FIXED VERSION:
+ * - Properly updates /Parent references in Page objects
+ * - Preserves binary streams by working with raw bytes
+ * - More efficient object parsing
+ */
+function mergePdfBlobsNative(pdfBlobs) {
+  if (pdfBlobs.length === 0) {
+    throw new Error('No PDFs to merge');
+  }
+
+  if (pdfBlobs.length === 1) {
+    return pdfBlobs[0];
+  }
+
+  Logger.log('Starting PDF merge with ' + pdfBlobs.length + ' files');
+
+  // Parse all PDFs
+  const pdfs = [];
+  for (let i = 0; i < pdfBlobs.length; i++) {
+    Logger.log('Parsing PDF ' + (i + 1) + '/' + pdfBlobs.length);
+    pdfs.push(parsePdfStructure(pdfBlobs[i], i));
+  }
+
+  Logger.log('Building merged PDF...');
+  // Merge into single PDF
+  const mergedBytes = buildMergedPdf(pdfs);
+
+  Logger.log('Merge complete, size: ' + mergedBytes.length + ' bytes');
+  return Utilities.newBlob(mergedBytes, MimeType.PDF, 'merged.pdf');
+}
+
+/**
+ * Parse PDF structure to extract objects and pages
+ * Uses a more efficient parsing approach
+ */
+function parsePdfStructure(blob, pdfIndex) {
+  const bytes = blob.getBytes();
+
+  // Convert to string for parsing structure (ISO-8859-1 preserves byte values)
+  const content = Utilities.newBlob(bytes).getDataAsString('ISO-8859-1');
+
+  // Find all objects using a simpler, more efficient approach
+  const objects = {};
+  let maxObjNum = 0;
+
+  // Match object headers: "N 0 obj"
+  const objHeaderRegex = /(\d+)\s+0\s+obj/g;
+  let headerMatch;
+  const objStarts = [];
+
+  while ((headerMatch = objHeaderRegex.exec(content)) !== null) {
+    objStarts.push({
+      objNum: parseInt(headerMatch[1]),
+      start: headerMatch.index,
+      headerEnd: headerMatch.index + headerMatch[0].length
+    });
+  }
+
+  // Find endobj for each object
+  for (let i = 0; i < objStarts.length; i++) {
+    const objInfo = objStarts[i];
+    const searchStart = objInfo.headerEnd;
+    const searchEnd = i < objStarts.length - 1 ? objStarts[i + 1].start : content.length;
+
+    // Find endobj within this object's range
+    const objContent = content.substring(searchStart, searchEnd);
+    const endObjPos = objContent.indexOf('endobj');
+
+    if (endObjPos !== -1) {
+      const body = objContent.substring(0, endObjPos);
+      maxObjNum = Math.max(maxObjNum, objInfo.objNum);
+
+      objects[objInfo.objNum] = {
+        num: objInfo.objNum,
+        body: body,
+        fullContent: content.substring(objInfo.start, searchStart + endObjPos + 6)
+      };
+    }
+  }
+
+  // Find page objects
+  const pages = [];
+  for (const objNum in objects) {
+    const obj = objects[objNum];
+    // Check if this is a Page object (not Pages)
+    if (obj.body.includes('/Type') &&
+        obj.body.includes('/Page') &&
+        !obj.body.includes('/Pages')) {
+      pages.push(parseInt(objNum));
+    }
+  }
+
+  Logger.log('PDF ' + pdfIndex + ': ' + Object.keys(objects).length + ' objects, ' + pages.length + ' pages');
+
+  return {
+    index: pdfIndex,
+    bytes: bytes,
+    content: content,
+    objects: objects,
+    pages: pages,
+    maxObjNum: maxObjNum
+  };
+}
+
+/**
+ * Build merged PDF from parsed PDFs
+ * Key fix: Updates /Parent references to point to new Pages object
+ */
+function buildMergedPdf(pdfs) {
+  const outputChunks = [];
+
+  // Helper to add string to output
+  function addString(str) {
+    for (let i = 0; i < str.length; i++) {
+      outputChunks.push(str.charCodeAt(i) & 0xFF);
+    }
+  }
+
+  // Write PDF header
+  addString('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+
+  // First pass: build object mapping
+  let nextObjNum = 1;
+  const objMapping = []; // Maps [pdfIndex][oldObjNum] to newObjNum
+
+  for (const pdf of pdfs) {
+    objMapping[pdf.index] = {};
+    for (const oldObjNum in pdf.objects) {
+      objMapping[pdf.index][oldObjNum] = nextObjNum++;
+    }
+  }
+
+  // Reserve object numbers for new Pages and Catalog
+  const pagesObjNum = nextObjNum++;
+  const catalogObjNum = nextObjNum++;
+
+  // Collect all page references (in order)
+  const allPageRefs = [];
+  for (const pdf of pdfs) {
+    for (const oldPageNum of pdf.pages) {
+      const newPageNum = objMapping[pdf.index][oldPageNum];
+      if (newPageNum) {
+        allPageRefs.push(newPageNum);
+      }
+    }
+  }
+
+  // Second pass: write all objects with updated references
+  const xrefEntries = [];
+  xrefEntries[0] = { offset: 0, gen: 65535, free: true };
+
+  for (const pdf of pdfs) {
+    for (const oldObjNum in pdf.objects) {
+      const obj = pdf.objects[oldObjNum];
+      const newObjNum = objMapping[pdf.index][oldObjNum];
+
+      // Update references in object body
+      let body = obj.body;
+
+      // Replace all object references (N 0 R) with remapped numbers
+      body = body.replace(/(\d+)\s+0\s+R/g, (match, refNum) => {
+        const newRef = objMapping[pdf.index][refNum];
+        return newRef ? `${newRef} 0 R` : match;
+      });
+
+      // CRITICAL FIX: Update /Parent reference in Page objects to point to new Pages object
+      const isPage = allPageRefs.includes(newObjNum);
+      if (isPage) {
+        // Replace /Parent N 0 R with /Parent pagesObjNum 0 R
+        body = body.replace(/\/Parent\s+\d+\s+0\s+R/g, `/Parent ${pagesObjNum} 0 R`);
+      }
+
+      // Record xref entry
+      xrefEntries[newObjNum] = { offset: outputChunks.length, gen: 0, free: false };
+
+      // Write object
+      addString(`${newObjNum} 0 obj`);
+      addString(body);
+      addString('endobj\n');
+    }
+  }
+
+  // Write new Pages object
+  xrefEntries[pagesObjNum] = { offset: outputChunks.length, gen: 0, free: false };
+  const pageRefsStr = allPageRefs.map(n => `${n} 0 R`).join(' ');
+  addString(`${pagesObjNum} 0 obj\n<< /Type /Pages /Kids [${pageRefsStr}] /Count ${allPageRefs.length} >>\nendobj\n`);
+
+  // Write new Catalog object
+  xrefEntries[catalogObjNum] = { offset: outputChunks.length, gen: 0, free: false };
+  addString(`${catalogObjNum} 0 obj\n<< /Type /Catalog /Pages ${pagesObjNum} 0 R >>\nendobj\n`);
+
+  // Write xref table
+  const xrefOffset = outputChunks.length;
+  addString(`xref\n0 ${xrefEntries.length}\n`);
+
+  for (let i = 0; i < xrefEntries.length; i++) {
+    const entry = xrefEntries[i] || { offset: 0, gen: 65535, free: true };
+    const offsetStr = String(entry.offset).padStart(10, '0');
+    const genStr = String(entry.gen).padStart(5, '0');
+    const flag = entry.free ? 'f' : 'n';
+    addString(`${offsetStr} ${genStr} ${flag} \n`);
+  }
+
+  // Write trailer
+  addString(`trailer\n<< /Size ${xrefEntries.length} /Root ${catalogObjNum} 0 R >>\n`);
+  addString(`startxref\n${xrefOffset}\n%%EOF`);
+
+  return outputChunks;
+}
+
+/**
+ * Send email notification when PDF is ready
+ */
+function sendPdfReadyEmail(jobId, pdfUrl) {
+  try {
+    const job = getJobStatus(jobId);
+    if (!job || !job.created_by) return;
+
+    const familyName = getConfigValue('family_name') || 'votre famille';
+
+    MailApp.sendEmail({
+      to: job.created_by,
+      subject: `📚 Votre livre de souvenirs est prêt !`,
+      htmlBody: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Votre livre de souvenirs est prêt !</h2>
+          <p>Bonjour,</p>
+          <p>La génération de votre livre de souvenirs des <strong>${familyName}</strong> est terminée.</p>
+          <p>Période : du <strong>${job.date_from}</strong> au <strong>${job.date_to}</strong></p>
+          <p style="margin: 20px 0;">
+            <a href="${pdfUrl}" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px;">
+              📥 Télécharger le PDF
+            </a>
+          </p>
+          <p style="color: #666; font-size: 12px;">
+            Ce lien vous donne accès au fichier sur Google Drive.
+          </p>
+        </div>
+      `
+    });
+  } catch (e) {
+    Logger.log('Failed to send email: ' + e.message);
+  }
+}
+
+/**
+ * Cleanup batch state and temp files
+ */
+function cleanupBatchState(jobId) {
+  const props = PropertiesService.getScriptProperties();
+
+  try {
+    const stateJson = props.getProperty('PDF_BATCH_STATE_' + jobId);
+    if (stateJson) {
+      const state = JSON.parse(stateJson);
+
+      // Delete temp folder and its contents
+      if (state.tempFolderId) {
+        try {
+          const tempFolder = DriveApp.getFolderById(state.tempFolderId);
+          tempFolder.setTrashed(true);
+        } catch (e) {
+          // Folder might not exist
+        }
+      }
+    }
+  } catch (e) {
+    // Ignore cleanup errors
+  }
+
+  // Delete properties
+  props.deleteProperty('PDF_BATCH_STATE_' + jobId);
+  props.deleteProperty('PDF_OPTIONS_' + jobId);
+}
+
+// Legacy function for backward compatibility (simple generation without batch)
+function processOnePdfJob(jobId) {
+  // Use batch processing instead
+  initializeBatchState(jobId);
+  processNextPdfChunk(jobId);
 }
 
 /**

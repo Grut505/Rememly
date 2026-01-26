@@ -98,8 +98,12 @@ function toIsoString(value) {
 
 /**
  * Get all PDF jobs, optionally filtered by date range and author
+ * @param {string} dateFrom - Filter by creation date (start)
+ * @param {string} dateTo - Filter by creation date (end)
+ * @param {string} author - Filter by author email
+ * @param {boolean} includeInProgress - If true, include PENDING and RUNNING jobs
  */
-function getAllPdfJobs(dateFrom, dateTo, author) {
+function getAllPdfJobs(dateFrom, dateTo, author, includeInProgress) {
   const sheet = getJobsSheet();
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
@@ -114,14 +118,22 @@ function getAllPdfJobs(dateFrom, dateTo, author) {
       job[header] = toIsoString(row[index]);
     });
 
-    // Only include DONE jobs (with PDF URL) and ERROR jobs
-    if (job.status === 'DONE' && !job.pdf_url) continue;
-    if (job.status !== 'DONE' && job.status !== 'ERROR') continue;
+    // Filter by status
+    if (includeInProgress) {
+      // Include all valid statuses
+      if (!['PENDING', 'RUNNING', 'DONE', 'ERROR'].includes(job.status)) continue;
+      // Skip DONE jobs without PDF URL (incomplete)
+      if (job.status === 'DONE' && !job.pdf_url) continue;
+    } else {
+      // Only include completed jobs (DONE with URL, or ERROR)
+      if (job.status === 'DONE' && !job.pdf_url) continue;
+      if (job.status !== 'DONE' && job.status !== 'ERROR') continue;
+    }
 
-    // Apply author filter if provided
+    // Apply author filter if provided (only for completed jobs)
     if (author && job.created_by !== author) continue;
 
-    // Apply date filters if provided
+    // Apply date filters if provided (only for completed jobs)
     if (dateFrom && job.created_at) {
       const createdDate = new Date(job.created_at);
       const filterFrom = new Date(dateFrom);
@@ -148,10 +160,12 @@ function getAllPdfJobs(dateFrom, dateTo, author) {
 }
 
 function handlePdfList(params) {
-  const jobs = getAllPdfJobs(params.date_from, params.date_to, params.author);
+  const includeInProgress = params.include_in_progress === 'true' || params.include_in_progress === true;
+  const jobs = getAllPdfJobs(params.date_from, params.date_to, params.author, includeInProgress);
 
-  // Get unique authors for filter dropdown
-  const authors = [...new Set(jobs.map(j => j.created_by).filter(Boolean))];
+  // Get unique authors for filter dropdown (only from completed jobs)
+  const completedJobs = jobs.filter(j => j.status === 'DONE' || j.status === 'ERROR');
+  const authors = [...new Set(completedJobs.map(j => j.created_by).filter(Boolean))];
 
   return createResponse({
     ok: true,

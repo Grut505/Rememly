@@ -38,12 +38,12 @@ export function PdfExport() {
   // Generate modal
   const [showGenerateModal, setShowGenerateModal] = useState(false)
 
-  // Load PDF list
+  // Load PDF list (including in-progress jobs)
   const loadPdfList = useCallback(async () => {
     setLoadingList(true)
     setError(null)
     try {
-      const response = await pdfApi.list()
+      const response = await pdfApi.list({ include_in_progress: true })
       setPdfList(response.items || [])
       setAvailableAuthors(response.authors || [])
     } catch (err) {
@@ -57,7 +57,45 @@ export function PdfExport() {
     loadPdfList()
   }, [loadPdfList])
 
-  // Refresh list when PDF generation completes
+  // Track previous statuses to detect completion
+  const [previousStatuses, setPreviousStatuses] = useState<Map<string, string>>(new Map())
+  const { setLastCompletedJob } = usePdfGenerationStore()
+
+  // Separate in-progress and completed jobs
+  const inProgressJobs = pdfList.filter(p => p.status === 'PENDING' || p.status === 'RUNNING')
+  const completedJobs = pdfList.filter(p => p.status === 'DONE' || p.status === 'ERROR')
+
+  // Poll when there are in-progress jobs
+  useEffect(() => {
+    if (inProgressJobs.length === 0) return
+
+    const interval = setInterval(() => {
+      loadPdfList()
+    }, 2000) // Poll every 2 seconds
+
+    return () => clearInterval(interval)
+  }, [inProgressJobs.length, loadPdfList])
+
+  // Detect when a job completes
+  useEffect(() => {
+    const newStatuses = new Map(pdfList.map(p => [p.job_id, p.status]))
+
+    // Check if any job just completed
+    for (const [jobId, oldStatus] of previousStatuses) {
+      const newStatus = newStatuses.get(jobId)
+      if ((oldStatus === 'PENDING' || oldStatus === 'RUNNING') && newStatus === 'DONE') {
+        // Job just completed successfully
+        const job = pdfList.find(p => p.job_id === jobId)
+        if (job) {
+          setLastCompletedJob(job)
+        }
+      }
+    }
+
+    setPreviousStatuses(newStatuses)
+  }, [pdfList, previousStatuses, setLastCompletedJob])
+
+  // Refresh list when PDF generation completes (legacy, keep for now)
   const showSuccess = usePdfGenerationStore((state) => state.showSuccess)
   useEffect(() => {
     if (showSuccess) {
@@ -77,8 +115,8 @@ export function PdfExport() {
     return isNaN(d.getTime()) ? 0 : d.getTime()
   }
 
-  // Filter and sort list
-  const filteredList = pdfList
+  // Filter and sort list (only completed jobs - in-progress jobs are shown separately)
+  const filteredList = completedJobs
     .filter(pdf => !filterYear || pdf.year === parseInt(filterYear))
     .filter(pdf => !filterAuthor || pdf.created_by === filterAuthor)
     .sort((a, b) => {
@@ -352,7 +390,7 @@ export function PdfExport() {
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
           </div>
-        ) : filteredList.length === 0 ? (
+        ) : inProgressJobs.length === 0 && filteredList.length === 0 ? (
           <div className="text-center py-12">
             <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24" stroke="currentColor">
               <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -368,94 +406,154 @@ export function PdfExport() {
             </Button>
           </div>
         ) : (
-          <div className="space-y-3">
-            {filteredList.map((pdf) => (
-              <div
-                key={pdf.job_id}
-                onClick={() => selectionMode && toggleSelection(pdf.job_id)}
-                className={`bg-white rounded-lg shadow-sm border transition-colors ${
-                  selectionMode
-                    ? selectedIds.has(pdf.job_id)
-                      ? 'border-primary-500 bg-primary-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                    : 'border-gray-200'
-                } p-4 ${selectionMode ? 'cursor-pointer' : ''}`}
-              >
-                <div className="flex items-start gap-3">
-                  {/* Selection checkbox */}
-                  {selectionMode && (
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                      selectedIds.has(pdf.job_id)
-                        ? 'bg-primary-600 border-primary-600'
-                        : 'border-gray-300'
-                    }`}>
-                      {selectedIds.has(pdf.job_id) && (
-                        <svg className="w-3 h-3 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" viewBox="0 0 24 24" stroke="currentColor">
-                          <path d="M5 13l4 4L19 7"></path>
-                        </svg>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-gray-900">
-                        {formatDateRange(pdf.date_from, pdf.date_to)}
-                      </p>
-                      {pdf.status === 'ERROR' && (
-                        <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
-                          Erreur
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Créé le {formatDate(pdf.created_at)}
-                    </p>
-                    {pdf.status === 'ERROR' && pdf.error_message && (
-                      <p className="text-xs text-red-500 mt-0.5 truncate" title={pdf.error_message}>
-                        {pdf.error_message}
-                      </p>
-                    )}
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      par {pdf.created_by}
-                    </p>
-                  </div>
-
-                  {/* Actions (only in normal mode) */}
-                  {!selectionMode && (
-                    <div className="flex gap-1 flex-shrink-0">
-                      {pdf.pdf_url && (
-                        <a
-                          href={pdf.pdf_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                          title="Voir le PDF"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                            <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+          <>
+            {/* Section 1: In-progress PDFs (dedicated section, no filters/sort) */}
+            {inProgressJobs.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-gray-500 mb-3">
+                  En cours de génération
+                </h3>
+                <div className="space-y-3">
+                  {inProgressJobs.map((pdf) => (
+                    <div
+                      key={pdf.job_id}
+                      className="bg-blue-50 border border-blue-200 rounded-lg p-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-5 h-5 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
-                        </a>
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDeleteJobId(pdf.job_id)
-                        }}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Supprimer"
-                      >
-                        <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                          <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
-                      </button>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900">
+                            {formatDateRange(pdf.date_from, pdf.date_to)}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex-1 h-1.5 bg-blue-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                                style={{ width: `${pdf.progress || 0}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-blue-600 font-medium w-8">
+                              {pdf.progress || 0}%
+                            </span>
+                          </div>
+                          <p className="text-xs text-blue-500 mt-0.5">
+                            {pdf.progress_message || 'En attente...'}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            par {pdf.created_by}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+
+            {/* Section 2: Completed PDFs (normal list with filters/sort) */}
+            {filteredList.length > 0 && (
+              <div>
+                {inProgressJobs.length > 0 && (
+                  <h3 className="text-sm font-medium text-gray-500 mb-3">
+                    Générés
+                  </h3>
+                )}
+                <div className="space-y-3">
+                  {filteredList.map((pdf) => (
+                    <div
+                      key={pdf.job_id}
+                      onClick={() => selectionMode && toggleSelection(pdf.job_id)}
+                      className={`bg-white rounded-lg shadow-sm border transition-colors ${
+                        selectionMode
+                          ? selectedIds.has(pdf.job_id)
+                            ? 'border-primary-500 bg-primary-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                          : 'border-gray-200'
+                      } p-4 ${selectionMode ? 'cursor-pointer' : ''}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        {/* Selection checkbox */}
+                        {selectionMode && (
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                            selectedIds.has(pdf.job_id)
+                              ? 'bg-primary-600 border-primary-600'
+                              : 'border-gray-300'
+                          }`}>
+                            {selectedIds.has(pdf.job_id) && (
+                              <svg className="w-3 h-3 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" viewBox="0 0 24 24" stroke="currentColor">
+                                <path d="M5 13l4 4L19 7"></path>
+                              </svg>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900">
+                              {formatDateRange(pdf.date_from, pdf.date_to)}
+                            </p>
+                            {pdf.status === 'ERROR' && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
+                                Erreur
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Créé le {formatDate(pdf.created_at)}
+                          </p>
+                          {pdf.status === 'ERROR' && pdf.error_message && (
+                            <p className="text-xs text-red-500 mt-0.5 truncate" title={pdf.error_message}>
+                              {pdf.error_message}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            par {pdf.created_by}
+                          </p>
+                        </div>
+
+                        {/* Actions (only in normal mode) */}
+                        {!selectionMode && (
+                          <div className="flex gap-1 flex-shrink-0">
+                            {pdf.pdf_url && (
+                              <a
+                                href={pdf.pdf_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                title="Voir le PDF"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                </svg>
+                              </a>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeleteJobId(pdf.job_id)
+                              }}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Supprimer"
+                            >
+                              <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

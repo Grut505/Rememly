@@ -2,53 +2,35 @@ import { usePdfGenerationStore } from '../stores/pdfGenerationStore'
 
 export function PdfGenerationNotification() {
   const {
-    isGenerating,
-    progress,
-    progressMessage,
     error,
     pdfUrl,
     showSuccess,
+    lastCompletedJob,
     dismissSuccess,
     dismissError,
   } = usePdfGenerationStore()
 
   // Don't show anything if nothing to show
-  if (!isGenerating && !showSuccess && !error) {
+  // Progress is now shown directly in the PDF list
+  if (!showSuccess && !error) {
     return null
+  }
+
+  // Format date range for the completed job
+  const formatDateRange = (from: string, to: string) => {
+    try {
+      const fromDate = new Date(from)
+      const toDate = new Date(to)
+      const options: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' }
+      return `${fromDate.toLocaleDateString('fr-FR', options)} - ${toDate.toLocaleDateString('fr-FR', options)}`
+    } catch {
+      return `${from} - ${to}`
+    }
   }
 
   return (
     <div className="fixed bottom-20 left-4 right-4 z-50 max-w-md mx-auto">
-      {/* Generating state */}
-      {isGenerating && (
-        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-4 animate-slide-up">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-primary-600 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900">Génération du PDF...</p>
-              <div className="flex items-center gap-2 mt-1">
-                <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary-600 rounded-full transition-all duration-300"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-                <span className="text-xs text-gray-500 flex-shrink-0">{progress}%</span>
-              </div>
-              {progressMessage && (
-                <p className="text-xs text-gray-500 mt-0.5 truncate">{progressMessage}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success state */}
+      {/* Success state - PDF completed */}
       {showSuccess && pdfUrl && (
         <div className="bg-green-50 border border-green-200 rounded-lg shadow-lg p-4 animate-slide-up">
           <div className="flex items-start gap-3">
@@ -59,6 +41,11 @@ export function PdfGenerationNotification() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-green-800">PDF généré avec succès !</p>
+              {lastCompletedJob && (
+                <p className="text-xs text-green-600 mt-0.5">
+                  {formatDateRange(lastCompletedJob.date_from, lastCompletedJob.date_to)}
+                </p>
+              )}
               <div className="flex gap-2 mt-2">
                 <a
                   href={pdfUrl}

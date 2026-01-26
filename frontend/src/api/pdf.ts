@@ -29,7 +29,9 @@ export interface PdfListItem {
   year: number
   date_from: string
   date_to: string
-  status: string
+  status: 'PENDING' | 'RUNNING' | 'DONE' | 'ERROR'
+  progress?: number
+  progress_message?: string
   pdf_url?: string
   pdf_file_id?: string
   error_message?: string
@@ -51,8 +53,16 @@ export const pdfApi = {
   status: (jobId: string) =>
     apiClient.get<PdfJob>('pdf/status', { job_id: jobId }),
 
-  list: (params?: { date_from?: string; date_to?: string; author?: string }) =>
-    apiClient.get<PdfListResponse>('pdf/list', params),
+  list: (params?: { date_from?: string; date_to?: string; author?: string; include_in_progress?: boolean }) => {
+    // Convert boolean to string for the API
+    const queryParams: Record<string, string | undefined> | undefined = params ? {
+      date_from: params.date_from,
+      date_to: params.date_to,
+      author: params.author,
+      include_in_progress: params.include_in_progress ? 'true' : undefined,
+    } : undefined
+    return apiClient.get<PdfListResponse>('pdf/list', queryParams)
+  },
 
   delete: (jobId: string) =>
     apiClient.post<{ deleted: boolean }>('pdf/delete', { job_id: jobId }),

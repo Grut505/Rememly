@@ -1,8 +1,8 @@
 import { create } from 'zustand'
-import { pdfApi } from '../api/pdf'
+import { pdfApi, PdfListItem } from '../api/pdf'
 
 interface PdfGenerationState {
-  // Current generation
+  // Current generation (used during initial creation)
   isGenerating: boolean
   jobId: string | null
   progress: number
@@ -12,6 +12,9 @@ interface PdfGenerationState {
   // Result
   pdfUrl: string | null
   showSuccess: boolean
+
+  // Last completed job (for notification when polling detects completion)
+  lastCompletedJob: PdfListItem | null
 
   // Callback when generation completes
   onCompleteCallback: (() => void) | null
@@ -23,6 +26,7 @@ interface PdfGenerationState {
     max_mosaic_photos?: number
   }, onComplete?: () => void) => Promise<void>
   pollJobStatus: (jobId: string) => Promise<void>
+  setLastCompletedJob: (job: PdfListItem | null) => void
   dismissSuccess: () => void
   dismissError: () => void
   reset: () => void
@@ -36,6 +40,7 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
   error: null,
   pdfUrl: null,
   showSuccess: false,
+  lastCompletedJob: null,
   onCompleteCallback: null,
 
   startGeneration: async (from, to, options, onComplete) => {
@@ -47,6 +52,7 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
       error: null,
       pdfUrl: null,
       showSuccess: false,
+      lastCompletedJob: null,
       onCompleteCallback: onComplete || null,
     })
 
@@ -58,6 +64,7 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
       })
 
       if (response.status === 'DONE' && response.pdf_url) {
+        // Rare case: job completed immediately
         set({
           isGenerating: false,
           progress: 100,
@@ -65,6 +72,7 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
           pdfUrl: response.pdf_url,
           showSuccess: true,
         })
+        if (onComplete) onComplete()
       } else if (response.status === 'ERROR') {
         set({
           isGenerating: false,
@@ -72,21 +80,20 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
           progressMessage: '',
         })
       } else {
-        // Job started (PENDING), start polling and trigger processing
+        // Job started (PENDING)
+        // Progress will be shown in the list via polling in PdfExport
         set({
+          isGenerating: false, // No longer showing progress in notification
           jobId: response.job_id,
-          progress: response.progress || 0,
-          progressMessage: response.progress_message || 'En attente...',
         })
-
-        // Start polling for status updates
-        get().pollJobStatus(response.job_id)
 
         // Fire and forget: trigger the actual PDF generation
-        // We don't await this - it will run in the background
         pdfApi.process(response.job_id).catch(() => {
-          // Ignore errors here - polling will catch any issues
+          // Ignore errors here - list polling will catch any issues
         })
+
+        // Call onComplete to trigger list refresh (job will appear in list)
+        if (onComplete) onComplete()
       }
     } catch (err) {
       set({
@@ -134,8 +141,16 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
     }
   },
 
+  setLastCompletedJob: (job) => {
+    set({
+      lastCompletedJob: job,
+      showSuccess: job !== null,
+      pdfUrl: job?.pdf_url || null,
+    })
+  },
+
   dismissSuccess: () => {
-    set({ showSuccess: false, pdfUrl: null })
+    set({ showSuccess: false, pdfUrl: null, lastCompletedJob: null })
   },
 
   dismissError: () => {
@@ -151,6 +166,7 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
       error: null,
       pdfUrl: null,
       showSuccess: false,
+      lastCompletedJob: null,
       onCompleteCallback: null,
     })
   },

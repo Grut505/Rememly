@@ -24,7 +24,7 @@ export function Settings() {
       const result = await configApi.get('family_name')
       setFamilyName(result.value || '')
     } catch (error) {
-      showToast('Erreur lors du chargement', 'error')
+      showToast('Error while loading', 'error')
     } finally {
       setIsLoading(false)
     }
@@ -34,17 +34,17 @@ export function Settings() {
     setIsSaving(true)
     try {
       await configApi.set('family_name', familyName.trim())
-      showToast('Configuration sauvegardée', 'success')
+      showToast('Configuration saved', 'success')
       navigate('/')
     } catch (error) {
-      showToast('Erreur lors de la sauvegarde', 'error')
+      showToast('Error while saving', 'error')
     } finally {
       setIsSaving(false)
     }
   }
 
   if (isLoading) {
-    return <LoadingScreen message="Chargement..." />
+    return <LoadingScreen message="Loading..." />
   }
 
   return (
@@ -62,7 +62,7 @@ export function Settings() {
               <path d="M15 19l-7-7 7-7"></path>
             </svg>
           </button>
-          <h2 className="text-lg font-semibold text-gray-900">Paramètres</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Settings</h2>
         </div>
       </div>
 
@@ -70,15 +70,15 @@ export function Settings() {
       <div className="flex-1 p-4 space-y-6 pb-32 max-w-md mx-auto w-full">
         {/* Family Name */}
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Page de couverture PDF</h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">PDF cover page</h3>
           <Input
-            label="Nom de la famille"
+            label="Family name"
             value={familyName}
             onChange={(e) => setFamilyName(e.target.value)}
-            placeholder="Ex: Famille Dupont"
+            placeholder="e.g., Dupont family"
           />
           <p className="text-xs text-gray-500 mt-2">
-            Apparaîtra sur la couverture : "Livre de souvenirs de {familyName || '...'}"
+            Appears on the PDF cover title.
           </p>
         </div>
       </div>
@@ -90,7 +90,7 @@ export function Settings() {
           disabled={isSaving}
           fullWidth
         >
-          {isSaving ? 'Sauvegarde...' : 'Sauvegarder'}
+          {isSaving ? 'Saving...' : 'Save'}
         </Button>
       </div>
     </div>

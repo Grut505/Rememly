@@ -92,23 +92,49 @@ function getJobsSheet() {
 
   if (!sheet) {
     sheet = ss.insertSheet('jobs_pdf');
-    sheet.appendRow([
-      'job_id',
-      'created_at',
-      'created_by',
-      'year',
-      'date_from',
-      'date_to',
-      'status',
-      'progress',
-      'pdf_file_id',
-      'pdf_url',
-      'error_message',
-      'progress_message',
-    ]);
+    sheet.appendRow(getJobsHeaders());
+  } else {
+    ensureJobsSheetColumns(sheet);
   }
 
   return sheet;
+}
+
+function getJobsHeaders() {
+  return [
+    'job_id',
+    'created_at',
+    'created_by',
+    'year',
+    'date_from',
+    'date_to',
+    'status',
+    'progress',
+    'pdf_file_id',
+    'pdf_url',
+    'error_message',
+    'progress_message',
+    'temp_folder_id',
+    'temp_folder_url',
+  ];
+}
+
+function ensureJobsSheetColumns(sheet) {
+  const expected = getJobsHeaders();
+  const lastCol = sheet.getLastColumn() || expected.length;
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  let updated = false;
+
+  expected.forEach((header) => {
+    if (!headers.includes(header)) {
+      headers.push(header);
+      updated = true;
+    }
+  });
+
+  if (updated) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
 }
 
 function getUsersSheet() {

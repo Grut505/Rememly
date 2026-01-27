@@ -23,12 +23,12 @@ export function UpdatePrompt() {
 
   return (
     <div className="fixed bottom-20 left-4 right-4 z-50 bg-primary-600 text-white p-4 rounded-lg shadow-lg flex items-center justify-between">
-      <span className="text-sm font-medium">Nouvelle version disponible</span>
+      <span className="text-sm font-medium">New version available</span>
       <button
         onClick={() => updateServiceWorker(true)}
         className="bg-white text-primary-600 px-4 py-2 rounded-md text-sm font-semibold"
       >
-        Mettre à jour
+        Update
       </button>
     </div>
   )

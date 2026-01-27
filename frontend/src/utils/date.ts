@@ -1,28 +1,31 @@
-import { CONSTANTS, MONTHS_EN } from './constants'
+import { CONSTANTS } from './constants'
 
 export function formatDate(isoString: string): string {
   const date = new Date(isoString)
-  const day = date.getDate()
-  const month = MONTHS_EN[date.getMonth()]
-  const year = date.getFullYear()
-  return `${month} ${day}, ${year}`
+  return date.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  })
 }
 
 export function formatDateShort(isoString: string): string {
   const date = new Date(isoString)
-  const day = date.getDate()
-  const month = MONTHS_EN[date.getMonth()].substring(0, 3)
-  return `${month} ${day}`
+  return date.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+  })
 }
 
 export function formatDateTimeFull(isoString: string): string {
   const date = new Date(isoString)
-  const day = date.getDate()
-  const month = MONTHS_EN[date.getMonth()]
-  const year = date.getFullYear()
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${month} ${day}, ${year} · ${hours}:${minutes}`
+  return date.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 export function getCurrentYear(): number {
@@ -51,9 +54,10 @@ export function now(): string {
 
 export function getMonthYear(isoString: string): string {
   const date = new Date(isoString)
-  const month = MONTHS_EN[date.getMonth()]
-  const year = date.getFullYear()
-  return `${month} ${year}`
+  return date.toLocaleDateString('fr-FR', {
+    month: 'long',
+    year: 'numeric',
+  })
 }
 
 export function getMonthYearKey(isoString: string): string {

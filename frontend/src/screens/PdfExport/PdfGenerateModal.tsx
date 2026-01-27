@@ -4,11 +4,12 @@ import { articlesApi } from '../../api/articles'
 import { Article } from '../../api/types'
 import { getMonthYear } from '../../utils/date'
 import { usePdfGenerationStore } from '../../stores/pdfGenerationStore'
+import type { PdfListItem } from '../../api/pdf'
 
 interface PdfGenerateModalProps {
   isOpen: boolean
   onClose: () => void
-  onComplete: (pdfUrl: string) => void
+  onComplete: (job: PdfListItem | null) => void
 }
 
 interface MonthCount {
@@ -39,6 +40,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const [mosaicLayout, setMosaicLayout] = useState<'full' | 'centered'>('full')
   const [showSeasonalFruits, setShowSeasonalFruits] = useState(true)
   const [maxMosaicPhotos, setMaxMosaicPhotos] = useState<number>(0) // 0 = all photos
+  const [keepTempFiles, setKeepTempFiles] = useState(false)
 
   const reset = () => {
     setStep('dates')
@@ -50,6 +52,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     setMosaicLayout('full')
     setShowSeasonalFruits(true)
     setMaxMosaicPhotos(0)
+    setKeepTempFiles(false)
   }
 
   const handleClose = () => {
@@ -59,7 +62,11 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
 
   const handleSearchArticles = async () => {
     if (!startDate || !endDate) {
-      setError('Veuillez sélectionner les dates de début et de fin')
+      setError('Please select a start and end date')
+      return
+    }
+    if (endDate < startDate) {
+      setError('End date cannot be earlier than start date')
       return
     }
 
@@ -111,29 +118,30 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       setMaxMosaicPhotos(allArticles.length) // Default to all photos
 
       if (allArticles.length === 0) {
-        setError('Aucun article trouvé pour cette période')
+        setError('No articles found for this period')
       } else {
         setStep('preview')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors du chargement')
+      setError(err instanceof Error ? err.message : 'Error while loading')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     // Start generation in background using the global store
-    startGeneration(startDate, endDate, {
+    const job = await startGeneration(startDate, endDate, {
       mosaic_layout: mosaicLayout,
       show_seasonal_fruits: showSeasonalFruits,
       max_mosaic_photos: maxMosaicPhotos > 0 ? maxMosaicPhotos : undefined,
+      keep_temp: keepTempFiles,
     })
 
     // Close modal immediately - progress will show in global notification
     reset()
     onClose()
-    onComplete('')
+    onComplete(job)
   }
 
   if (!isOpen) return null
@@ -151,9 +159,9 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">
-            {step === 'dates' && 'Sélectionner la période'}
-            {step === 'preview' && 'Aperçu des articles'}
-            {step === 'options' && 'Options de génération'}
+            {step === 'dates' && 'Select date range'}
+            {step === 'preview' && 'Article preview'}
+            {step === 'options' && 'Generation options'}
           </h3>
           {(
             <button
@@ -181,25 +189,41 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date de début
+                  Start date
                 </label>
                 <input
                   type="date"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setStartDate(next)
+                    if (endDate && next && endDate < next) {
+                      setEndDate(next)
+                    }
+                    if (error) setError(null)
+                  }}
                   disabled={loading}
+                  max={endDate || undefined}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date de fin
+                  End date
                 </label>
                 <input
                   type="date"
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setEndDate(next)
+                    if (startDate && next && next < startDate) {
+                      setStartDate(next)
+                    }
+                    if (error) setError(null)
+                  }}
                   disabled={loading}
+                  min={startDate || undefined}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
                 />
               </div>
@@ -221,7 +245,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
               {/* Month breakdown */}
               <div className="border border-gray-200 rounded-lg overflow-hidden">
                 <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
-                  <h4 className="text-sm font-medium text-gray-700">Détail par mois</h4>
+                  <h4 className="text-sm font-medium text-gray-700">Monthly breakdown</h4>
                 </div>
                 <ul className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
                   {monthCounts.map((month) => (
@@ -243,7 +267,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
               {/* Mosaic photo limit */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Photos sur la couverture
+                  Cover photos
                 </label>
                 <div className="flex items-center gap-3">
                   <input
@@ -259,14 +283,14 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Nombre de photos pour la mosaïque de couverture
+                  Number of photos in the cover mosaic
                 </p>
               </div>
 
               {/* Month divider layout */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Style des intercalaires de mois
+                  Month divider style
                 </label>
                 <div className="flex gap-2">
                   <button
@@ -277,7 +301,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                         : 'border-gray-300 text-gray-600 hover:bg-gray-50'
                     }`}
                   >
-                    Mosaïque pleine
+                    Full mosaic
                   </button>
                   <button
                     onClick={() => setMosaicLayout('centered')}
@@ -287,7 +311,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                         : 'border-gray-300 text-gray-600 hover:bg-gray-50'
                     }`}
                   >
-                    Mosaïque centrée
+                    Centered mosaic
                   </button>
                 </div>
               </div>
@@ -301,15 +325,29 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                   className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
                 <div>
-                  <span className="text-sm font-medium text-gray-700">Fruits & légumes de saison</span>
-                  <p className="text-xs text-gray-500">Décorations autour des intercalaires</p>
+                  <span className="text-sm font-medium text-gray-700">Seasonal fruits & vegetables</span>
+                  <p className="text-xs text-gray-500">Decorations around month dividers</p>
+                </div>
+              </label>
+
+              {/* Keep temp files toggle */}
+              <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={keepTempFiles}
+                  onChange={(e) => setKeepTempFiles(e.target.checked)}
+                  className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Keep temporary PDF files</span>
+                  <p className="text-xs text-gray-500">Preserve intermediate PDFs and show a folder link</p>
                 </div>
               </label>
 
               {/* Summary reminder */}
               <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
-                <strong>{totalArticles}</strong> articles du{' '}
-                <strong>{new Date(startDate).toLocaleDateString('fr-FR')}</strong> au{' '}
+                <strong>{totalArticles}</strong> articles from{' '}
+                <strong>{new Date(startDate).toLocaleDateString('fr-FR')}</strong> to{' '}
                 <strong>{new Date(endDate).toLocaleDateString('fr-FR')}</strong>
               </div>
             </div>
@@ -321,7 +359,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
           {step === 'dates' && (
             <>
               <Button variant="secondary" onClick={handleClose} fullWidth>
-                Annuler
+                Cancel
               </Button>
               <Button
                 onClick={handleSearchArticles}
@@ -331,10 +369,10 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                 {loading ? (
                   <>
                     <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Recherche...
+                    Searching...
                   </>
                 ) : (
-                  'Suivant'
+                  'Next'
                 )}
               </Button>
             </>
@@ -343,10 +381,10 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
           {step === 'preview' && (
             <>
               <Button variant="secondary" onClick={() => setStep('dates')} fullWidth>
-                Retour
+                Back
               </Button>
               <Button onClick={() => setStep('options')} fullWidth>
-                Suivant
+                Next
               </Button>
             </>
           )}
@@ -354,13 +392,13 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
           {step === 'options' && (
             <>
               <Button variant="secondary" onClick={() => setStep('preview')} fullWidth>
-                Retour
+                Back
               </Button>
               <Button onClick={handleGenerate} disabled={isGenerating} fullWidth>
                 <svg className="w-5 h-5 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                   <path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
-                Générer le PDF
+                Generate PDF
               </Button>
             </>
           )}

@@ -17,7 +17,7 @@ echo ""
 # Push code to Apps Script
 echo "📤 Push du code vers Google Apps Script..."
 cd backend
-npx clasp push
+npx clasp push --force
 echo ""
 
 # Deploy and capture output to get version

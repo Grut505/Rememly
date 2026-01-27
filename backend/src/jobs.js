@@ -19,6 +19,8 @@ function createJob(from, to, userEmail) {
     '',
     '',
     '',
+    '',
+    '',
   ];
 
   sheet.appendRow(row);
@@ -58,16 +60,43 @@ function updateJobStatus(
 
   if (rowIndex === -1) return;
 
-  const row = sheet.getRange(rowIndex, 1, 1, 12).getValues()[0];
+  const headerMap = getJobsHeaderIndexMap(sheet);
+  const colCount = sheet.getLastColumn();
+  const row = sheet.getRange(rowIndex, 1, 1, colCount).getValues()[0];
 
-  row[6] = status;
-  if (progress !== undefined) row[7] = progress;
-  if (pdfFileId !== undefined) row[8] = pdfFileId;
-  if (pdfUrl !== undefined) row[9] = pdfUrl;
-  if (errorMessage !== undefined) row[10] = errorMessage;
-  if (progressMessage !== undefined) row[11] = progressMessage;
+  row[headerMap.status] = status;
+  if (progress !== undefined) row[headerMap.progress] = progress;
+  if (pdfFileId !== undefined) row[headerMap.pdf_file_id] = pdfFileId;
+  if (pdfUrl !== undefined) row[headerMap.pdf_url] = pdfUrl;
+  if (errorMessage !== undefined) row[headerMap.error_message] = errorMessage;
+  if (progressMessage !== undefined) row[headerMap.progress_message] = progressMessage;
 
-  sheet.getRange(rowIndex, 1, 1, 12).setValues([row]);
+  sheet.getRange(rowIndex, 1, 1, colCount).setValues([row]);
+}
+
+function getJobsHeaderIndexMap(sheet) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const map = {};
+  headers.forEach((header, index) => {
+    map[header] = index;
+  });
+  return map;
+}
+
+function updateJobTempFolder(jobId, folderId, folderUrl) {
+  const sheet = getJobsSheet();
+  const rowIndex = findRowById(sheet, jobId);
+
+  if (rowIndex === -1) return;
+
+  const headerMap = getJobsHeaderIndexMap(sheet);
+  const colCount = sheet.getLastColumn();
+  const row = sheet.getRange(rowIndex, 1, 1, colCount).getValues()[0];
+
+  if (folderId !== undefined) row[headerMap.temp_folder_id] = folderId;
+  if (folderUrl !== undefined) row[headerMap.temp_folder_url] = folderUrl;
+
+  sheet.getRange(rowIndex, 1, 1, colCount).setValues([row]);
 }
 
 function handlePdfStatus(jobId) {
@@ -107,6 +136,7 @@ function getAllPdfJobs(dateFrom, dateTo, author, includeInProgress) {
   const sheet = getJobsSheet();
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
+  const userPseudoCache = buildUserPseudoCache();
 
   const jobs = [];
 
@@ -117,6 +147,9 @@ function getAllPdfJobs(dateFrom, dateTo, author, includeInProgress) {
       // Convert dates to ISO strings for proper JSON serialization
       job[header] = toIsoString(row[index]);
     });
+    if (job.created_by) {
+      job.created_by_pseudo = userPseudoCache[job.created_by] || String(job.created_by).split('@')[0];
+    }
 
     // Filter by status
     if (includeInProgress) {
@@ -187,9 +220,12 @@ function deletePdfJob(jobId) {
     return { ok: false, error: 'Job not found' };
   }
 
+  const headerMap = getJobsHeaderIndexMap(sheet);
+  const colCount = sheet.getLastColumn();
   // Get the job data to find the file ID
-  const row = sheet.getRange(rowIndex, 1, 1, 12).getValues()[0];
-  const pdfFileId = row[8]; // pdf_file_id is at index 8
+  const row = sheet.getRange(rowIndex, 1, 1, colCount).getValues()[0];
+  const pdfFileId = row[headerMap.pdf_file_id];
+  const tempFolderId = row[headerMap.temp_folder_id];
 
   // Delete the file from Drive if it exists
   if (pdfFileId) {
@@ -198,6 +234,15 @@ function deletePdfJob(jobId) {
       file.setTrashed(true);
     } catch (e) {
       // File might already be deleted, continue anyway
+    }
+  }
+
+  if (tempFolderId) {
+    try {
+      const folder = DriveApp.getFolderById(tempFolderId);
+      folder.setTrashed(true);
+    } catch (e) {
+      // Folder might already be deleted, continue anyway
     }
   }
 

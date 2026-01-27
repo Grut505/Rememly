@@ -5,6 +5,7 @@ export interface PdfOptions {
   mosaic_layout?: 'full' | 'centered'
   show_seasonal_fruits?: boolean
   max_mosaic_photos?: number
+  keep_temp?: boolean
 }
 
 export interface CreatePdfPayload {
@@ -26,6 +27,7 @@ export interface PdfListItem {
   job_id: string
   created_at: string
   created_by: string
+  created_by_pseudo?: string
   year: number
   date_from: string
   date_to: string
@@ -34,6 +36,8 @@ export interface PdfListItem {
   progress_message?: string
   pdf_url?: string
   pdf_file_id?: string
+  temp_folder_id?: string
+  temp_folder_url?: string
   error_message?: string
 }
 

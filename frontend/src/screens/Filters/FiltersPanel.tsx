@@ -68,8 +68,9 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
 
   return (
     <>
-      {/* Content */}
-      <div className="p-4 space-y-6">
+      <div className="flex flex-col h-full">
+        {/* Content */}
+        <div className="p-4 space-y-6 overflow-y-auto overscroll-contain">
         {/* Year */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -129,13 +130,27 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
             type="date"
             label="From"
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value
+              setDateFrom(next)
+              if (dateTo && next && dateTo < next) {
+                setDateTo(next)
+              }
+            }}
+            max={dateTo || undefined}
           />
           <Input
             type="date"
             label="To"
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value
+              setDateTo(next)
+              if (dateFrom && next && next < dateFrom) {
+                setDateFrom(next)
+              }
+            }}
+            min={dateFrom || undefined}
           />
         </div>
 
@@ -222,16 +237,19 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
             </button>
           </div>
         </div>
-      </div>
+        </div>
 
-      {/* Actions */}
-      <div className="border-t border-gray-200 p-4 space-y-2">
-        <Button onClick={handleApply} fullWidth>
-          Apply Filters
-        </Button>
-        <Button variant="secondary" onClick={handleReset} fullWidth>
-          Reset
-        </Button>
+        {/* Actions */}
+        <div className="border-t border-gray-200 p-4 bg-white sticky bottom-0">
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={handleReset} fullWidth>
+              Reset
+            </Button>
+            <Button onClick={handleApply} fullWidth>
+              Apply Filters
+            </Button>
+          </div>
+        </div>
       </div>
     </>
   )

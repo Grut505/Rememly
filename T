@@ -4,8 +4,6 @@ Famileo
 
 Vue articles
 - Layout
--- Le titre principal bleu ne devrait jalais bouger quand un swipe vers le bas en mode pwa. Il faut qu'il reste collé en haut
--- Le sous titre en dessous, avec le "All years" notamment, il reste aussi fixe juste dessous
 -- Ensuite, la liste avec les headers des mois et les items, ça bouge au swipe vers le bas oui
 -- Et ajoute un système de pull to refresh au passage, pour recharger les articles en tenant bien sur en compte les filtres
 -- Dans les sous header de mois, on ajoute le nombre d'articles chargés pour ce mois - attention il faut gérer le fait qu'on lest charge petit à petit en auto suite à du scroll
@@ -41,3 +39,11 @@ Module d'assemblage des photos à revoir
 
 P3
 -- Le post vers famileo
+
+
+--------------------------
+--------------------------
+ça marche pas, ça reste en mode running da la sheet en progress à 10% mais ça n'avance pas...
+Le problème est que le trigger initial ne trouve pas le job. Regardons le code actuel : handlePdfProcess ajoute le job à la queue mais ne crée pas le mapping PDF_TRIGGER_ + triggerId. Le trigger se déclenche, cherche d'abord le mapping (pas trouvé), puis la queue (peut-être déjà vidée ou problème).
+
+Je vais corriger en stockant le mapping du trigger dans handlePdfProcess:

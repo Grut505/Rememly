@@ -425,7 +425,21 @@ export function Timeline() {
       )}
 
       {/* FAB - hide in selection mode */}
-      {!selectionMode && <FloatingActionButton onClick={() => navigate('/editor')} />}
+      {!selectionMode && (
+        <div className="fixed bottom-6 left-0 right-0 z-50">
+          <div className="max-w-content mx-auto px-4 flex justify-end">
+            <FloatingActionButton
+              onClick={() => navigate('/editor')}
+              className="bg-primary-600 hover:bg-primary-700 active:bg-primary-800 transition-all hover:scale-105 active:scale-95"
+              icon={
+                <svg className="w-8 h-8" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M12 4v16m8-8H4"></path>
+                </svg>
+              }
+            />
+          </div>
+        </div>
+      )}
 
       {/* Bulk Delete Confirmation (soft delete) */}
       <ConfirmDialog

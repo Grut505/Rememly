@@ -1,6 +1,89 @@
 // PDF Generation - Batch Architecture with Triggers
 // Generates PDFs in chunks using time-driven triggers to avoid timeouts
 
+function installPdfWorker() {
+  // Nettoyage des triggers existants du worker (optionnel)
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction && t.getHandlerFunction() === 'pdfWorkerTick') {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+
+  // Un trigger permanent
+  ScriptApp.newTrigger('pdfWorkerTick')
+    .timeBased()
+    .everyMinutes(1)   // ajuster si besoin
+    .create();
+}
+
+function enqueuePdfJob(jobId) {
+  const props = PropertiesService.getScriptProperties();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+
+  try {
+    const key = 'PDF_JOB_QUEUE';
+    const queue = JSON.parse(props.getProperty(key) || '[]');
+    if (!queue.includes(jobId)) queue.push(jobId);
+    props.setProperty(key, JSON.stringify(queue));
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function isJobQueued(jobId) {
+  const props = PropertiesService.getScriptProperties();
+  const queue = JSON.parse(props.getProperty('PDF_JOB_QUEUE') || '[]');
+  return queue.includes(jobId);
+}
+
+async function pdfWorkerTick() {
+  const jobId = dequeuePdfJob();
+  if (!jobId) return;
+
+  try {
+    await processNextPdfChunk(jobId);
+
+    // Si le job n’est pas fini, on le remet dans la queue
+    const props = PropertiesService.getScriptProperties();
+    const stateJson = props.getProperty('PDF_BATCH_STATE_' + jobId);
+
+    if (stateJson) {
+      const state = JSON.parse(stateJson);
+      const job = getJobStatus(jobId);
+
+      const done = job && (job.status === 'DONE' || job.status === 'ERROR' || job.status === 'CANCELLED');
+      const finishedChunks = state.currentChunk > state.monthKeys.length;
+
+      if (!done && !finishedChunks) {
+        enqueuePdfJob(jobId);
+      }
+    }
+  } catch (e) {
+    Logger.log('Worker error: ' + e.message);
+    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(e), 'Error');
+    cleanupBatchState(jobId);
+  }
+}
+
+
+function dequeuePdfJob() {
+  const props = PropertiesService.getScriptProperties();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+
+  try {
+    const key = 'PDF_JOB_QUEUE';
+    const queue = JSON.parse(props.getProperty(key) || '[]');
+    const jobId = queue.shift();
+    props.setProperty(key, JSON.stringify(queue));
+    return jobId || null;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
 function handlePdfCreate(body, user) {
   const jobId = createJob(body.from, body.to, user.email);
 
@@ -9,7 +92,8 @@ function handlePdfCreate(body, user) {
   props.setProperty('PDF_OPTIONS_' + jobId, JSON.stringify({
     mosaicLayout: body.options?.mosaic_layout || 'full',
     showSeasonalFruits: body.options?.show_seasonal_fruits !== false,
-    maxMosaicPhotos: body.options?.max_mosaic_photos || undefined
+    maxMosaicPhotos: body.options?.max_mosaic_photos || undefined,
+    keepTemp: body.options?.keep_temp === true
   }));
 
   // Return immediately with PENDING status
@@ -20,7 +104,7 @@ function handlePdfCreate(body, user) {
       job_id: jobId,
       status: 'PENDING',
       progress: 0,
-      progress_message: 'En attente...',
+      progress_message: 'Pending...',
     },
   });
 }
@@ -35,31 +119,39 @@ function handlePdfProcess(params) {
     });
   }
 
-  // Initialize the batch state and start processing
-  initializeBatchState(jobId);
-
-  // Add job to the processing queue
-  const props = PropertiesService.getScriptProperties();
-  const queue = JSON.parse(props.getProperty('PDF_JOB_QUEUE') || '[]');
-  if (!queue.includes(jobId)) {
-    queue.push(jobId);
-    props.setProperty('PDF_JOB_QUEUE', JSON.stringify(queue));
+  const job = getJobStatus(jobId);
+  if (!job) {
+    return createResponse({
+      ok: false,
+      error: { code: 'NOT_FOUND', message: 'Job not found' },
+    });
   }
 
-  // Create a trigger to process the queue
-  // This allows the request to return immediately
-  const trigger = ScriptApp.newTrigger('processPdfBatchTrigger')
-    .timeBased()
-    .after(1000) // 1 second delay
-    .create();
+  if (job.status === 'DONE' || job.status === 'ERROR' || job.status === 'CANCELLED') {
+    return createResponse({
+      ok: false,
+      error: { code: 'INVALID_STATUS', message: 'Job cannot be processed' },
+    });
+  }
 
-  Logger.log('Created trigger for job ' + jobId + ', trigger ID: ' + trigger.getUniqueId());
+  // Initialise l’état si pas encore fait
+  const props = PropertiesService.getScriptProperties();
+  const existingState = props.getProperty('PDF_BATCH_STATE_' + jobId);
+  if (!existingState) {
+    initializeBatchState(jobId);
+  }
+
+  // Ajoute dans la queue (le worker fera le reste)
+  if (!isJobQueued(jobId)) {
+    enqueuePdfJob(jobId);
+  }
 
   return createResponse({
     ok: true,
-    data: { processed: true, job_id: jobId },
+    data: { queued: true, job_id: jobId },
   });
 }
+
 
 /**
  * Cancel a PDF generation job
@@ -90,11 +182,15 @@ function handlePdfCancel(params) {
     });
   }
 
-  // Update status to CANCELLED
-  updateJobStatus(jobId, 'CANCELLED', 0, undefined, undefined, undefined, 'Annulé');
-
   // Clean up batch state and temp files
   cleanupBatchState(jobId);
+
+  // Remove job from sheet after cancellation
+  try {
+    deletePdfJob(jobId);
+  } catch (e) {
+    Logger.log('Failed to delete cancelled job row: ' + e.message);
+  }
 
   Logger.log('Job cancelled: ' + jobId);
 
@@ -110,7 +206,7 @@ function handlePdfCancel(params) {
 function initializeBatchState(jobId) {
   const props = PropertiesService.getScriptProperties();
 
-  updateJobStatus(jobId, 'RUNNING', 5, undefined, undefined, undefined, 'Initialisation...');
+  updateJobStatus(jobId, 'RUNNING', 5, undefined, undefined, undefined, 'Initializing...');
 
   const job = getJobStatus(jobId);
   if (!job) {
@@ -129,8 +225,14 @@ function initializeBatchState(jobId) {
     totalPages += Math.ceil(articlesByMonth[monthKey].length / 2);
   }
 
+  const optionsJson = props.getProperty('PDF_OPTIONS_' + jobId);
+  const pdfOptions = optionsJson ? JSON.parse(optionsJson) : {};
+
   // Create temp folder for partial PDFs
   const tempFolder = DriveApp.createFolder('_pdf_batch_' + jobId);
+  if (pdfOptions.keepTemp) {
+    updateJobTempFolder(jobId, tempFolder.getId(), tempFolder.getUrl());
+  }
 
   // Store batch state
   const batchState = {
@@ -147,63 +249,26 @@ function initializeBatchState(jobId) {
 
   props.setProperty('PDF_BATCH_STATE_' + jobId, JSON.stringify(batchState));
 
-  updateJobStatus(jobId, 'RUNNING', 10, undefined, undefined, undefined, `${articles.length} articles trouvés`);
-}
-
-/**
- * Trigger function that processes one chunk at a time
- * Called by time-driven triggers
- */
-function processPdfBatchTrigger(e) {
-  const props = PropertiesService.getScriptProperties();
-  let jobId = null;
-
-  // Delete the trigger itself first
-  if (e && e.triggerUid) {
-    const triggerId = e.triggerUid;
-
-    // Method 1: Check if this trigger has an associated job ID (set by processNextPdfChunk)
-    jobId = props.getProperty('PDF_TRIGGER_' + triggerId);
-    if (jobId) {
-      props.deleteProperty('PDF_TRIGGER_' + triggerId);
-    }
-
-    // Delete the trigger
-    const triggers = ScriptApp.getProjectTriggers();
-    for (const trigger of triggers) {
-      if (trigger.getUniqueId() === triggerId) {
-        ScriptApp.deleteTrigger(trigger);
-        break;
-      }
-    }
-  }
-
-  // Method 2: Fall back to queue if no job ID found (initial trigger from handlePdfProcess)
-  if (!jobId) {
-    const queue = JSON.parse(props.getProperty('PDF_JOB_QUEUE') || '[]');
-    if (queue.length > 0) {
-      jobId = queue.shift(); // Take first job from queue
-      props.setProperty('PDF_JOB_QUEUE', JSON.stringify(queue));
-      Logger.log('Got job from queue: ' + jobId);
-    }
-  }
-
-  if (!jobId) {
-    Logger.log('No job ID found in trigger or queue');
-    return;
-  }
-
-  Logger.log('Processing job: ' + jobId);
-
-  // Process the next chunk
-  processNextPdfChunk(jobId);
+  updateJobStatus(jobId, 'RUNNING', 10, undefined, undefined, undefined, `${articles.length} articles found`);
 }
 
 /**
  * Process the next chunk of the PDF batch
+ * NOTE:
+ * - This function processes ONE chunk only
+ * - It NEVER creates or deletes triggers
+ * - Orchestration is handled by the permanent worker (pdfWorkerTick)
  */
-function processNextPdfChunk(jobId) {
+async function processNextPdfChunk(jobId) {
   const props = PropertiesService.getScriptProperties();
+  const lock = LockService.getScriptLock();
+  const gotLock = lock.tryLock(1000);
+
+  if (!gotLock) {
+    Logger.log('Chunk processing locked, re-queuing job: ' + jobId);
+    enqueuePdfJob(jobId);
+    return;
+  }
 
   try {
     // Get batch state
@@ -229,92 +294,151 @@ function processNextPdfChunk(jobId) {
     const optionsJson = props.getProperty('PDF_OPTIONS_' + jobId);
     const pdfOptions = optionsJson ? JSON.parse(optionsJson) : {
       mosaicLayout: 'full',
-      showSeasonalFruits: true
+      showSeasonalFruits: true,
+      keepTemp: false
     };
 
-    const monthsFr = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-                      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    const monthsFr = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    const monthsEn = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
 
     const tempFolder = DriveApp.getFolderById(state.tempFolderId);
 
+    // =====================================================
+    // CHUNK 0 : COVER PAGE
+    // =====================================================
     if (state.currentChunk === 0) {
-      // Generate cover page
-      const progress = 15;
-      updateJobStatus(jobId, 'RUNNING', progress, undefined, undefined, undefined, 'Génération de la couverture...');
+      updateJobStatus(
+        jobId,
+        'RUNNING',
+        15,
+        undefined,
+        undefined,
+        undefined,
+        'Generating cover...'
+      );
 
       const articles = getArticlesInRange(job.date_from, job.date_to);
-      const coverHtml = generateCoverOnlyHtml(articles, job.date_from, job.date_to, pdfOptions.maxMosaicPhotos);
+      const coverHtml = generateCoverOnlyHtml(
+        articles,
+        job.date_from,
+        job.date_to,
+        pdfOptions.maxMosaicPhotos
+      );
       const coverPdf = convertHtmlToPdf(coverHtml);
 
-      // Save to temp folder
       const coverFile = tempFolder.createFile(coverPdf);
       coverFile.setName('chunk_000_cover.pdf');
       state.partialPdfIds.push(coverFile.getId());
 
       state.currentChunk = 1;
       state.currentPage = 1;
+    }
 
-    } else if (state.currentChunk <= state.monthKeys.length) {
-      // Generate month chunk
+    // =====================================================
+    // CHUNKS 1..N : MONTHS
+    // =====================================================
+    else if (state.currentChunk <= state.monthKeys.length) {
       const monthIndex = state.currentChunk - 1;
       const monthKey = state.monthKeys[monthIndex];
       const [yearStr, monthStr] = monthKey.split('-');
-      const monthIdx = parseInt(monthStr);
+      const monthIdx = parseInt(monthStr, 10) - 1;
       const monthName = monthsFr[monthIdx];
+      const monthNameEn = monthsEn[monthIdx];
 
-      const progress = Math.round(15 + (state.currentChunk / state.totalChunks) * 65);
-      updateJobStatus(jobId, 'RUNNING', progress, undefined, undefined, undefined, `Génération de ${monthName} ${yearStr}...`);
+      const progress = Math.round(
+        15 + (state.currentChunk / state.totalChunks) * 65
+      );
 
-      // Get articles for this month
+      updateJobStatus(
+        jobId,
+        'RUNNING',
+        progress,
+        undefined,
+        undefined,
+        undefined,
+        `Generating ${monthNameEn} ${yearStr}...`
+      );
+
       const articles = getArticlesInRange(job.date_from, job.date_to);
       const articlesByMonth = groupArticlesByMonth(articles);
-      const monthArticles = articlesByMonth[monthKey];
+      const monthArticles = articlesByMonth[monthKey] || [];
 
-      // Generate month PDF
-      const monthHtml = generateMonthOnlyHtml(monthArticles, monthName, yearStr, monthIdx, state.currentPage, state.totalPages, pdfOptions);
+      const monthHtml = generateMonthOnlyHtml(
+        monthArticles,
+        monthName,
+        yearStr,
+        monthIdx,
+        state.currentPage,
+        state.totalPages,
+        pdfOptions
+      );
+
       const monthPdf = convertHtmlToPdf(monthHtml);
-
-      // Save to temp folder
       const monthFile = tempFolder.createFile(monthPdf);
-      monthFile.setName(`chunk_${String(state.currentChunk).padStart(3, '0')}_${monthKey}.pdf`);
+      monthFile.setName(
+        `chunk_${String(state.currentChunk).padStart(3, '0')}_${monthKey}.pdf`
+      );
+
       state.partialPdfIds.push(monthFile.getId());
 
-      // Update page counter for next chunk
       state.currentPage += 1 + Math.ceil(monthArticles.length / 2);
       state.currentChunk++;
     }
 
-    // Save updated state
-    props.setProperty('PDF_BATCH_STATE_' + jobId, JSON.stringify(state));
+    // =====================================================
+    // SAVE STATE
+    // =====================================================
+    props.setProperty(
+      'PDF_BATCH_STATE_' + jobId,
+      JSON.stringify(state)
+    );
 
-    // Check if all chunks are done
+    // =====================================================
+    // FINAL STEP
+    // =====================================================
     if (state.currentChunk > state.monthKeys.length) {
       // All chunks generated, proceed to merge
-      mergePdfChunksAndFinish(jobId);
-    } else {
-      // Schedule next chunk
-      const trigger = ScriptApp.newTrigger('processPdfBatchTrigger')
-        .timeBased()
-        .after(1000) // 1 second delay
-        .create();
-      props.setProperty('PDF_TRIGGER_' + trigger.getUniqueId(), jobId);
+      await mergePdfChunksAndFinish(jobId);
     }
+
+    // IMPORTANT:
+    // No trigger scheduling here.
+    // The permanent worker will re-enqueue this job if needed.
 
   } catch (error) {
     Logger.log('Error processing chunk: ' + error.message);
-    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error), 'Erreur');
+    updateJobStatus(
+      jobId,
+      'ERROR',
+      0,
+      undefined,
+      undefined,
+      String(error),
+      'Error'
+    );
     cleanupBatchState(jobId);
+  } finally {
+    if (gotLock) {
+      lock.releaseLock();
+    }
   }
 }
+
 
 /**
  * Merge all PDF chunks and finish the job
  */
-function mergePdfChunksAndFinish(jobId) {
+async function mergePdfChunksAndFinish(jobId) {
   const props = PropertiesService.getScriptProperties();
 
   try {
-    updateJobStatus(jobId, 'RUNNING', 85, undefined, undefined, undefined, 'Fusion des PDFs...');
+    updateJobStatus(jobId, 'RUNNING', 85, undefined, undefined, undefined, 'Merging PDFs...');
 
     const stateJson = props.getProperty('PDF_BATCH_STATE_' + jobId);
     const state = JSON.parse(stateJson);
@@ -326,10 +450,10 @@ function mergePdfChunksAndFinish(jobId) {
       return file.getBlob();
     });
 
-    // Merge PDFs
-    const mergedPdf = mergePdfBlobsNative(pdfBlobs);
+    // Merge PDFs (use PDFApp to preserve text streams)
+    const mergedPdf = await mergePdfBlobs(pdfBlobs);
 
-    updateJobStatus(jobId, 'RUNNING', 92, undefined, undefined, undefined, 'Sauvegarde sur Drive...');
+    updateJobStatus(jobId, 'RUNNING', 92, undefined, undefined, undefined, 'Saving to Drive...');
 
     // Save final PDF
     const dateFrom = typeof job.date_from === 'string' ? job.date_from : Utilities.formatDate(job.date_from, 'Europe/Paris', 'yyyy-MM-dd');
@@ -339,7 +463,7 @@ function mergePdfChunksAndFinish(jobId) {
     const pdfData = savePdfToFolder(mergedPdf, job.year, fileName);
 
     // Update job status
-    updateJobStatus(jobId, 'DONE', 100, pdfData.fileId, pdfData.url, undefined, 'Terminé !');
+    updateJobStatus(jobId, 'DONE', 100, pdfData.fileId, pdfData.url, undefined, 'Done!');
 
     // Send email notification
     sendPdfReadyEmail(jobId, pdfData.url);
@@ -349,7 +473,7 @@ function mergePdfChunksAndFinish(jobId) {
 
   } catch (error) {
     Logger.log('Error merging PDFs: ' + error.message);
-    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error), 'Erreur lors de la fusion');
+    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error), 'Error during merge');
     cleanupBatchState(jobId);
   }
 }
@@ -517,8 +641,17 @@ function buildMergedPdf(pdfs) {
       // Update references in object body
       let body = obj.body;
 
-      // Replace all object references (N 0 R) with remapped numbers
-      body = body.replace(/(\d+)\s+0\s+R/g, (match, refNum) => {
+      // Avoid touching binary stream data: only rewrite before "stream" if present
+      let preStream = body;
+      let postStream = '';
+      const streamIndex = body.indexOf('stream');
+      if (streamIndex !== -1) {
+        preStream = body.substring(0, streamIndex);
+        postStream = body.substring(streamIndex);
+      }
+
+      // Replace all object references (N 0 R) with remapped numbers in pre-stream only
+      preStream = preStream.replace(/(\d+)\s+0\s+R/g, (match, refNum) => {
         const newRef = objMapping[pdf.index][refNum];
         return newRef ? `${newRef} 0 R` : match;
       });
@@ -527,8 +660,10 @@ function buildMergedPdf(pdfs) {
       const isPage = allPageRefs.includes(newObjNum);
       if (isPage) {
         // Replace /Parent N 0 R with /Parent pagesObjNum 0 R
-        body = body.replace(/\/Parent\s+\d+\s+0\s+R/g, `/Parent ${pagesObjNum} 0 R`);
+        preStream = preStream.replace(/\/Parent\s+\d+\s+0\s+R/g, `/Parent ${pagesObjNum} 0 R`);
       }
+
+      body = preStream + postStream;
 
       // Record xref entry
       xrefEntries[newObjNum] = { offset: outputChunks.length, gen: 0, free: false };
@@ -576,24 +711,24 @@ function sendPdfReadyEmail(jobId, pdfUrl) {
     const job = getJobStatus(jobId);
     if (!job || !job.created_by) return;
 
-    const familyName = getConfigValue('family_name') || 'votre famille';
+    const familyName = getConfigValue('family_name') || 'your family';
 
     MailApp.sendEmail({
       to: job.created_by,
-      subject: `📚 Votre livre de souvenirs est prêt !`,
+      subject: `📚 Your memory book is ready!`,
       htmlBody: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>Votre livre de souvenirs est prêt !</h2>
-          <p>Bonjour,</p>
-          <p>La génération de votre livre de souvenirs des <strong>${familyName}</strong> est terminée.</p>
-          <p>Période : du <strong>${job.date_from}</strong> au <strong>${job.date_to}</strong></p>
+          <h2>Your memory book is ready!</h2>
+          <p>Hello,</p>
+          <p>The generation of your <strong>${familyName}</strong> memory book is complete.</p>
+          <p>Period: from <strong>${job.date_from}</strong> to <strong>${job.date_to}</strong></p>
           <p style="margin: 20px 0;">
             <a href="${pdfUrl}" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px;">
-              📥 Télécharger le PDF
+              📥 Download PDF
             </a>
           </p>
           <p style="color: #666; font-size: 12px;">
-            Ce lien vous donne accès au fichier sur Google Drive.
+            This link gives you access to the file on Google Drive.
           </p>
         </div>
       `
@@ -608,6 +743,9 @@ function sendPdfReadyEmail(jobId, pdfUrl) {
  */
 function cleanupBatchState(jobId) {
   const props = PropertiesService.getScriptProperties();
+  const optionsJson = props.getProperty('PDF_OPTIONS_' + jobId);
+  const pdfOptions = optionsJson ? JSON.parse(optionsJson) : {};
+  const keepTemp = pdfOptions.keepTemp === true || getConfigValue('pdf_keep_temp') === 'true';
 
   try {
     const stateJson = props.getProperty('PDF_BATCH_STATE_' + jobId);
@@ -615,7 +753,7 @@ function cleanupBatchState(jobId) {
       const state = JSON.parse(stateJson);
 
       // Delete temp folder and its contents
-      if (state.tempFolderId) {
+      if (state.tempFolderId && !keepTemp) {
         try {
           const tempFolder = DriveApp.getFolderById(state.tempFolderId);
           tempFolder.setTrashed(true);
@@ -637,16 +775,18 @@ function cleanupBatchState(jobId) {
     // Ignore queue cleanup errors
   }
 
-  // Delete properties
-  props.deleteProperty('PDF_BATCH_STATE_' + jobId);
-  props.deleteProperty('PDF_OPTIONS_' + jobId);
+  if (!keepTemp) {
+    // Delete properties
+    props.deleteProperty('PDF_BATCH_STATE_' + jobId);
+    props.deleteProperty('PDF_OPTIONS_' + jobId);
+  }
 }
 
 // Legacy function for backward compatibility (simple generation without batch)
-function processOnePdfJob(jobId) {
+async function processOnePdfJob(jobId) {
   // Use batch processing instead
   initializeBatchState(jobId);
-  processNextPdfChunk(jobId);
+  await processNextPdfChunk(jobId);
 }
 
 /**
@@ -656,7 +796,7 @@ function groupArticlesByMonth(articles) {
   const articlesByMonth = {};
   articles.forEach((article) => {
     const date = new Date(article.date);
-    const key = `${date.getFullYear()}-${String(date.getMonth()).padStart(2, '0')}`;
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     if (!articlesByMonth[key]) {
       articlesByMonth[key] = [];
     }
@@ -921,6 +1061,11 @@ function getPdfStyles() {
       padding-top: 0.3cm;
     }
 
+    .articles-page .page-number {
+      margin-top: auto;
+      align-self: flex-end;
+    }
+
     .month-divider {
       page-break-before: always;
       position: relative;
@@ -1035,7 +1180,7 @@ function getPdfStyles() {
 /**
  * Merge multiple PDF blobs into one using PDFApp library
  * https://github.com/tanaikech/PDFApp
- * Returns a Promise (use with async/await)
+ * NOTE: Uses async/await; caller must await.
  */
 async function mergePdfBlobs(pdfBlobs) {
   if (pdfBlobs.length === 0) {
@@ -1046,7 +1191,7 @@ async function mergePdfBlobs(pdfBlobs) {
     return pdfBlobs[0];
   }
 
-  // Use PDFApp library to merge PDFs (async)
+  // Use PDFApp library to merge PDFs
   const mergedBlob = await PDFApp.mergePDFs(pdfBlobs);
   mergedBlob.setName('merged.pdf');
 
@@ -1119,7 +1264,7 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
   const articlesByMonth = {};
   articles.forEach((article) => {
     const date = new Date(article.date);
-    const key = `${date.getFullYear()}-${String(date.getMonth()).padStart(2, '0')}`;
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     if (!articlesByMonth[key]) {
       articlesByMonth[key] = [];
     }
@@ -1319,6 +1464,11 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
       padding-top: 0.3cm;
     }
 
+    .articles-page .page-number {
+      margin-top: auto;
+      align-self: flex-end;
+    }
+
     .month-divider {
       page-break-before: always;
       position: relative;
@@ -1478,7 +1628,7 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
   let currentPage = 1; // Start counting from page 2 (after cover)
   for (const monthKey of monthKeys) {
     const [yearStr, monthStr] = monthKey.split('-');
-    const monthIndex = parseInt(monthStr);
+    const monthIndex = parseInt(monthStr, 10) - 1;
     const monthName = monthsFr[monthIndex];
     const monthYear = `${monthName} ${yearStr}`;
 

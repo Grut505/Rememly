@@ -6,13 +6,18 @@ import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { Switch } from '../../ui/Switch'
 import { pdfApi, PdfListItem } from '../../api/pdf'
 import { PdfGenerateModal } from './PdfGenerateModal'
+import { FloatingActionButton } from '../../ui/FloatingActionButton'
 import { usePdfGenerationStore } from '../../stores/pdfGenerationStore'
+import { useAuth } from '../../hooks/useAuth'
+import { useProfile } from '../../contexts/ProfileContext'
 
 type SortField = 'created_at' | 'date_from' | 'created_by'
 type SortOrder = 'asc' | 'desc'
 
 export function PdfExport() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const { profile } = useProfile()
 
   // List state
   const [pdfList, setPdfList] = useState<PdfListItem[]>([])
@@ -124,13 +129,7 @@ export function PdfExport() {
     setPreviousStatuses(newStatuses)
   }, [pdfList, previousStatuses, setLastCompletedJob])
 
-  // Refresh list when PDF generation completes (legacy, keep for now)
-  const showSuccess = usePdfGenerationStore((state) => state.showSuccess)
-  useEffect(() => {
-    if (showSuccess) {
-      loadPdfList()
-    }
-  }, [showSuccess, loadPdfList])
+  // No full refresh on completion; list is updated locally.
 
   // Get unique years from list
   const availableYears = Array.from(
@@ -190,6 +189,16 @@ export function PdfExport() {
     }
   }
 
+  const getAuthorLabel = useCallback((email?: string, pseudo?: string) => {
+    if (pseudo) return pseudo
+    if (!email) return 'Unknown'
+    if (user?.email && profile?.pseudo && email === user.email) {
+      return profile.pseudo
+    }
+    const fromList = pdfList.find(p => p.created_by === email)?.created_by_pseudo
+    return fromList || email.split('@')[0]
+  }, [pdfList, profile?.pseudo, user?.email])
+
   const toggleSelection = (jobId: string) => {
     const newSelected = new Set(selectedIds)
     if (newSelected.has(jobId)) {
@@ -242,9 +251,23 @@ export function PdfExport() {
     }
   }
 
-  const handleGenerateComplete = () => {
+  const handleGenerateComplete = (job: PdfListItem | null) => {
     setShowGenerateModal(false)
-    loadPdfList()
+    if (!job) return
+    setPdfList(prev => {
+      const existingIndex = prev.findIndex(p => p.job_id === job.job_id)
+      if (existingIndex === -1) {
+        return [job, ...prev]
+      }
+      const next = [...prev]
+      next[existingIndex] = { ...next[existingIndex], ...job }
+      return next
+    })
+    setAvailableAuthors(prev => (
+      job.created_by && !prev.includes(job.created_by)
+        ? [...prev, job.created_by]
+        : prev
+    ))
   }
 
   const handleCancelJob = async (jobId: string) => {
@@ -253,7 +276,7 @@ export function PdfExport() {
       await pdfApi.cancel(jobId)
       // Update the local list to reflect cancelled status
       setPdfList(prev => prev.map(p =>
-        p.job_id === jobId ? { ...p, status: 'CANCELLED' as const, progress_message: 'Annulé' } : p
+        p.job_id === jobId ? { ...p, status: 'CANCELLED' as const, progress_message: 'Cancelled' } : p
       ))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to cancel PDF generation')
@@ -283,7 +306,7 @@ export function PdfExport() {
             <div className="w-9 h-9" />
           )}
           <h2 className="text-lg font-semibold text-gray-900 flex-1">
-            {selectionMode ? `${selectedIds.size} sélectionné(s)` : 'PDFs générés'}
+            {selectionMode ? `${selectedIds.size} selected` : 'Generated PDFs'}
           </h2>
 
           <div className="flex items-center gap-4">
@@ -312,7 +335,7 @@ export function PdfExport() {
         <div className="flex items-center gap-2 mt-3 h-11 overflow-x-auto">
           {selectionMode ? (
             <span className="text-sm text-gray-500">
-              Sélectionnez les PDFs à supprimer
+              Select PDFs to delete
             </span>
           ) : (
             <>
@@ -322,7 +345,7 @@ export function PdfExport() {
               onChange={(e) => setFilterYear(e.target.value)}
               className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="">Année</option>
+              <option value="">Year</option>
               {availableYears.map(year => (
                 <option key={year} value={year}>{year}</option>
               ))}
@@ -335,12 +358,12 @@ export function PdfExport() {
                 onChange={(e) => setFilterAuthor(e.target.value)}
                 className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 max-w-32 truncate"
               >
-                <option value="">Auteur</option>
-                {availableAuthors.map(author => (
-                  <option key={author} value={author}>{author.split('@')[0]}</option>
-                ))}
-              </select>
-            )}
+              <option value="">Author</option>
+              {availableAuthors.map(author => (
+                <option key={author} value={author}>{getAuthorLabel(author)}</option>
+              ))}
+            </select>
+          )}
 
             {/* Sort toggle */}
             <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
@@ -359,7 +382,7 @@ export function PdfExport() {
                     : 'bg-white text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                Création
+                Created
                 {sortField === 'created_at' && (
                   <span className="text-[10px]">{sortOrder === 'desc' ? '↓' : '↑'}</span>
                 )}
@@ -379,7 +402,7 @@ export function PdfExport() {
                     : 'bg-white text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                Période
+                Period
                 {sortField === 'date_from' && (
                   <span className="text-[10px]">{sortOrder === 'desc' ? '↓' : '↑'}</span>
                 )}
@@ -399,7 +422,7 @@ export function PdfExport() {
                     : 'bg-white text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                Auteur
+                Author
                 {sortField === 'created_by' && (
                   <span className="text-[10px]">{sortOrder === 'desc' ? '↓' : '↑'}</span>
                 )}
@@ -440,13 +463,13 @@ export function PdfExport() {
               <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
             <p className="text-gray-500 mb-2">
-              {filterYear ? 'Aucun PDF pour cette année' : 'Aucun PDF généré'}
+              {filterYear ? 'No PDFs for this year' : 'No PDFs generated'}
             </p>
             <Button
               onClick={() => setShowGenerateModal(true)}
               variant="primary"
             >
-              Créer mon premier PDF
+              Create my first PDF
             </Button>
           </div>
         ) : (
@@ -455,7 +478,7 @@ export function PdfExport() {
             {inProgressJobs.length > 0 && (
               <div className="mb-6">
                 <h3 className="text-sm font-medium text-gray-500 mb-3">
-                  En cours de génération
+                  Generating
                 </h3>
                 <div className="space-y-3">
                   {inProgressJobs.map((pdf) => (
@@ -486,18 +509,29 @@ export function PdfExport() {
                             </span>
                           </div>
                           <p className="text-xs text-blue-500 mt-0.5">
-                            {pdf.progress_message || 'En attente...'}
+                          {pdf.progress_message || 'Pending...'}
                           </p>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            par {pdf.created_by}
+                            by {getAuthorLabel(pdf.created_by, pdf.created_by_pseudo)}
                           </p>
+                          {pdf.temp_folder_url && (
+                            <a
+                              href={pdf.temp_folder_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-700 mt-0.5 inline-flex"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              Temporary folder
+                            </a>
+                          )}
                         </div>
                         {/* Cancel button */}
                         <button
                           onClick={() => handleCancelJob(pdf.job_id)}
                           disabled={cancellingJobId === pdf.job_id}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                          title="Annuler"
+                          title="Cancel"
                         >
                           {cancellingJobId === pdf.job_id ? (
                             <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -522,7 +556,7 @@ export function PdfExport() {
               <div>
                 {inProgressJobs.length > 0 && (
                   <h3 className="text-sm font-medium text-gray-500 mb-3">
-                    Générés
+                    Generated
                   </h3>
                 )}
                 <div className="space-y-3">
@@ -561,17 +595,17 @@ export function PdfExport() {
                             </p>
                             {pdf.status === 'ERROR' && (
                               <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
-                                Erreur
+                                Error
                               </span>
                             )}
                             {pdf.status === 'CANCELLED' && (
                               <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded">
-                                Annulé
+                                Cancelled
                               </span>
                             )}
                           </div>
                           <p className="text-sm text-gray-500 mt-1">
-                            Créé le {formatDate(pdf.created_at)}
+                            Created on {formatDate(pdf.created_at)}
                           </p>
                           {pdf.status === 'ERROR' && pdf.error_message && (
                             <p className="text-xs text-red-500 mt-0.5 truncate" title={pdf.error_message}>
@@ -579,8 +613,19 @@ export function PdfExport() {
                             </p>
                           )}
                           <p className="text-xs text-gray-400 mt-0.5">
-                            par {pdf.created_by}
+                            by {getAuthorLabel(pdf.created_by, pdf.created_by_pseudo)}
                           </p>
+                          {pdf.temp_folder_url && (
+                            <a
+                              href={pdf.temp_folder_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-700 mt-0.5 inline-flex"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              Temporary folder
+                            </a>
+                          )}
                         </div>
 
                         {/* Actions (only in normal mode) */}
@@ -606,7 +651,7 @@ export function PdfExport() {
                                 setDeleteJobId(pdf.job_id)
                               }}
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Supprimer"
+                              title="Delete"
                             >
                               <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                                 <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -629,13 +674,13 @@ export function PdfExport() {
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 p-4 z-50 shadow-lg">
           <div className="max-w-content mx-auto flex items-center justify-between gap-4">
             <span className="text-sm text-gray-600">
-              {selectedIds.size} PDF{selectedIds.size > 1 ? 's' : ''} sélectionné{selectedIds.size > 1 ? 's' : ''}
+              {selectedIds.size} PDF{selectedIds.size > 1 ? 's' : ''} selected
             </span>
             <button
               onClick={() => setDeleteBulk(true)}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
             >
-              Supprimer
+              Delete
             </button>
           </div>
         </div>
@@ -643,15 +688,19 @@ export function PdfExport() {
 
       {/* FAB to create new PDF */}
       {!selectionMode && (
-        <button
-          onClick={() => setShowGenerateModal(true)}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-primary-600 hover:bg-primary-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-105 active:scale-95 z-30"
-          title="Nouveau PDF"
-        >
-          <svg className="w-7 h-7" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-            <path d="M12 4v16m8-8H4"></path>
-          </svg>
-        </button>
+        <div className="fixed bottom-6 left-0 right-0 z-30">
+          <div className="max-w-content mx-auto px-4 flex justify-end">
+            <FloatingActionButton
+              onClick={() => setShowGenerateModal(true)}
+              className="bg-primary-600 hover:bg-primary-700 active:bg-primary-800 transition-all hover:scale-105 active:scale-95"
+              icon={
+                <svg className="w-8 h-8" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M12 4v16m8-8H4"></path>
+                </svg>
+              }
+            />
+          </div>
+        </div>
       )}
 
       {/* Generate modal */}
@@ -664,10 +713,10 @@ export function PdfExport() {
       {/* Delete single confirmation dialog */}
       <ConfirmDialog
         isOpen={!!deleteJobId}
-        title="Supprimer le PDF ?"
-        message="Le PDF sera définitivement supprimé de Google Drive."
-        confirmLabel="Supprimer"
-        cancelLabel="Annuler"
+        title="Delete PDF?"
+        message="The PDF will be permanently deleted from Google Drive."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
         onConfirm={handleDeleteSingle}
         onCancel={() => setDeleteJobId(null)}
         variant="danger"
@@ -677,10 +726,10 @@ export function PdfExport() {
       {/* Delete bulk confirmation dialog */}
       <ConfirmDialog
         isOpen={deleteBulk}
-        title={`Supprimer ${selectedIds.size} PDF${selectedIds.size > 1 ? 's' : ''} ?`}
-        message="Les PDFs sélectionnés seront définitivement supprimés de Google Drive."
-        confirmLabel="Supprimer"
-        cancelLabel="Annuler"
+        title={`Delete ${selectedIds.size} PDF${selectedIds.size > 1 ? 's' : ''}?`}
+        message="Selected PDFs will be permanently deleted from Google Drive."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
         onConfirm={handleDeleteBulk}
         onCancel={() => setDeleteBulk(false)}
         variant="danger"

@@ -9,21 +9,6 @@ export const CONSTANTS = {
   ARTICLES_PER_PAGE: 5, // Number of articles to load per batch in timeline
 } as const
 
-export const MONTHS_FR = [
-  'Janvier',
-  'Février',
-  'Mars',
-  'Avril',
-  'Mai',
-  'Juin',
-  'Juillet',
-  'Août',
-  'Septembre',
-  'Octobre',
-  'Novembre',
-  'Décembre',
-] as const
-
 export const MONTHS_EN = [
   'January',
   'February',

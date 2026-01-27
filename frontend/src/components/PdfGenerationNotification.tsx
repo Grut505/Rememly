@@ -40,7 +40,7 @@ export function PdfGenerationNotification() {
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-green-800">PDF généré avec succès !</p>
+              <p className="text-sm font-medium text-green-800">PDF generated successfully!</p>
               {lastCompletedJob && (
                 <p className="text-xs text-green-600 mt-0.5">
                   {formatDateRange(lastCompletedJob.date_from, lastCompletedJob.date_to)}
@@ -56,13 +56,13 @@ export function PdfGenerationNotification() {
                   <svg className="w-4 h-4 mr-1" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                     <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
                   </svg>
-                  Voir
+                  View
                 </a>
                 <button
                   onClick={dismissSuccess}
                   className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 rounded-lg transition-colors"
                 >
-                  Fermer
+                  Close
                 </button>
               </div>
             </div>
@@ -88,7 +88,7 @@ export function PdfGenerationNotification() {
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-red-800">Erreur de génération</p>
+              <p className="text-sm font-medium text-red-800">Generation error</p>
               <p className="text-xs text-red-600 mt-0.5">{error}</p>
             </div>
             <button

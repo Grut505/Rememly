@@ -303,7 +303,7 @@ export function FamileoBrowser() {
           {families.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Famille
+                Family
               </label>
               <select
                 value={selectedFamilyId}
@@ -320,11 +320,11 @@ export function FamileoBrowser() {
             </div>
           )}
           {loadingFamilies && (
-            <div className="text-sm text-gray-500">Chargement des familles...</div>
+            <div className="text-sm text-gray-500">Loading families...</div>
           )}
           {!loadingFamilies && families.length === 0 && (
             <div className="text-sm text-amber-600">
-              Aucune famille configurée. Ajoutez des familles dans la sheet "families".
+              No family configured. Add families in the "families" sheet.
             </div>
           )}
 
@@ -442,7 +442,7 @@ export function FamileoBrowser() {
                 className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
               <label htmlFor="hideImported" className="text-sm text-gray-600">
-                Masquer les posts déjà importés ({posts.filter(p => importedPostIds.has(String(p.id))).length})
+                Hide already imported posts ({posts.filter(p => importedPostIds.has(String(p.id))).length})
               </label>
             </div>
           </div>

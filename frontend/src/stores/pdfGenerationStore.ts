@@ -24,12 +24,42 @@ interface PdfGenerationState {
     mosaic_layout?: 'full' | 'centered'
     show_seasonal_fruits?: boolean
     max_mosaic_photos?: number
-  }, onComplete?: () => void) => Promise<void>
+    keep_temp?: boolean
+  }, onComplete?: () => void) => Promise<PdfListItem | null>
   pollJobStatus: (jobId: string) => Promise<void>
   setLastCompletedJob: (job: PdfListItem | null) => void
   dismissSuccess: () => void
   dismissError: () => void
   reset: () => void
+}
+
+const getCurrentUserEmail = (): string => {
+  try {
+    const userJson = localStorage.getItem('user')
+    if (!userJson) return 'me'
+    const user = JSON.parse(userJson)
+    return user.email || 'me'
+  } catch {
+    return 'me'
+  }
+}
+
+const getCurrentUserName = (): string | null => {
+  try {
+    const userJson = localStorage.getItem('user')
+    if (!userJson) return null
+    const user = JSON.parse(userJson)
+    return user.name || null
+  } catch {
+    return null
+  }
+}
+
+const normalizeStatus = (status: string): PdfListItem['status'] => {
+  if (status === 'PENDING' || status === 'RUNNING' || status === 'DONE' || status === 'ERROR' || status === 'CANCELLED') {
+    return status
+  }
+  return 'PENDING'
 }
 
 export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
@@ -48,7 +78,7 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
       isGenerating: true,
       jobId: null,
       progress: 0,
-      progressMessage: 'Démarrage...',
+      progressMessage: 'Starting...',
       error: null,
       pdfUrl: null,
       showSuccess: false,
@@ -63,22 +93,43 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
         options,
       })
 
+      const createdAt = new Date().toISOString()
+      const createdBy = getCurrentUserEmail()
+      const createdByPseudo = getCurrentUserName() || createdBy.split('@')[0]
+      const year = new Date(from).getFullYear()
+      const jobItem: PdfListItem = {
+        job_id: response.job_id,
+        created_at: createdAt,
+        created_by: createdBy,
+        created_by_pseudo: createdByPseudo,
+        year,
+        date_from: from,
+        date_to: to,
+        status: normalizeStatus(response.status),
+        progress: response.progress,
+        progress_message: response.progress_message,
+        pdf_url: response.pdf_url,
+        pdf_file_id: response.pdf_file_id,
+      }
+
       if (response.status === 'DONE' && response.pdf_url) {
         // Rare case: job completed immediately
         set({
           isGenerating: false,
           progress: 100,
-          progressMessage: 'Terminé !',
+          progressMessage: 'Done!',
           pdfUrl: response.pdf_url,
           showSuccess: true,
         })
         if (onComplete) onComplete()
+        return jobItem
       } else if (response.status === 'ERROR') {
         set({
           isGenerating: false,
-          error: 'La génération du PDF a échoué',
+          error: 'PDF generation failed',
           progressMessage: '',
         })
+        return null
       } else {
         // Job started (PENDING)
         // Progress will be shown in the list via polling in PdfExport
@@ -94,13 +145,15 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
 
         // Call onComplete to trigger list refresh (job will appear in list)
         if (onComplete) onComplete()
+        return jobItem
       }
     } catch (err) {
       set({
         isGenerating: false,
-        error: err instanceof Error ? err.message : 'Erreur lors de la génération',
+        error: err instanceof Error ? err.message : 'Error while generating PDF',
         progressMessage: '',
       })
+      return null
     }
   },
 
@@ -127,7 +180,7 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
       } else if (job.status === 'ERROR') {
         set({
           isGenerating: false,
-          error: job.error_message || 'La génération du PDF a échoué',
+          error: job.error_message || 'PDF generation failed',
         })
       } else {
         // Still running, poll again
@@ -136,7 +189,7 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
     } catch (err) {
       set({
         isGenerating: false,
-        error: err instanceof Error ? err.message : 'Erreur lors du suivi',
+        error: err instanceof Error ? err.message : 'Error while tracking job',
       })
     }
   },

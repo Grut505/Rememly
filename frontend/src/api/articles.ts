@@ -34,15 +34,22 @@ export interface ListArticlesFilters {
   month?: string
   from?: string
   to?: string
+  author?: string
   limit?: string
   cursor?: string
   status_filter?: 'active' | 'all' | 'deleted'
   source_filter?: 'all' | 'famileo' | 'local'
 }
 
+export interface ArticlesAuthorsResponse {
+  authors: { email: string; pseudo: string }[]
+}
+
 export const articlesApi = {
   list: (filters?: ListArticlesFilters) =>
     apiClient.get<ListArticlesResponse>('articles/list', filters as Record<string, string | undefined>),
+  authors: (filters?: { status_filter?: 'active' | 'all' | 'deleted'; source_filter?: 'all' | 'famileo' | 'local' }) =>
+    apiClient.get<ArticlesAuthorsResponse>('articles/authors', filters as Record<string, string | undefined>),
 
   get: (id: string) =>
     apiClient.get<Article>('articles/get', { id }),

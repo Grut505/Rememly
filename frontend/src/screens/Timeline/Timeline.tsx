@@ -46,6 +46,9 @@ export function Timeline() {
   const loadingRef = useRef(false)
   const cursorRef = useRef<string | null>(null)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [pullDistance, setPullDistance] = useState(0)
+  const touchStartYRef = useRef<number | null>(null)
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -79,6 +82,13 @@ export function Timeline() {
       setLoading(false)
     }
   }
+
+  const refreshArticles = useCallback(async () => {
+    if (isLoading) return
+    setIsRefreshing(true)
+    await loadArticles()
+    setIsRefreshing(false)
+  }, [isLoading, loadArticles])
 
   const loadMore = useCallback(async () => {
     const currentCursor = cursorRef.current
@@ -204,6 +214,35 @@ export function Timeline() {
     }
   }
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (window.scrollY <= 0 && !isRefreshing && !isLoading) {
+      touchStartYRef.current = e.touches[0].clientY
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartYRef.current === null || isRefreshing || isLoading) return
+    if (window.scrollY > 0) {
+      setPullDistance(0)
+      touchStartYRef.current = null
+      return
+    }
+    const delta = e.touches[0].clientY - touchStartYRef.current
+    if (delta > 0) {
+      setPullDistance(Math.min(delta, 80))
+    } else {
+      setPullDistance(0)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    if (pullDistance >= 50 && !isRefreshing && !isLoading) {
+      refreshArticles()
+    }
+    setPullDistance(0)
+    touchStartYRef.current = null
+  }
+
   // Bulk soft delete (mark as DELETED)
   const handleBulkDelete = async () => {
     setBulkDeleting(true)
@@ -297,7 +336,12 @@ export function Timeline() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div
+      className="min-h-screen flex flex-col"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       <AppHeader />
 
       {/* Year Header with Filter - Fixed */}
@@ -314,24 +358,35 @@ export function Timeline() {
               {selectedIds.size === articles.length ? 'Deselect all' : 'Select all'}
             </button>
           ) : (
-            <button
-              onClick={() => setShowFiltersModal(true)}
-              className={`touch-manipulation flex items-center gap-2 ${
-                hasActiveFilters
-                  ? 'text-white bg-primary-600 hover:bg-primary-700 px-3 py-1.5 rounded-lg font-medium'
-                  : 'text-primary-600 hover:text-primary-700'
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                <path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
-              </svg>
-              Filter
-              {hasActiveFilters && (
-                <span className="ml-1 bg-white text-primary-600 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  !
-                </span>
-              )}
-            </button>
+            <>
+              <button
+                onClick={refreshArticles}
+                className="text-primary-600 hover:text-primary-700 touch-manipulation text-sm font-medium flex items-center gap-2 hidden sm:flex"
+              >
+                <svg className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Refresh
+              </button>
+              <button
+                onClick={() => setShowFiltersModal(true)}
+                className={`touch-manipulation flex items-center gap-2 ${
+                  hasActiveFilters
+                    ? 'text-white bg-primary-600 hover:bg-primary-700 px-3 py-1.5 rounded-lg font-medium'
+                    : 'text-primary-600 hover:text-primary-700'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+                </svg>
+                Filter
+                {hasActiveFilters && (
+                  <span className="ml-1 bg-white text-primary-600 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    !
+                  </span>
+                )}
+              </button>
+            </>
           )}
           {articles.length > 0 && (
             <Switch
@@ -348,6 +403,14 @@ export function Timeline() {
 
       {/* Timeline */}
       <div className="flex-1 pb-20">
+        {pullDistance > 0 && (
+          <div
+            className="flex items-center justify-center text-xs text-gray-500"
+            style={{ height: `${pullDistance}px` }}
+          >
+            {pullDistance >= 50 ? 'Release to refresh' : 'Pull to refresh'}
+          </div>
+        )}
         {articles.length === 0 ? (
           <EmptyState />
         ) : (

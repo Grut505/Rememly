@@ -7,6 +7,7 @@ export interface ArticleFilters {
   month?: string
   from?: string
   to?: string
+  author?: string
   statusFilter?: StatusFilter
   sourceFilter?: SourceFilter
 }
@@ -16,6 +17,7 @@ const defaultFilters: ArticleFilters = {
   month: '',
   from: '',
   to: '',
+  author: '',
   statusFilter: 'active',
   sourceFilter: 'all',
 }

@@ -1,0 +1,30 @@
+{
+  "id": "hero-right-2-4x5",
+  "name": "Hero Right + 2 (4x5)",
+  "aspectRatio": 0.8,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 40,
+      "height": 50
+    },
+    {
+      "x": 40,
+      "y": 0,
+      "width": 60,
+      "height": 100
+    }
+  ],
+  "tags": [
+    "hero",
+    "3-photos",
+    "4x5"
+  ]
+}

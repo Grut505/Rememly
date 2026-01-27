@@ -1,0 +1,60 @@
+{
+  "id": "gallery-8-3x4",
+  "name": "Gallery 8 (3x4)",
+  "aspectRatio": 0.75,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 40
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 50,
+      "height": 40
+    },
+    {
+      "x": 0,
+      "y": 40,
+      "width": 33.33,
+      "height": 30
+    },
+    {
+      "x": 33.33,
+      "y": 40,
+      "width": 33.33,
+      "height": 30
+    },
+    {
+      "x": 66.66,
+      "y": 40,
+      "width": 33.34,
+      "height": 30
+    },
+    {
+      "x": 0,
+      "y": 70,
+      "width": 25,
+      "height": 30
+    },
+    {
+      "x": 25,
+      "y": 70,
+      "width": 25,
+      "height": 30
+    },
+    {
+      "x": 50,
+      "y": 70,
+      "width": 50,
+      "height": 30
+    }
+  ],
+  "tags": [
+    "gallery",
+    "8-photos",
+    "3x4"
+  ]
+}

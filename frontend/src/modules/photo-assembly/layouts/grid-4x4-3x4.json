@@ -1,0 +1,108 @@
+{
+  "id": "grid-4x4-3x4",
+  "name": "Grid 4x4 (3x4)",
+  "aspectRatio": 0.75,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 25,
+      "y": 0,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 75,
+      "y": 0,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 25,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 25,
+      "y": 25,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 50,
+      "y": 25,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 75,
+      "y": 25,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 25,
+      "y": 50,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 50,
+      "y": 50,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 75,
+      "y": 50,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 75,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 25,
+      "y": 75,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 50,
+      "y": 75,
+      "width": 25,
+      "height": 25
+    },
+    {
+      "x": 75,
+      "y": 75,
+      "width": 25,
+      "height": 25
+    }
+  ],
+  "tags": [
+    "grid",
+    "16-photos",
+    "3x4"
+  ]
+}

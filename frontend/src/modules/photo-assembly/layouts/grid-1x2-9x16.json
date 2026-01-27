@@ -1,0 +1,24 @@
+{
+  "id": "grid-1x2-9x16",
+  "name": "Grid 1x2 (9x16)",
+  "aspectRatio": 0.5625,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 100
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 50,
+      "height": 100
+    }
+  ],
+  "tags": [
+    "grid",
+    "2-photos",
+    "9x16"
+  ]
+}

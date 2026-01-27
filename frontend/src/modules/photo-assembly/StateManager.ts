@@ -20,6 +20,7 @@ export class StateManager {
           zoom: 1,
           x: 0,
           y: 0,
+          rotation: 0,
         })),
     }
   }
@@ -37,13 +38,24 @@ export class StateManager {
 
   updateZoneTransform(
     zoneIndex: number,
-    transform: { zoom?: number; x?: number; y?: number }
+    transform: { zoom?: number; x?: number; y?: number; rotation?: number }
   ): void {
     if (zoneIndex >= 0 && zoneIndex < this.state.zoneStates.length) {
       const zone = this.state.zoneStates[zoneIndex]
       if (transform.zoom !== undefined) zone.zoom = transform.zoom
       if (transform.x !== undefined) zone.x = transform.x
       if (transform.y !== undefined) zone.y = transform.y
+      if (transform.rotation !== undefined) zone.rotation = transform.rotation
+    }
+  }
+
+  removePhotoFromZone(zoneIndex: number): void {
+    if (zoneIndex >= 0 && zoneIndex < this.state.zoneStates.length) {
+      this.state.zoneStates[zoneIndex].photoIndex = -1
+      this.state.zoneStates[zoneIndex].zoom = 1
+      this.state.zoneStates[zoneIndex].x = 0
+      this.state.zoneStates[zoneIndex].y = 0
+      this.state.zoneStates[zoneIndex].rotation = 0
     }
   }
 

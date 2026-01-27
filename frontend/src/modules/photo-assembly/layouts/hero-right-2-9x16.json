@@ -1,0 +1,30 @@
+{
+  "id": "hero-right-2-9x16",
+  "name": "Hero Right + 2 (9x16)",
+  "aspectRatio": 0.5625,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 40,
+      "height": 50
+    },
+    {
+      "x": 40,
+      "y": 0,
+      "width": 60,
+      "height": 100
+    }
+  ],
+  "tags": [
+    "hero",
+    "3-photos",
+    "9x16"
+  ]
+}

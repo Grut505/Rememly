@@ -1,0 +1,42 @@
+{
+  "id": "grid-1x5-4x5",
+  "name": "Grid 1x5 (4x5)",
+  "aspectRatio": 0.8,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 20,
+      "height": 100
+    },
+    {
+      "x": 20,
+      "y": 0,
+      "width": 20,
+      "height": 100
+    },
+    {
+      "x": 40,
+      "y": 0,
+      "width": 20,
+      "height": 100
+    },
+    {
+      "x": 60,
+      "y": 0,
+      "width": 20,
+      "height": 100
+    },
+    {
+      "x": 80,
+      "y": 0,
+      "width": 20,
+      "height": 100
+    }
+  ],
+  "tags": [
+    "grid",
+    "5-photos",
+    "4x5"
+  ]
+}

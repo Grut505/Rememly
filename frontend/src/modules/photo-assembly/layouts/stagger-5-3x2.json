@@ -1,0 +1,42 @@
+{
+  "id": "stagger-5-3x2",
+  "name": "Stagger 5 (3x2)",
+  "aspectRatio": 1.5,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 40
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 50,
+      "height": 60
+    },
+    {
+      "x": 0,
+      "y": 40,
+      "width": 50,
+      "height": 60
+    },
+    {
+      "x": 50,
+      "y": 60,
+      "width": 25,
+      "height": 40
+    },
+    {
+      "x": 75,
+      "y": 60,
+      "width": 25,
+      "height": 40
+    }
+  ],
+  "tags": [
+    "mosaic",
+    "5-photos",
+    "3x2"
+  ]
+}

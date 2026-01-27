@@ -24,6 +24,7 @@ export interface ZoneState {
   zoom: number
   x: number
   y: number
+  rotation?: number
 }
 
 export interface PdfJob {

@@ -1,38 +1,55 @@
 import { useRef, useEffect, useState } from 'react'
-import { Template, ZoneDefinition } from './templates'
+import { LayoutTemplate } from './layoutRegistry'
 import { StateManager } from './StateManager'
 import { CONSTANTS } from '../../utils/constants'
 
 interface AssemblyCanvasProps {
-  template: Template
+  template: LayoutTemplate
   stateManager: StateManager
-  onZoneClick: (zoneIndex: number) => void
+  selectedZoneIndex: number | null
+  onZoneSelect: (zoneIndex: number) => void
+  onStateChange: () => void
+  stateVersion: number
 }
 
 export function AssemblyCanvas({
   template,
   stateManager,
-  onZoneClick,
+  selectedZoneIndex,
+  onZoneSelect,
+  onStateChange,
+  stateVersion,
 }: AssemblyCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [images, setImages] = useState<Map<number, HTMLImageElement>>(new Map())
+  const activeZoneRef = useRef<number | null>(null)
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const gestureRef = useRef({
+    startX: 0,
+    startY: 0,
+    startZoom: 1,
+    startDist: 0,
+    startCenter: { x: 0, y: 0 },
+  })
 
   useEffect(() => {
     loadImages()
-  }, [stateManager])
+  }, [stateManager, stateVersion])
 
   useEffect(() => {
     drawCanvas()
-  }, [template, images])
+  }, [template, images, stateVersion, selectedZoneIndex])
 
   const loadImages = async () => {
     const newImages = new Map<number, HTMLImageElement>()
     const state = stateManager.getState()
+    const objectUrls: string[] = []
 
     for (let i = 0; i < state.photos.length; i++) {
       const file = state.photos[i]
       const img = new Image()
       const url = URL.createObjectURL(file)
+      objectUrls.push(url)
 
       await new Promise<void>((resolve) => {
         img.onload = () => {
@@ -44,6 +61,7 @@ export function AssemblyCanvas({
     }
 
     setImages(newImages)
+    objectUrls.forEach((url) => URL.revokeObjectURL(url))
   }
 
   const drawCanvas = () => {
@@ -56,12 +74,12 @@ export function AssemblyCanvas({
     const width = canvas.width
     const height = canvas.height
 
-    // Clear canvas
     ctx.fillStyle = '#f3f4f6'
     ctx.fillRect(0, 0, width, height)
 
-    // Draw zones
+    const colors = ['#2563eb', '#16a34a', '#f97316', '#7c3aed', '#0ea5e9', '#ef4444', '#a855f7']
     const state = stateManager.getState()
+
     template.zones.forEach((zone, index) => {
       const zoneState = state.zoneStates[index]
       const img = images.get(zoneState.photoIndex)
@@ -71,13 +89,14 @@ export function AssemblyCanvas({
       const zoneWidth = (zone.width / 100) * width
       const zoneHeight = (zone.height / 100) * height
 
-      // Draw border
-      ctx.strokeStyle = '#d1d5db'
-      ctx.lineWidth = 2
+      ctx.fillStyle = index === selectedZoneIndex ? 'rgba(37, 99, 235, 0.08)' : 'rgba(255, 255, 255, 0.6)'
+      ctx.fillRect(zoneX, zoneY, zoneWidth, zoneHeight)
+
+      ctx.strokeStyle = index === selectedZoneIndex ? '#2563eb' : colors[index % colors.length]
+      ctx.lineWidth = index === selectedZoneIndex ? 3 : 2
       ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
 
       if (img) {
-        // Apply transformations and draw image
         ctx.save()
         ctx.beginPath()
         ctx.rect(zoneX, zoneY, zoneWidth, zoneHeight)
@@ -86,13 +105,15 @@ export function AssemblyCanvas({
         const scale = zoneState.zoom
         const imgWidth = img.width * scale
         const imgHeight = img.height * scale
-        const imgX = zoneX + zoneState.x + (zoneWidth - imgWidth) / 2
-        const imgY = zoneY + zoneState.y + (zoneHeight - imgHeight) / 2
+        const centerX = zoneX + zoneWidth / 2 + zoneState.x
+        const centerY = zoneY + zoneHeight / 2 + zoneState.y
+        const rotation = (zoneState.rotation || 0) * (Math.PI / 180)
 
-        ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight)
+        ctx.translate(centerX, centerY)
+        ctx.rotate(rotation)
+        ctx.drawImage(img, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight)
         ctx.restore()
       } else {
-        // Draw placeholder
         ctx.fillStyle = '#e5e7eb'
         ctx.fillRect(zoneX + 2, zoneY + 2, zoneWidth - 4, zoneHeight - 4)
         ctx.fillStyle = '#9ca3af'
@@ -101,39 +122,182 @@ export function AssemblyCanvas({
         ctx.font = '14px sans-serif'
         ctx.fillText('+', zoneX + zoneWidth / 2, zoneY + zoneHeight / 2)
       }
+
+      ctx.fillStyle = index === selectedZoneIndex ? '#1d4ed8' : '#6b7280'
+      ctx.font = '12px sans-serif'
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'top'
+      ctx.fillText(`${index + 1}`, zoneX + 6, zoneY + 6)
     })
   }
 
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const getCanvasPoint = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
-    if (!canvas) return
-
+    if (!canvas) return null
     const rect = canvas.getBoundingClientRect()
-    const x = ((e.clientX - rect.left) / rect.width) * 100
-    const y = ((e.clientY - rect.top) / rect.height) * 100
+    const x = ((e.clientX - rect.left) / rect.width) * canvas.width
+    const y = ((e.clientY - rect.top) / rect.height) * canvas.height
+    return { x, y }
+  }
 
-    const clickedZoneIndex = template.zones.findIndex((zone) => {
+  const hitTestZone = (point: { x: number; y: number }) => {
+    const canvas = canvasRef.current
+    if (!canvas) return -1
+    const width = canvas.width
+    const height = canvas.height
+    return template.zones.findIndex((zone) => {
+      const zoneX = (zone.x / 100) * width
+      const zoneY = (zone.y / 100) * height
+      const zoneWidth = (zone.width / 100) * width
+      const zoneHeight = (zone.height / 100) * height
       return (
-        x >= zone.x &&
-        x <= zone.x + zone.width &&
-        y >= zone.y &&
-        y <= zone.y + zone.height
+        point.x >= zoneX &&
+        point.x <= zoneX + zoneWidth &&
+        point.y >= zoneY &&
+        point.y <= zoneY + zoneHeight
       )
     })
+  }
 
-    if (clickedZoneIndex >= 0) {
-      onZoneClick(clickedZoneIndex)
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const point = getCanvasPoint(e)
+    if (!point) return
+
+    const zoneIndex = hitTestZone(point)
+    if (zoneIndex < 0) return
+
+    onZoneSelect(zoneIndex)
+
+    const zoneState = stateManager.getState().zoneStates[zoneIndex]
+    if (zoneState.photoIndex < 0) return
+
+    activeZoneRef.current = zoneIndex
+
+    const pointers = pointersRef.current
+    pointers.set(e.pointerId, { x: point.x, y: point.y })
+    ;(e.target as HTMLCanvasElement).setPointerCapture(e.pointerId)
+    const gesture = gestureRef.current
+
+    if (pointers.size === 1) {
+      gesture.startX = zoneState.x
+      gesture.startY = zoneState.y
+      gesture.startZoom = zoneState.zoom
+      gesture.startCenter = { x: point.x, y: point.y }
+    } else if (pointers.size === 2) {
+      const points = Array.from(pointers.values())
+      const dx = points[0].x - points[1].x
+      const dy = points[0].y - points[1].y
+      gesture.startDist = Math.hypot(dx, dy)
+      gesture.startCenter = {
+        x: (points[0].x + points[1].x) / 2,
+        y: (points[0].y + points[1].y) / 2,
+      }
+      gesture.startX = zoneState.x
+      gesture.startY = zoneState.y
+      gesture.startZoom = zoneState.zoom
     }
   }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const point = getCanvasPoint(e)
+    if (!point) return
+
+    const zoneIndex = activeZoneRef.current
+    if (zoneIndex === null) return
+
+    const pointers = pointersRef.current
+    if (!pointers.has(e.pointerId)) return
+    pointers.set(e.pointerId, { x: point.x, y: point.y })
+
+    const gesture = gestureRef.current
+
+    if (pointers.size === 1) {
+      const dx = point.x - gesture.startCenter.x
+      const dy = point.y - gesture.startCenter.y
+      stateManager.updateZoneTransform(zoneIndex, {
+        x: gesture.startX + dx,
+        y: gesture.startY + dy,
+      })
+    } else if (pointers.size === 2) {
+      const points = Array.from(pointers.values())
+      const dx = points[0].x - points[1].x
+      const dy = points[0].y - points[1].y
+      const newDist = Math.hypot(dx, dy)
+      const scale = gesture.startDist > 0 ? newDist / gesture.startDist : 1
+      const center = {
+        x: (points[0].x + points[1].x) / 2,
+        y: (points[0].y + points[1].y) / 2,
+      }
+      const moveDx = center.x - gesture.startCenter.x
+      const moveDy = center.y - gesture.startCenter.y
+      stateManager.updateZoneTransform(zoneIndex, {
+        zoom: Math.min(5, Math.max(0.5, gesture.startZoom * scale)),
+        x: gesture.startX + moveDx,
+        y: gesture.startY + moveDy,
+      })
+    }
+
+    onStateChange()
+    drawCanvas()
+  }
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const pointers = pointersRef.current
+    if (!pointers.has(e.pointerId)) return
+    pointers.delete(e.pointerId)
+
+    if (pointers.size === 1) {
+      const remaining = Array.from(pointers.values())[0]
+      const zoneIndex = activeZoneRef.current
+      if (zoneIndex !== null) {
+        const zoneState = stateManager.getState().zoneStates[zoneIndex]
+        gestureRef.current = {
+          startX: zoneState.x,
+          startY: zoneState.y,
+          startZoom: zoneState.zoom,
+          startDist: 0,
+          startCenter: { x: remaining.x, y: remaining.y },
+        }
+      }
+    }
+
+    if (pointers.size === 0) {
+      activeZoneRef.current = null
+    }
+  }
+
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    if (selectedZoneIndex === null) return
+    const zoneState = stateManager.getState().zoneStates[selectedZoneIndex]
+    if (zoneState.photoIndex < 0) return
+    e.preventDefault()
+    const delta = e.deltaY
+    const step = delta > 0 ? -0.1 : 0.1
+    const nextZoom = Math.min(5, Math.max(0.5, zoneState.zoom + step))
+    stateManager.updateZoneTransform(selectedZoneIndex, { zoom: nextZoom })
+    onStateChange()
+    drawCanvas()
+  }
+
+  const canvasWidth = Math.round(
+    CONSTANTS.TARGET_IMAGE_WIDTH_PX * Math.min(1, template.aspectRatio)
+  )
+  const canvasHeight = Math.round(
+    CONSTANTS.TARGET_IMAGE_WIDTH_PX / Math.max(1, template.aspectRatio)
+  )
 
   return (
     <div className="w-full bg-gray-100 rounded-lg overflow-hidden">
       <canvas
         ref={canvasRef}
-        width={CONSTANTS.TARGET_IMAGE_WIDTH_PX}
-        height={CONSTANTS.TARGET_IMAGE_WIDTH_PX}
-        onClick={handleCanvasClick}
-        className="w-full h-auto cursor-pointer touch-manipulation"
+        width={canvasWidth}
+        height={canvasHeight}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onWheel={handleWheel}
+        className="w-full h-auto cursor-pointer touch-none"
       />
     </div>
   )

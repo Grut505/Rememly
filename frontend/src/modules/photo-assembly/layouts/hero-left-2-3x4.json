@@ -1,0 +1,30 @@
+{
+  "id": "hero-left-2-3x4",
+  "name": "Hero Left + 2 (3x4)",
+  "aspectRatio": 0.75,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 60,
+      "height": 100
+    },
+    {
+      "x": 60,
+      "y": 0,
+      "width": 40,
+      "height": 50
+    },
+    {
+      "x": 60,
+      "y": 50,
+      "width": 40,
+      "height": 50
+    }
+  ],
+  "tags": [
+    "hero",
+    "3-photos",
+    "3x4"
+  ]
+}

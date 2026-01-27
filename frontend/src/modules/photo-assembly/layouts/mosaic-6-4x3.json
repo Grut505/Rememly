@@ -1,0 +1,48 @@
+{
+  "id": "mosaic-6-4x3",
+  "name": "Mosaic 6 (4x3)",
+  "aspectRatio": 1.3333,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 50
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 50,
+      "height": 25
+    },
+    {
+      "x": 50,
+      "y": 25,
+      "width": 50,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 25,
+      "height": 50
+    },
+    {
+      "x": 25,
+      "y": 50,
+      "width": 25,
+      "height": 50
+    },
+    {
+      "x": 50,
+      "y": 50,
+      "width": 50,
+      "height": 50
+    }
+  ],
+  "tags": [
+    "mosaic",
+    "6-photos",
+    "4x3"
+  ]
+}

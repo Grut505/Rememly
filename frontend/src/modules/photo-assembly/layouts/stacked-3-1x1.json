@@ -1,0 +1,30 @@
+{
+  "id": "stacked-3-1x1",
+  "name": "Stacked 3 (1x1)",
+  "aspectRatio": 1,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 33.33
+    },
+    {
+      "x": 0,
+      "y": 33.33,
+      "width": 100,
+      "height": 33.33
+    },
+    {
+      "x": 0,
+      "y": 66.66,
+      "width": 100,
+      "height": 33.34
+    }
+  ],
+  "tags": [
+    "stacked",
+    "3-photos",
+    "1x1"
+  ]
+}

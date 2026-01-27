@@ -1,0 +1,24 @@
+{
+  "id": "grid-2x1-3x4",
+  "name": "Grid 2x1 (3x4)",
+  "aspectRatio": 0.75,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 100,
+      "height": 50
+    }
+  ],
+  "tags": [
+    "grid",
+    "2-photos",
+    "3x4"
+  ]
+}

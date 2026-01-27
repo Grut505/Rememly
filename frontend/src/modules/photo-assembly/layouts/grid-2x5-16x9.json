@@ -1,0 +1,72 @@
+{
+  "id": "grid-2x5-16x9",
+  "name": "Grid 2x5 (16x9)",
+  "aspectRatio": 1.7778,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 20,
+      "height": 50
+    },
+    {
+      "x": 20,
+      "y": 0,
+      "width": 20,
+      "height": 50
+    },
+    {
+      "x": 40,
+      "y": 0,
+      "width": 20,
+      "height": 50
+    },
+    {
+      "x": 60,
+      "y": 0,
+      "width": 20,
+      "height": 50
+    },
+    {
+      "x": 80,
+      "y": 0,
+      "width": 20,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 20,
+      "height": 50
+    },
+    {
+      "x": 20,
+      "y": 50,
+      "width": 20,
+      "height": 50
+    },
+    {
+      "x": 40,
+      "y": 50,
+      "width": 20,
+      "height": 50
+    },
+    {
+      "x": 60,
+      "y": 50,
+      "width": 20,
+      "height": 50
+    },
+    {
+      "x": 80,
+      "y": 50,
+      "width": 20,
+      "height": 50
+    }
+  ],
+  "tags": [
+    "grid",
+    "10-photos",
+    "16x9"
+  ]
+}

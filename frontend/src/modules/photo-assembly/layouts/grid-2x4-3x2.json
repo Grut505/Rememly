@@ -1,0 +1,60 @@
+{
+  "id": "grid-2x4-3x2",
+  "name": "Grid 2x4 (3x2)",
+  "aspectRatio": 1.5,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 25,
+      "height": 50
+    },
+    {
+      "x": 25,
+      "y": 0,
+      "width": 25,
+      "height": 50
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 25,
+      "height": 50
+    },
+    {
+      "x": 75,
+      "y": 0,
+      "width": 25,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 25,
+      "height": 50
+    },
+    {
+      "x": 25,
+      "y": 50,
+      "width": 25,
+      "height": 50
+    },
+    {
+      "x": 50,
+      "y": 50,
+      "width": 25,
+      "height": 50
+    },
+    {
+      "x": 75,
+      "y": 50,
+      "width": 25,
+      "height": 50
+    }
+  ],
+  "tags": [
+    "grid",
+    "8-photos",
+    "3x2"
+  ]
+}

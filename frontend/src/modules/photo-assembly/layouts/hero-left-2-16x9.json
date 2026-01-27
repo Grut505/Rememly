@@ -1,0 +1,30 @@
+{
+  "id": "hero-left-2-16x9",
+  "name": "Hero Left + 2 (16x9)",
+  "aspectRatio": 1.7778,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 60,
+      "height": 100
+    },
+    {
+      "x": 60,
+      "y": 0,
+      "width": 40,
+      "height": 50
+    },
+    {
+      "x": 60,
+      "y": 50,
+      "width": 40,
+      "height": 50
+    }
+  ],
+  "tags": [
+    "hero",
+    "3-photos",
+    "16x9"
+  ]
+}

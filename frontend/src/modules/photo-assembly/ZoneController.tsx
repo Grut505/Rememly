@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { StateManager } from './StateManager'
 
 interface ZoneControllerProps {
@@ -6,6 +6,9 @@ interface ZoneControllerProps {
   stateManager: StateManager
   onUpdate: () => void
   onClose: () => void
+  onAddPhoto: (zoneIndex: number) => void
+  onFitPhoto: (zoneIndex: number) => void
+  onCenterPhoto: (zoneIndex: number) => void
 }
 
 export function ZoneController({
@@ -13,11 +16,20 @@ export function ZoneController({
   stateManager,
   onUpdate,
   onClose,
+  onAddPhoto,
+  onFitPhoto,
+  onCenterPhoto,
 }: ZoneControllerProps) {
   const state = stateManager.getState()
   const zoneState = state.zoneStates[zoneIndex]
 
   const [zoom, setZoom] = useState(zoneState.zoom)
+  const [rotation, setRotation] = useState(zoneState.rotation || 0)
+
+  useEffect(() => {
+    setZoom(zoneState.zoom)
+    setRotation(zoneState.rotation || 0)
+  }, [zoneState.zoom, zoneState.rotation, zoneIndex])
 
   const handleZoomChange = (newZoom: number) => {
     setZoom(newZoom)
@@ -26,8 +38,23 @@ export function ZoneController({
   }
 
   const handleReset = () => {
-    stateManager.updateZoneTransform(zoneIndex, { zoom: 1, x: 0, y: 0 })
+    stateManager.updateZoneTransform(zoneIndex, { zoom: 1, x: 0, y: 0, rotation: 0 })
     setZoom(1)
+    setRotation(0)
+    onUpdate()
+  }
+
+  const handleRotate = (direction: 'left' | 'right') => {
+    const next = (rotation + (direction === 'left' ? -90 : 90) + 360) % 360
+    setRotation(next)
+    stateManager.updateZoneTransform(zoneIndex, { rotation: next })
+    onUpdate()
+  }
+
+  const handleRemovePhoto = () => {
+    stateManager.removePhotoFromZone(zoneIndex)
+    setZoom(1)
+    setRotation(0)
     onUpdate()
   }
 
@@ -46,6 +73,36 @@ export function ZoneController({
           </button>
         </div>
 
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => onAddPhoto(zoneIndex)}
+            className="px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700"
+          >
+            Ajouter / Remplacer
+          </button>
+          <button
+            onClick={handleRemovePhoto}
+            className="px-3 py-2 rounded-lg bg-gray-200 text-gray-900 text-sm font-medium hover:bg-gray-300"
+          >
+            Retirer
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => onFitPhoto(zoneIndex)}
+            className="px-3 py-2 rounded-lg bg-gray-200 text-gray-900 text-sm font-medium hover:bg-gray-300"
+          >
+            Auto-fit
+          </button>
+          <button
+            onClick={() => onCenterPhoto(zoneIndex)}
+            className="px-3 py-2 rounded-lg bg-gray-200 text-gray-900 text-sm font-medium hover:bg-gray-300"
+          >
+            Centrer
+          </button>
+        </div>
+
         <div>
           <label className="block text-sm text-gray-600 mb-2">
             Zoom: {zoom.toFixed(1)}x
@@ -53,12 +110,27 @@ export function ZoneController({
           <input
             type="range"
             min="0.5"
-            max="3"
+            max="5"
             step="0.1"
             value={zoom}
             onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
             className="w-full"
           />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleRotate('left')}
+            className="flex-1 px-3 py-2 rounded-lg bg-gray-200 text-gray-900 text-sm font-medium hover:bg-gray-300"
+          >
+            Tourner -90°
+          </button>
+          <button
+            onClick={() => handleRotate('right')}
+            className="flex-1 px-3 py-2 rounded-lg bg-gray-200 text-gray-900 text-sm font-medium hover:bg-gray-300"
+          >
+            Tourner +90°
+          </button>
         </div>
 
         <button

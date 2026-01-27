@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../../ui/AppHeader'
 import { Button } from '../../ui/Button'
+import { LoadingScreen } from '../../ui/Spinner'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { Switch } from '../../ui/Switch'
 import { pdfApi, PdfListItem } from '../../api/pdf'
@@ -454,9 +455,7 @@ export function PdfExport() {
       {/* List content */}
       <div className="flex-1 p-4 pb-24">
         {loadingList ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-          </div>
+          <LoadingScreen message="Loading PDFs..." />
         ) : inProgressJobs.length === 0 && filteredList.length === 0 ? (
           <div className="text-center py-12">
             <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24" stroke="currentColor">
@@ -688,7 +687,7 @@ export function PdfExport() {
 
       {/* FAB to create new PDF */}
       {!selectionMode && (
-        <div className="fixed bottom-6 left-0 right-0 z-30">
+        <div className="fixed bottom-20 left-0 right-0 z-30">
           <div className="max-w-content mx-auto px-4 flex justify-end">
             <FloatingActionButton
               onClick={() => setShowGenerateModal(true)}

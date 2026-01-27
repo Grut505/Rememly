@@ -135,10 +135,6 @@ export function Statistics() {
     navigate('/')
   }
 
-  if (isLoading) {
-    return <LoadingScreen message="Loading statistics..." />
-  }
-
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
@@ -168,106 +164,110 @@ export function Statistics() {
 
       {/* Content */}
       <div className="flex-1 p-4 pb-20">
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">
-            Year breakdown
-          </h2>
+        {isLoading ? (
+          <LoadingScreen message="Loading statistics..." />
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Year breakdown
+            </h2>
 
-          <div className="space-y-3">
-            {years.map((year) => {
-              const isSelected = selectedYear === year.year
-              return (
-                <div key={year.year} className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50">
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedYear(isSelected ? null : year.year)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          setSelectedYear(isSelected ? null : year.year)
-                        }
-                      }}
-                      className="flex-1 min-w-0"
-                    >
-                      <div className="text-base font-semibold text-gray-900">
-                        {year.year}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-0.5">
-                        {year.total} total • {year.active} active • {year.deleted} deleted
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => openYear(year.year, 'active')}
-                        className="text-xs font-medium text-primary-600 hover:text-primary-700"
-                      >
-                        View active
-                      </button>
-                      <span className="text-gray-300">|</span>
-                      <button
-                        onClick={() => openYear(year.year, 'deleted')}
-                        className="text-xs font-medium text-red-600 hover:text-red-700"
-                      >
-                        View deleted
-                      </button>
-                      <span className="text-gray-300">|</span>
-                      <button
+            <div className="space-y-3">
+              {years.map((year) => {
+                const isSelected = selectedYear === year.year
+                return (
+                  <div key={year.year} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50">
+                      <div
+                        role="button"
+                        tabIndex={0}
                         onClick={() => setSelectedYear(isSelected ? null : year.year)}
-                        className="text-xs font-medium text-gray-600 hover:text-gray-800"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            setSelectedYear(isSelected ? null : year.year)
+                          }
+                        }}
+                        className="flex-1 min-w-0"
                       >
-                        {isSelected ? 'Hide months' : 'Show months'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {isSelected && (
-                    <div className="px-4 pb-3">
-                      <div className="mt-2 space-y-2">
-                        {year.months.map((month) => (
-                          <div
-                            key={`${year.year}-${month.monthIndex}`}
-                            className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0"
-                          >
-                            <div>
-                              <div className="text-sm text-gray-900">
-                                {month.monthName}
-                              </div>
-                              <div className="text-xs text-gray-500 mt-0.5">
-                                {month.total} total • {month.active} active • {month.deleted} deleted
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => openMonth(year.year, month.monthIndex, 'active')}
-                                className="text-xs font-medium text-primary-600 hover:text-primary-700"
-                              >
-                                View active
-                              </button>
-                              <span className="text-gray-300">|</span>
-                              <button
-                                onClick={() => openMonth(year.year, month.monthIndex, 'deleted')}
-                                className="text-xs font-medium text-red-600 hover:text-red-700"
-                              >
-                                View deleted
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        {year.months.length === 0 && (
-                          <div className="text-sm text-gray-500">No months found</div>
-                        )}
+                        <div className="text-base font-semibold text-gray-900">
+                          {year.year}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {year.total} total • {year.active} active • {year.deleted} deleted
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => openYear(year.year, 'active')}
+                          className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                        >
+                          View active
+                        </button>
+                        <span className="text-gray-300">|</span>
+                        <button
+                          onClick={() => openYear(year.year, 'deleted')}
+                          className="text-xs font-medium text-red-600 hover:text-red-700"
+                        >
+                          View deleted
+                        </button>
+                        <span className="text-gray-300">|</span>
+                        <button
+                          onClick={() => setSelectedYear(isSelected ? null : year.year)}
+                          className="text-xs font-medium text-gray-600 hover:text-gray-800"
+                        >
+                          {isSelected ? 'Hide months' : 'Show months'}
+                        </button>
                       </div>
                     </div>
-                  )}
-                </div>
-              )
-            })}
-            {years.length === 0 && (
-              <div className="text-sm text-gray-500">No statistics available</div>
-            )}
+
+                    {isSelected && (
+                      <div className="px-4 pb-3">
+                        <div className="mt-2 space-y-2">
+                          {year.months.map((month) => (
+                            <div
+                              key={`${year.year}-${month.monthIndex}`}
+                              className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0"
+                            >
+                              <div>
+                                <div className="text-sm text-gray-900">
+                                  {month.monthName}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-0.5">
+                                  {month.total} total • {month.active} active • {month.deleted} deleted
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => openMonth(year.year, month.monthIndex, 'active')}
+                                  className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                                >
+                                  View active
+                                </button>
+                                <span className="text-gray-300">|</span>
+                                <button
+                                  onClick={() => openMonth(year.year, month.monthIndex, 'deleted')}
+                                  className="text-xs font-medium text-red-600 hover:text-red-700"
+                                >
+                                  View deleted
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                          {year.months.length === 0 && (
+                            <div className="text-sm text-gray-500">No months found</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              {years.length === 0 && (
+                <div className="text-sm text-gray-500">No statistics available</div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

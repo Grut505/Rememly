@@ -183,7 +183,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
         </div>
 
         {/* Date Range */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             type="date"
             label="From"
@@ -196,6 +196,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
               }
             }}
             max={dateTo || undefined}
+            className="min-w-0"
           />
           <Input
             type="date"
@@ -209,6 +210,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
               }
             }}
             min={dateFrom || undefined}
+            className="min-w-0"
           />
         </div>
 

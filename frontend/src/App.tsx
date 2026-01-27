@@ -13,6 +13,7 @@ import { PdfExport } from './screens/PdfExport/PdfExport'
 import { Settings } from './screens/Settings/Settings'
 import { UpdatePrompt } from './components/UpdatePrompt'
 import { PdfGenerationNotification } from './components/PdfGenerationNotification'
+import { BottomNav } from './ui/BottomNav'
 
 function App() {
   return (
@@ -98,6 +99,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
+      <BottomNav />
       </ProfileProvider>
     </AuthProvider>
   )

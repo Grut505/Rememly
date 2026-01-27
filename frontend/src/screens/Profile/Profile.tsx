@@ -186,7 +186,7 @@ export function Profile() {
       </div>
 
       {/* Actions */}
-      <div className="bg-white border-t border-gray-200 p-4 space-y-2 sticky bottom-0">
+      <div className="bg-white border-t border-gray-200 p-4 space-y-2 sticky bottom-16">
         <Button
           onClick={handleSave}
           disabled={isSaving || !pseudo.trim()}

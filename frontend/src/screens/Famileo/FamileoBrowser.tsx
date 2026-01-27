@@ -280,7 +280,7 @@ export function FamileoBrowser() {
                 <path d="M15 19l-7-7 7-7"></path>
               </svg>
             </button>
-            <h2 className="text-lg font-semibold text-gray-900">Famileo Scraper</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Famileo Extractor</h2>
           </div>
           <button
             onClick={handleRefreshSession}

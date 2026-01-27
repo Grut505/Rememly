@@ -70,6 +70,7 @@ export function Timeline() {
         month: filters.month,
         from: filters.from,
         to: filters.to,
+        author: filters.author,
         limit: String(CONSTANTS.ARTICLES_PER_PAGE),
         status_filter: filters.statusFilter || 'active',
         source_filter: filters.sourceFilter || 'all',
@@ -104,6 +105,7 @@ export function Timeline() {
         month: filters.month,
         from: filters.from,
         to: filters.to,
+        author: filters.author,
         cursor: currentCursor,
         limit: String(CONSTANTS.ARTICLES_PER_PAGE),
         status_filter: filters.statusFilter || 'active',
@@ -145,14 +147,15 @@ export function Timeline() {
     console.log('Applying filters:', filterValues)
     // Clear articles first to show loading state
     setArticles([])
-    setFilters({
-      year: filterValues.year,
-      month: filterValues.month,
-      from: filterValues.dateFrom,
-      to: filterValues.dateTo,
-      statusFilter: filterValues.statusFilter,
-      sourceFilter: filterValues.sourceFilter,
-    })
+      setFilters({
+        year: filterValues.year,
+        month: filterValues.month,
+        from: filterValues.dateFrom,
+        to: filterValues.dateTo,
+        author: filterValues.author,
+        statusFilter: filterValues.statusFilter,
+        sourceFilter: filterValues.sourceFilter,
+      })
   }
 
   const handleArticleDeleted = (id: string) => {
@@ -305,6 +308,7 @@ export function Timeline() {
     filters.month ||
     filters.from ||
     filters.to ||
+    filters.author ||
     (filters.statusFilter && filters.statusFilter !== 'active') ||
     (filters.sourceFilter && filters.sourceFilter !== 'all')
 
@@ -314,6 +318,7 @@ export function Timeline() {
     month: filters.month || '',
     dateFrom: filters.from || '',
     dateTo: filters.to || '',
+    author: filters.author || '',
     statusFilter: filters.statusFilter || 'active',
     sourceFilter: filters.sourceFilter || 'all',
   }
@@ -321,7 +326,7 @@ export function Timeline() {
   useEffect(() => {
     console.log('Filters changed, reloading articles:', filters)
     loadArticles()
-  }, [filters.year, filters.month, filters.from, filters.to, filters.statusFilter, filters.sourceFilter])
+  }, [filters.year, filters.month, filters.from, filters.to, filters.author, filters.statusFilter, filters.sourceFilter])
 
   if (isLoading && articles.length === 0) {
     return <LoadingScreen message="Loading articles..." />

@@ -10,6 +10,7 @@ function handleArticlesList(params) {
   const month = params.month ? params.month : null;
   const from = params.from ? new Date(params.from) : null;
   const to = params.to ? new Date(params.to) : null;
+  const author = params.author ? params.author : null;
   const limit = params.limit ? parseInt(params.limit) : 40;
   const cursor = params.cursor ? parseInt(params.cursor) : 0; // Offset-based cursor
   const statusFilter = params.status_filter || 'active'; // 'active', 'all', or 'deleted'
@@ -73,6 +74,11 @@ function handleArticlesList(params) {
       continue;
     }
 
+    // Filter by author (email)
+    if (author && article.auteur !== author) {
+      continue;
+    }
+
     articles.push(article);
   }
 
@@ -91,6 +97,57 @@ function handleArticlesList(params) {
     data: {
       items: paginatedArticles,
       next_cursor: hasMore ? String(nextOffset) : null,
+    },
+  });
+}
+
+function handleArticlesAuthors(params) {
+  const sheet = getArticlesSheet();
+  const data = sheet.getDataRange().getValues();
+  const statusFilter = params.status_filter || 'all';
+  const sourceFilter = params.source_filter || 'all';
+  const userPseudoCache = buildUserPseudoCache();
+
+  const authorsMap = {};
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const status = row[8];
+    const famileoPostId = row[9];
+    const email = row[2];
+
+    if (!email) continue;
+
+    if (statusFilter === 'active' && status === 'DELETED') {
+      continue;
+    }
+    if (statusFilter === 'deleted' && status !== 'DELETED') {
+      continue;
+    }
+
+    if (sourceFilter === 'famileo' && !famileoPostId) {
+      continue;
+    }
+    if (sourceFilter === 'local' && famileoPostId) {
+      continue;
+    }
+
+    if (!authorsMap[email]) {
+      authorsMap[email] = {
+        email: email,
+        pseudo: userPseudoCache[email] || email.split('@')[0],
+      };
+    }
+  }
+
+  const authors = Object.values(authorsMap).sort((a, b) => {
+    return String(a.pseudo || '').localeCompare(String(b.pseudo || ''));
+  });
+
+  return createResponse({
+    ok: true,
+    data: {
+      authors: authors,
     },
   });
 }

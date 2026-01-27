@@ -36,6 +36,9 @@ function doPost(e) {
       case 'articles/list':
         return handleArticlesList(params);
 
+      case 'articles/authors':
+        return handleArticlesAuthors(params);
+
       case 'articles/get':
         return handleArticleGet(params.id);
 

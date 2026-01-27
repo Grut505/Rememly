@@ -3,12 +3,14 @@ import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 import { MONTHS_EN } from '../../utils/constants'
 import { getCurrentYear } from '../../utils/date'
+import { articlesApi } from '../../api/articles'
 
 const DEFAULT_FILTERS: FilterValues = {
   year: '',
   month: '',
   dateFrom: '',
   dateTo: '',
+  author: '',
   statusFilter: 'active',
   sourceFilter: 'all',
 }
@@ -27,6 +29,7 @@ export interface FilterValues {
   month: string
   dateFrom: string
   dateTo: string
+  author: string
   statusFilter: StatusFilter
   sourceFilter: SourceFilter
 }
@@ -36,8 +39,11 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
   const [month, setMonth] = useState(initialFilters?.month ?? DEFAULT_FILTERS.month)
   const [dateFrom, setDateFrom] = useState(initialFilters?.dateFrom ?? DEFAULT_FILTERS.dateFrom)
   const [dateTo, setDateTo] = useState(initialFilters?.dateTo ?? DEFAULT_FILTERS.dateTo)
+  const [author, setAuthor] = useState(initialFilters?.author ?? DEFAULT_FILTERS.author)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilters?.statusFilter ?? DEFAULT_FILTERS.statusFilter)
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialFilters?.sourceFilter ?? DEFAULT_FILTERS.sourceFilter)
+  const [authors, setAuthors] = useState<{ email: string; pseudo: string }[]>([])
+  const [loadingAuthors, setLoadingAuthors] = useState(false)
 
   useEffect(() => {
     if (initialFilters) {
@@ -45,13 +51,42 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
       setMonth(initialFilters.month ?? DEFAULT_FILTERS.month)
       setDateFrom(initialFilters.dateFrom ?? DEFAULT_FILTERS.dateFrom)
       setDateTo(initialFilters.dateTo ?? DEFAULT_FILTERS.dateTo)
+      setAuthor(initialFilters.author ?? DEFAULT_FILTERS.author)
       setStatusFilter(initialFilters.statusFilter ?? DEFAULT_FILTERS.statusFilter)
       setSourceFilter(initialFilters.sourceFilter ?? DEFAULT_FILTERS.sourceFilter)
     }
   }, [initialFilters])
 
+  useEffect(() => {
+    let isMounted = true
+    const loadAuthors = async () => {
+      setLoadingAuthors(true)
+      try {
+        const response = await articlesApi.authors({
+          status_filter: statusFilter,
+          source_filter: sourceFilter,
+        })
+        if (isMounted) {
+          setAuthors(response.authors || [])
+        }
+      } catch {
+        if (isMounted) {
+          setAuthors([])
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingAuthors(false)
+        }
+      }
+    }
+    loadAuthors()
+    return () => {
+      isMounted = false
+    }
+  }, [statusFilter, sourceFilter])
+
   const handleApply = () => {
-    onApply({ year, month, dateFrom, dateTo, statusFilter, sourceFilter })
+    onApply({ year, month, dateFrom, dateTo, author, statusFilter, sourceFilter })
     onClose()
   }
 
@@ -60,6 +95,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
     setMonth(DEFAULT_FILTERS.month)
     setDateFrom(DEFAULT_FILTERS.dateFrom)
     setDateTo(DEFAULT_FILTERS.dateTo)
+    setAuthor(DEFAULT_FILTERS.author)
     setStatusFilter(DEFAULT_FILTERS.statusFilter)
     setSourceFilter(DEFAULT_FILTERS.sourceFilter)
     onApply(DEFAULT_FILTERS)
@@ -121,6 +157,28 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
           </select>
           {!year && (
             <p className="text-xs text-gray-500 mt-1">Select a year first</p>
+          )}
+        </div>
+
+        {/* Author */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Author
+          </label>
+          <select
+            value={author}
+            onChange={(e) => setAuthor(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All authors</option>
+            {authors.map((a) => (
+              <option key={a.email} value={a.email}>
+                {a.pseudo || a.email.split('@')[0]}
+              </option>
+            ))}
+          </select>
+          {loadingAuthors && (
+            <p className="text-xs text-gray-500 mt-1">Loading authors...</p>
           )}
         </div>
 
@@ -250,6 +308,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
             </Button>
           </div>
         </div>
+
       </div>
     </>
   )

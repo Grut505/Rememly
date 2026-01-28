@@ -47,6 +47,11 @@ scripts/famileo-refresh/cookies.json
 scripts/famileo-refresh/error-screenshot.png
 scripts/famileo-refresh/node_modules/
 
+# PDF merge (local artifacts / secrets)
+scripts/*.pdf
+scripts/credentials.json
+scripts/token.json
+
 # Docs
 TODO.md
 

@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../../ui/AppHeader'
 import { Button } from '../../ui/Button'
-import { LoadingScreen } from '../../ui/Spinner'
+import { Spinner } from '../../ui/Spinner'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { Switch } from '../../ui/Switch'
 import { pdfApi, PdfListItem } from '../../api/pdf'
@@ -16,7 +15,6 @@ type SortField = 'created_at' | 'date_from' | 'created_by'
 type SortOrder = 'asc' | 'desc'
 
 export function PdfExport() {
-  const navigate = useNavigate()
   const { user } = useAuth()
   const { profile } = useProfile()
 
@@ -26,7 +24,6 @@ export function PdfExport() {
   const [error, setError] = useState<string | null>(null)
 
   // Filters
-  const [filterYear, setFilterYear] = useState<string>('')
   const [filterAuthor, setFilterAuthor] = useState<string>('')
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -132,11 +129,6 @@ export function PdfExport() {
 
   // No full refresh on completion; list is updated locally.
 
-  // Get unique years from list
-  const availableYears = Array.from(
-    new Set(pdfList.map(p => p.year).filter(Boolean))
-  ).sort((a, b) => b - a)
-
   // Helper to safely parse dates
   const parseDate = (dateStr: string | undefined | null): number => {
     if (!dateStr) return 0
@@ -146,7 +138,6 @@ export function PdfExport() {
 
   // Filter and sort list (only completed jobs - in-progress jobs are shown separately)
   const filteredList = completedJobs
-    .filter(pdf => !filterYear || pdf.year === parseInt(filterYear))
     .filter(pdf => !filterAuthor || pdf.created_by === filterAuthor)
     .sort((a, b) => {
       let comparison = 0
@@ -159,10 +150,6 @@ export function PdfExport() {
       }
       return sortOrder === 'desc' ? -comparison : comparison
     })
-
-  const handleBack = () => {
-    navigate('/')
-  }
 
   const formatDate = (dateStr: string) => {
     try {
@@ -275,10 +262,8 @@ export function PdfExport() {
     setCancellingJobId(jobId)
     try {
       await pdfApi.cancel(jobId)
-      // Update the local list to reflect cancelled status
-      setPdfList(prev => prev.map(p =>
-        p.job_id === jobId ? { ...p, status: 'CANCELLED' as const, progress_message: 'Cancelled' } : p
-      ))
+      // Job row is deleted on backend; remove it locally too
+      setPdfList(prev => prev.filter(p => p.job_id !== jobId))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to cancel PDF generation')
     } finally {
@@ -294,18 +279,6 @@ export function PdfExport() {
       <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-14 z-20">
         {/* Row 1: Title and actions */}
         <div className="flex items-center gap-3">
-          {!selectionMode ? (
-            <button
-              onClick={handleBack}
-              className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation"
-            >
-              <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                <path d="M15 19l-7-7 7-7"></path>
-              </svg>
-            </button>
-          ) : (
-            <div className="w-9 h-9" />
-          )}
           <h2 className="text-lg font-semibold text-gray-900 flex-1">
             {selectionMode ? `${selectedIds.size} selected` : 'Generated PDFs'}
           </h2>
@@ -340,18 +313,6 @@ export function PdfExport() {
             </span>
           ) : (
             <>
-            {/* Year filter */}
-            <select
-              value={filterYear}
-              onChange={(e) => setFilterYear(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="">Year</option>
-              {availableYears.map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-
             {/* Author filter */}
             {availableAuthors.length > 1 && (
               <select
@@ -455,21 +416,20 @@ export function PdfExport() {
       {/* List content */}
       <div className="flex-1 p-4 pb-24">
         {loadingList ? (
-          <LoadingScreen message="Loading PDFs..." />
+          <div className="flex items-center justify-center py-16">
+            <div className="flex flex-col items-center">
+              <Spinner size="lg" />
+              <p className="mt-4 text-gray-600">Loading PDFs...</p>
+            </div>
+          </div>
         ) : inProgressJobs.length === 0 && filteredList.length === 0 ? (
           <div className="text-center py-12">
             <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24" stroke="currentColor">
               <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
             <p className="text-gray-500 mb-2">
-              {filterYear ? 'No PDFs for this year' : 'No PDFs generated'}
+              {'No PDFs generated'}
             </p>
-            <Button
-              onClick={() => setShowGenerateModal(true)}
-              variant="primary"
-            >
-              Create my first PDF
-            </Button>
           </div>
         ) : (
           <>
@@ -513,15 +473,15 @@ export function PdfExport() {
                           <p className="text-xs text-gray-400 mt-0.5">
                             by {getAuthorLabel(pdf.created_by, pdf.created_by_pseudo)}
                           </p>
-                          {pdf.temp_folder_url && (
+                          {pdf.chunks_folder_url && (
                             <a
-                              href={pdf.temp_folder_url}
+                              href={pdf.chunks_folder_url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs text-blue-600 hover:text-blue-700 mt-0.5 inline-flex"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              Temporary folder
+                              PDF parts folder
                             </a>
                           )}
                         </div>
@@ -614,15 +574,15 @@ export function PdfExport() {
                           <p className="text-xs text-gray-400 mt-0.5">
                             by {getAuthorLabel(pdf.created_by, pdf.created_by_pseudo)}
                           </p>
-                          {pdf.temp_folder_url && (
+                          {pdf.chunks_folder_url && (
                             <a
-                              href={pdf.temp_folder_url}
+                              href={pdf.chunks_folder_url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs text-blue-600 hover:text-blue-700 mt-0.5 inline-flex"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              Temporary folder
+                              PDF parts folder
                             </a>
                           )}
                         </div>

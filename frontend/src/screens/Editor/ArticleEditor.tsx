@@ -200,18 +200,10 @@ export function ArticleEditor() {
       <AppHeader />
       <div className="flex-1 flex flex-col max-w-content mx-auto w-full bg-white">
       {/* Sub-header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <button
-          onClick={handleCancel}
-          className="text-gray-600 touch-manipulation"
-          disabled={isSaving}
-        >
-          ← Back
-        </button>
+      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-center flex-shrink-0">
         <h1 className="text-lg font-semibold">
           {isEditMode ? 'Edit Article' : 'New Article'}
         </h1>
-        <div className="w-12" />
       </header>
 
       {/* Content - scrollable */}

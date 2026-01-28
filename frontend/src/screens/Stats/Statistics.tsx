@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { articlesApi } from '../../api/articles'
 import { Article } from '../../api/types'
-import { LoadingScreen } from '../../ui/Spinner'
+import { Spinner } from '../../ui/Spinner'
 import { ErrorMessage } from '../../ui/ErrorMessage'
 import { MONTHS_EN } from '../../utils/constants'
 import { getCurrentYear } from '../../utils/date'
@@ -147,25 +147,15 @@ export function Statistics() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <AppHeader />
 
-      {/* Subheader - sticky under main header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-14 z-20">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/')}
-            className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation"
-          >
-            <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-              <path d="M15 19l-7-7 7-7"></path>
-            </svg>
-          </button>
-          <h2 className="text-lg font-semibold text-gray-900">Statistics</h2>
-        </div>
-      </div>
-
       {/* Content */}
       <div className="flex-1 p-4 pb-20">
         {isLoading ? (
-          <LoadingScreen message="Loading statistics..." />
+          <div className="flex items-center justify-center py-16">
+            <div className="flex flex-col items-center">
+              <Spinner size="lg" />
+              <p className="mt-4 text-gray-600">Loading statistics...</p>
+            </div>
+          </div>
         ) : (
           <div className="bg-white rounded-lg shadow-sm p-4">
             <h2 className="text-xl font-bold text-gray-900 mb-4">

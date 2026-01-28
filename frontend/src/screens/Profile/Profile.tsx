@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
-import { LoadingScreen } from '../../ui/Spinner'
+import { LoadingScreen, Spinner } from '../../ui/Spinner'
 import { useUiStore } from '../../state/uiStore'
 import { useProfile } from '../../contexts/ProfileContext'
 import { AppHeader } from '../../ui/AppHeader'
@@ -36,24 +35,28 @@ function convertDriveUrl(url: string): string {
 }
 
 export function Profile() {
-  const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const { showToast } = useUiStore()
+  const { showToast, setUnsavedChanges } = useUiStore()
   const { profile, isLoading, saveProfile, avatarBlobUrl } = useProfile()
 
   const [pseudo, setPseudo] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [initialPseudo, setInitialPseudo] = useState('')
+  const isDirty = pseudo.trim() !== initialPseudo.trim() || avatarFile !== null
 
   useEffect(() => {
     if (profile) {
       setPseudo(profile.pseudo)
+      setInitialPseudo(profile.pseudo || '')
       // Use blob URL from context if available, otherwise use Drive URL
       setPreviewUrl(avatarBlobUrl || profile.avatar_url)
     } else if (user) {
       setPseudo(user.name)
+      setInitialPseudo(user.name || '')
     }
+    setAvatarFile(null)
   }, [profile, user, avatarBlobUrl])
 
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,9 +76,12 @@ export function Profile() {
 
     setIsSaving(true)
     try {
-      await saveProfile(pseudo.trim(), avatarFile || undefined)
+      const nextPseudo = pseudo.trim()
+      await saveProfile(nextPseudo, avatarFile || undefined)
+      setPseudo(nextPseudo)
+      setInitialPseudo(nextPseudo)
+      setAvatarFile(null)
       showToast('Profile saved', 'success')
-      navigate('/')
     } catch (error) {
       showToast('Failed to save profile', 'error')
     } finally {
@@ -87,6 +93,10 @@ export function Profile() {
     logout()
   }
 
+  useEffect(() => {
+    setUnsavedChanges(isDirty)
+  }, [isDirty, setUnsavedChanges])
+
   if (isLoading) {
     return <LoadingScreen message="Loading profile..." />
   }
@@ -94,21 +104,6 @@ export function Profile() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <AppHeader />
-
-      {/* Subheader - sticky under main header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-14 z-20">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/')}
-            className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation"
-          >
-            <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-              <path d="M15 19l-7-7 7-7"></path>
-            </svg>
-          </button>
-          <h2 className="text-lg font-semibold text-gray-900">Profile</h2>
-        </div>
-      </div>
 
       {/* Content */}
       <div className="flex-1 p-4 space-y-6 pb-32 max-w-md mx-auto w-full">
@@ -186,23 +181,34 @@ export function Profile() {
       </div>
 
       {/* Actions */}
-      <div className="bg-white border-t border-gray-200 p-4 space-y-2 sticky bottom-16">
-        <Button
-          onClick={handleSave}
-          disabled={isSaving || !pseudo.trim()}
-          fullWidth
-        >
-          {isSaving ? 'Saving...' : 'Save Profile'}
-        </Button>
-        <Button
-          variant="danger"
-          onClick={handleLogout}
-          disabled={isSaving}
-          fullWidth
-        >
-          Logout
-        </Button>
+      <div className="bg-white border-t border-gray-200 p-4 sticky bottom-16">
+        <div className="max-w-md mx-auto w-full flex flex-col sm:flex-row sm:justify-center gap-2">
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || isLoading || !pseudo.trim() || !isDirty}
+            className="w-full sm:w-auto"
+          >
+            {isSaving ? 'Saving...' : 'Save Profile'}
+          </Button>
+          <Button
+            variant="danger"
+            onClick={handleLogout}
+            disabled={isSaving}
+            className="w-full sm:w-auto"
+          >
+            Logout
+          </Button>
+        </div>
       </div>
+
+      {isSaving && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl px-6 py-5 flex flex-col items-center">
+            <Spinner size="md" />
+            <p className="mt-3 text-sm text-gray-700">Saving...</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

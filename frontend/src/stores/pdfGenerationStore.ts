@@ -96,13 +96,11 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
       const createdAt = new Date().toISOString()
       const createdBy = getCurrentUserEmail()
       const createdByPseudo = getCurrentUserName() || createdBy.split('@')[0]
-      const year = new Date(from).getFullYear()
       const jobItem: PdfListItem = {
         job_id: response.job_id,
         created_at: createdAt,
         created_by: createdBy,
         created_by_pseudo: createdByPseudo,
-        year,
         date_from: from,
         date_to: to,
         status: normalizeStatus(response.status),

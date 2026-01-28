@@ -1,4 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
+import { useUiStore } from '../state/uiStore'
 
 const NAV_ITEMS = [
   {
@@ -54,11 +55,13 @@ const NAV_ITEMS = [
   },
 ]
 
-const HIDDEN_PATHS = ['/auth', '/editor', '/photo-assembly', '/settings']
+const HIDDEN_PATHS = ['/auth', '/editor', '/photo-assembly']
 
 export function BottomNav() {
   const navigate = useNavigate()
   const location = useLocation()
+  const hasUnsavedChanges = useUiStore((state) => state.hasUnsavedChanges)
+  const setPendingNavigationPath = useUiStore((state) => state.setPendingNavigationPath)
 
   if (HIDDEN_PATHS.some((p) => location.pathname.startsWith(p))) {
     return null
@@ -73,10 +76,19 @@ export function BottomNav() {
             <div className="flex items-center justify-between px-2 py-1">
             {NAV_ITEMS.map((item) => {
               const isActive = location.pathname === item.path
+              const handleClick = () => {
+                if (location.pathname === item.path) return
+                if (hasUnsavedChanges) {
+                  setPendingNavigationPath(item.path)
+                  return
+                }
+                navigate(item.path)
+              }
+
               return (
                 <button
                   key={item.path}
-                  onClick={() => navigate(item.path)}
+                  onClick={handleClick}
                 className={`flex flex-col items-center justify-center px-3 py-1 rounded-xl transition-all ${
                   isActive
                     ? 'text-white'

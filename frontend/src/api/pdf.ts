@@ -28,7 +28,6 @@ export interface PdfListItem {
   created_at: string
   created_by: string
   created_by_pseudo?: string
-  year: number
   date_from: string
   date_to: string
   status: 'PENDING' | 'RUNNING' | 'DONE' | 'ERROR' | 'CANCELLED'
@@ -36,8 +35,8 @@ export interface PdfListItem {
   progress_message?: string
   pdf_url?: string
   pdf_file_id?: string
-  temp_folder_id?: string
-  temp_folder_url?: string
+  chunks_folder_id?: string
+  chunks_folder_url?: string
   error_message?: string
 }
 

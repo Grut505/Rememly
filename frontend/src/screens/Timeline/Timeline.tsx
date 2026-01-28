@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useArticlesStore } from '../../state/articlesStore'
 import { articlesApi } from '../../api/articles'
 import { FloatingActionButton } from '../../ui/FloatingActionButton'
-import { LoadingScreen, Spinner } from '../../ui/Spinner'
+import { Spinner } from '../../ui/Spinner'
 import { ErrorMessage } from '../../ui/ErrorMessage'
 import { ArticleCard } from './ArticleCard'
 import { EmptyState } from './EmptyState'
@@ -313,6 +313,7 @@ export function Timeline() {
 
   const totalLoadedCount = articles.length
   const totalCountLabel = hasMore ? `${totalLoadedCount}+` : `${totalLoadedCount}`
+  const lastLoadedMonthKey = articles.length > 0 ? getMonthYearKey(articles[articles.length - 1].date) : null
 
   // Check if filters are active (different from default)
   const hasActiveFilters =
@@ -340,17 +341,7 @@ export function Timeline() {
     loadArticles()
   }, [filters.year, filters.month, filters.from, filters.to, filters.author, filters.statusFilter, filters.sourceFilter])
 
-  if (isLoading && articles.length === 0) {
-    return <LoadingScreen message="Loading articles..." />
-  }
-
-  if (error && articles.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center p-6">
-        <ErrorMessage message={error} onRetry={loadArticles} />
-      </div>
-    )
-  }
+  const headerDisabled = isLoading
 
   return (
     <div
@@ -377,7 +368,10 @@ export function Timeline() {
           {selectionMode ? (
             <button
               onClick={handleSelectAll}
-              className="text-primary-600 hover:text-primary-700 touch-manipulation text-sm font-medium"
+              className={`touch-manipulation text-sm font-medium ${
+                headerDisabled ? 'text-gray-400 cursor-not-allowed' : 'text-primary-600 hover:text-primary-700'
+              }`}
+              disabled={headerDisabled}
             >
               {selectedIds.size === articles.length ? 'Deselect all' : 'Select all'}
             </button>
@@ -385,7 +379,10 @@ export function Timeline() {
             <>
               <button
                 onClick={refreshArticles}
-                className="text-primary-600 hover:text-primary-700 touch-manipulation text-sm font-medium flex items-center gap-2 hidden sm:flex"
+                className={`touch-manipulation text-sm font-medium flex items-center gap-2 hidden sm:flex ${
+                  headerDisabled ? 'text-gray-400 cursor-not-allowed' : 'text-primary-600 hover:text-primary-700'
+                }`}
+                disabled={headerDisabled}
               >
                 <svg className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                   <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -395,10 +392,13 @@ export function Timeline() {
               <button
                 onClick={() => setShowFiltersModal(true)}
                 className={`touch-manipulation flex items-center gap-2 ${
-                  hasActiveFilters
-                    ? 'text-white bg-primary-600 hover:bg-primary-700 px-3 py-1.5 rounded-lg font-medium'
-                    : 'text-primary-600 hover:text-primary-700'
+                  headerDisabled
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : hasActiveFilters
+                      ? 'text-white bg-primary-600 hover:bg-primary-700 px-3 py-1.5 rounded-lg font-medium'
+                      : 'text-primary-600 hover:text-primary-700'
                 }`}
+                disabled={headerDisabled}
               >
                 <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                   <path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
@@ -417,6 +417,7 @@ export function Timeline() {
               checked={selectionMode}
               onChange={handleSelectionModeToggle}
               label="Select"
+              disabled={headerDisabled}
             />
           )}
         </div>
@@ -479,7 +480,18 @@ export function Timeline() {
             </div>
           </div>
         )}
-        {articles.length === 0 ? (
+        {isLoading && articles.length === 0 ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="flex flex-col items-center">
+              <Spinner size="lg" />
+              <p className="mt-4 text-gray-600">Loading articles...</p>
+            </div>
+          </div>
+        ) : error && articles.length === 0 ? (
+          <div className="flex items-center justify-center p-6">
+            <ErrorMessage message={error} onRetry={loadArticles} />
+          </div>
+        ) : articles.length === 0 ? (
           <EmptyState />
         ) : (
           <>
@@ -495,6 +507,7 @@ export function Timeline() {
                     <MonthSeparator
                       monthYear={getMonthYear(article.date)}
                       count={monthCounts[currentMonthKey] || 0}
+                      showPlus={hasMore && lastLoadedMonthKey === currentMonthKey}
                     />
                   )}
                   <div className={`relative z-0 ${showMonthSeparator ? 'pt-8' : ''}`}>

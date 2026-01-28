@@ -13,6 +13,7 @@ import { PdfExport } from './screens/PdfExport/PdfExport'
 import { Settings } from './screens/Settings/Settings'
 import { UpdatePrompt } from './components/UpdatePrompt'
 import { PdfGenerationNotification } from './components/PdfGenerationNotification'
+import { UnsavedChangesGuard } from './components/UnsavedChangesGuard'
 import { BottomNav } from './ui/BottomNav'
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
       <ProfileProvider>
         <UpdatePrompt />
         <PdfGenerationNotification />
+        <UnsavedChangesGuard />
         <div className="min-h-screen max-w-content mx-auto bg-white">
           <Routes>
           <Route path="/auth" element={<GoogleAuth />} />

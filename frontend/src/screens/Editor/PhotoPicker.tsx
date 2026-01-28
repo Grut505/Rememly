@@ -340,9 +340,11 @@ export function PhotoPicker({ onPhotoSelected, currentImage }: PhotoPickerProps)
               </button>
             </div>
           ) : (
-            <Button onClick={() => setShowOptions(true)}>
-              Select Photo
-            </Button>
+            <div className="flex justify-center">
+              <Button onClick={() => setShowOptions(true)}>
+                Select Photo
+              </Button>
+            </div>
           )}
         </div>
       )}

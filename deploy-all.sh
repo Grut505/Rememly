@@ -12,6 +12,31 @@ DEPLOYMENT_ID="AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP
 BACKEND_URL="https://script.google.com/macros/s/${DEPLOYMENT_ID}/exec"
 GITHUB_PAGES_REPO="Grut505/grut505.github.io"
 
+update_about_date() {
+    local date_fr
+    date_fr=$(date '+%d/%m/%Y')
+    if [ -f "frontend/src/data/about.ts" ]; then
+        sed -i "s|^  lastPublished: '.*'|  lastPublished: '${date_fr}'|" frontend/src/data/about.ts
+        echo "  ✓ lastPublished mis à jour (${date_fr})"
+    fi
+}
+
+cleanup_vite_temp_files() {
+    echo "🧹 Nettoyage des fichiers Vite temporaires..."
+    local tracked
+    tracked=$(git ls-files "frontend/vite.config.ts.timestamp-*.mjs")
+    if [ -z "$tracked" ]; then
+        echo "  ✓ Rien à nettoyer"
+        return
+    fi
+    while IFS= read -r file; do
+        if [ -n "$file" ] && [ ! -e "$file" ]; then
+            git rm --cached --ignore-unmatch -- "$file" >/dev/null 2>&1 || true
+            echo "  ✓ Retiré de l’index: $file"
+        fi
+    done <<< "$tracked"
+}
+
 echo "🚀 Déploiement complet de Rememly"
 echo ""
 
@@ -40,11 +65,16 @@ if [ -n "$VERSION" ]; then
     echo "  ✓ .env et .env.production mis à jour"
 fi
 
+echo ""
+echo "🗓️  Mise à jour de la date de publication..."
+update_about_date
+
 echo "✅ Backend déployé @$VERSION"
 echo ""
 
 # Git commit and push
 echo "📦 Commit et push vers GitHub..."
+cleanup_vite_temp_files
 git add -A
 git commit -m "Deploy: $(date '+%Y-%m-%d %H:%M:%S')" || echo "Rien à commiter"
 git push

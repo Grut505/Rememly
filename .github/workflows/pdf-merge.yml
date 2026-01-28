@@ -1,0 +1,62 @@
+name: PDF Merge
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "PDF job id"
+        required: true
+      folder_id:
+        description: "Drive folder id with PDF chunks"
+        required: true
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/merge_pdf_from_drive.requirements.txt
+
+      - name: Write credentials
+        run: |
+          echo "${{ secrets.GDRIVE_CREDENTIALS_JSON }}" | base64 -d > credentials.json
+          echo "${{ secrets.GDRIVE_TOKEN_JSON }}" | base64 -d > token.json
+
+      - name: Merge PDFs
+        id: merge
+        run: |
+          RESULT=$(python scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --output-name "merged.pdf")
+          echo "result=$RESULT" >> $GITHUB_OUTPUT
+
+      - name: Notify backend
+        run: |
+          JOB_ID="${{ inputs.job_id }}"
+          RESULT='${{ steps.merge.outputs.result }}'
+          FILE_ID=$(python - <<'PY'
+import json, os, sys
+data=json.loads(os.environ['RESULT'])
+print(data['file_id'])
+PY
+          )
+          URL=$(python - <<'PY'
+import json, os, sys
+data=json.loads(os.environ['RESULT'])
+print(data['url'])
+PY
+          )
+          curl -s -X POST "${{ secrets.APPS_SCRIPT_URL }}?path=pdf/merge-complete" \
+            -H "Content-Type: application/json" \
+            -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${JOB_ID}\",\"file_id\":\"${FILE_ID}\",\"url\":\"${URL}\"}"
+        env:
+          RESULT: ${{ steps.merge.outputs.result }}

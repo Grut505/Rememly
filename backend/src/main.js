@@ -16,6 +16,14 @@ function doPost(e) {
       const body = e.postData ? JSON.parse(e.postData.contents) : {};
       return handleFamileoUpdateSession(body);
     }
+    if (path === 'pdf/merge-complete') {
+      const body = e.postData ? JSON.parse(e.postData.contents) : {};
+      return handlePdfMergeComplete(body);
+    }
+    if (path === 'pdf/job-by-folder') {
+      const body = e.postData ? JSON.parse(e.postData.contents) : {};
+      return handlePdfJobByFolder(body);
+    }
 
     // Get auth token from header or parameter
     const token = getAuthToken(e);
@@ -72,6 +80,9 @@ function doPost(e) {
       case 'pdf/cancel':
         return handlePdfCancel(body);
 
+      case 'pdf/cleanup-properties':
+        return createResponse({ ok: true, data: cleanupOrphanPdfProperties() });
+
       case 'profile/get':
         return handleProfileGet(authResult.user.email);
 
@@ -104,6 +115,12 @@ function doPost(e) {
 
       case 'config/set':
         return handleConfigSet(body);
+
+      case 'logs/pdf/range':
+        return createResponse({ ok: true, data: getPdfLogsRange() });
+
+      case 'logs/pdf/clear':
+        return createResponse({ ok: true, data: clearPdfLogsRange(body?.from, body?.to) });
 
       default:
         return createResponse({

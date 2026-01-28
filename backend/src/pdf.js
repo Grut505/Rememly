@@ -19,7 +19,11 @@ function installPdfWorker() {
 function enqueuePdfJob(jobId) {
   const props = PropertiesService.getScriptProperties();
   const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  const gotLock = lock.tryLock(1000);
+  if (!gotLock) {
+    Logger.log('Queue lock busy, skipping enqueue for job: ' + jobId);
+    return;
+  }
 
   try {
     const key = 'PDF_JOB_QUEUE';
@@ -42,6 +46,7 @@ async function pdfWorkerTick() {
   if (!jobId) return;
 
   try {
+    logPdfEvent(jobId, 'INFO', 'Worker tick start');
     await processNextPdfChunk(jobId);
 
     // Si le job n’est pas fini, on le remet dans la queue
@@ -61,6 +66,7 @@ async function pdfWorkerTick() {
     }
   } catch (e) {
     Logger.log('Worker error: ' + e.message);
+    logPdfEvent(jobId, 'ERROR', 'Worker error', { message: String(e), stack: e && e.stack ? String(e.stack) : '' });
     updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(e), 'Error');
     cleanupBatchState(jobId);
   }
@@ -70,7 +76,11 @@ async function pdfWorkerTick() {
 function dequeuePdfJob() {
   const props = PropertiesService.getScriptProperties();
   const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  const gotLock = lock.tryLock(1000);
+  if (!gotLock) {
+    Logger.log('Queue lock busy, skipping dequeue');
+    return null;
+  }
 
   try {
     const key = 'PDF_JOB_QUEUE';
@@ -93,7 +103,7 @@ function handlePdfCreate(body, user) {
     mosaicLayout: body.options?.mosaic_layout || 'full',
     showSeasonalFruits: body.options?.show_seasonal_fruits !== false,
     maxMosaicPhotos: body.options?.max_mosaic_photos || undefined,
-    keepTemp: body.options?.keep_temp === true
+    keepTemp: body.options?.keep_temp !== false
   }));
 
   // Return immediately with PENDING status
@@ -217,22 +227,20 @@ function initializeBatchState(jobId) {
   const articles = getArticlesInRange(job.date_from, job.date_to);
   const articlesByMonth = groupArticlesByMonth(articles);
   const monthKeys = Object.keys(articlesByMonth).sort();
+  const articlesPerChunk = parseInt(getConfigValue('pdf_articles_per_chunk') || '', 10) || 10;
 
   // Calculate total pages for page numbering
   let totalPages = 1; // cover page
+  let totalSegments = 1; // cover segment
   for (const monthKey of monthKeys) {
     totalPages += 1; // month divider
     totalPages += Math.ceil(articlesByMonth[monthKey].length / 2);
+    totalSegments += Math.max(1, Math.ceil(articlesByMonth[monthKey].length / articlesPerChunk));
   }
 
-  const optionsJson = props.getProperty('PDF_OPTIONS_' + jobId);
-  const pdfOptions = optionsJson ? JSON.parse(optionsJson) : {};
-
-  // Create temp folder for partial PDFs
-  const tempFolder = DriveApp.createFolder('_pdf_batch_' + jobId);
-  if (pdfOptions.keepTemp) {
-    updateJobTempFolder(jobId, tempFolder.getId(), tempFolder.getUrl());
-  }
+  // Create folder for PDF chunks inside Rememly/PDF
+  const tempFolder = createPdfJobFolder(jobId);
+  updateJobChunksFolder(jobId, tempFolder.getId(), tempFolder.getUrl());
 
   // Store batch state
   const batchState = {
@@ -244,7 +252,10 @@ function initializeBatchState(jobId) {
     currentPage: 1,
     tempFolderId: tempFolder.getId(),
     partialPdfIds: [],
-    articlesCount: articles.length
+    articlesCount: articles.length,
+    monthOffsets: {},
+    totalSegments: totalSegments,
+    completedSegments: 0
   };
 
   props.setProperty('PDF_BATCH_STATE_' + jobId, JSON.stringify(batchState));
@@ -261,11 +272,10 @@ function initializeBatchState(jobId) {
  */
 async function processNextPdfChunk(jobId) {
   const props = PropertiesService.getScriptProperties();
-  const lock = LockService.getScriptLock();
-  const gotLock = lock.tryLock(1000);
+  const gotJobLease = tryAcquireJobLease(jobId);
 
-  if (!gotLock) {
-    Logger.log('Chunk processing locked, re-queuing job: ' + jobId);
+  if (!gotJobLease) {
+    Logger.log('Job lease busy, re-queuing job: ' + jobId);
     enqueuePdfJob(jobId);
     return;
   }
@@ -338,6 +348,7 @@ async function processNextPdfChunk(jobId) {
 
       state.currentChunk = 1;
       state.currentPage = 1;
+      state.completedSegments = (state.completedSegments || 0) + 1;
     }
 
     // =====================================================
@@ -351,8 +362,10 @@ async function processNextPdfChunk(jobId) {
       const monthName = monthsFr[monthIdx];
       const monthNameEn = monthsEn[monthIdx];
 
+      const totalSegments = state.totalSegments || (state.monthKeys.length + 1);
+      const completedSegments = state.completedSegments || 0;
       const progress = Math.round(
-        15 + (state.currentChunk / state.totalChunks) * 65
+        15 + (completedSegments / totalSegments) * 65
       );
 
       updateJobStatus(
@@ -368,27 +381,44 @@ async function processNextPdfChunk(jobId) {
       const articles = getArticlesInRange(job.date_from, job.date_to);
       const articlesByMonth = groupArticlesByMonth(articles);
       const monthArticles = articlesByMonth[monthKey] || [];
+      const articlesPerChunk = parseInt(getConfigValue('pdf_articles_per_chunk') || '', 10) || 10;
+      state.monthOffsets = state.monthOffsets || {};
+      const offset = state.monthOffsets[monthKey] || 0;
+      const chunkArticles = monthArticles.slice(offset, offset + articlesPerChunk);
+      const includeDivider = offset === 0;
 
-      const monthHtml = generateMonthOnlyHtml(
+      const monthHtml = generateMonthChunkHtml(
         monthArticles,
+        chunkArticles,
         monthName,
         yearStr,
         monthIdx,
         state.currentPage,
         state.totalPages,
-        pdfOptions
+        pdfOptions,
+        includeDivider
       );
 
       const monthPdf = convertHtmlToPdf(monthHtml);
       const monthFile = tempFolder.createFile(monthPdf);
+      const offsetLabel = String(offset).padStart(4, '0');
       monthFile.setName(
-        `chunk_${String(state.currentChunk).padStart(3, '0')}_${monthKey}.pdf`
+        `chunk_${String(state.currentChunk).padStart(3, '0')}_${monthKey}_part_${offsetLabel}.pdf`
       );
 
       state.partialPdfIds.push(monthFile.getId());
 
-      state.currentPage += 1 + Math.ceil(monthArticles.length / 2);
-      state.currentChunk++;
+      const pagesThisChunk = (includeDivider ? 1 : 0) + Math.ceil(chunkArticles.length / 2);
+      state.currentPage += pagesThisChunk;
+      state.completedSegments = (state.completedSegments || 0) + 1;
+
+      const nextOffset = offset + chunkArticles.length;
+      if (nextOffset >= monthArticles.length) {
+        delete state.monthOffsets[monthKey];
+        state.currentChunk++;
+      } else {
+        state.monthOffsets[monthKey] = nextOffset;
+      }
     }
 
     // =====================================================
@@ -403,8 +433,8 @@ async function processNextPdfChunk(jobId) {
     // FINAL STEP
     // =====================================================
     if (state.currentChunk > state.monthKeys.length) {
-      // All chunks generated, proceed to merge
-      await mergePdfChunksAndFinish(jobId);
+      // All chunks generated, finalize job without merge
+      finalizePdfChunks(jobId);
     }
 
     // IMPORTANT:
@@ -424,9 +454,44 @@ async function processNextPdfChunk(jobId) {
     );
     cleanupBatchState(jobId);
   } finally {
-    if (gotLock) {
-      lock.releaseLock();
+    releaseJobLease(jobId);
+  }
+}
+
+function tryAcquireJobLease(jobId) {
+  const props = PropertiesService.getScriptProperties();
+  const lock = LockService.getScriptLock();
+  const gotLock = lock.tryLock(1000);
+
+  if (!gotLock) {
+    return false;
+  }
+
+  try {
+    const key = 'PDF_JOB_ACTIVE_' + jobId;
+    const raw = props.getProperty(key);
+    if (raw) {
+      const last = parseInt(raw, 10);
+      if (!isNaN(last) && (Date.now() - last) < 30 * 60 * 1000) {
+        return false;
+      }
     }
+    props.setProperty(key, String(Date.now()));
+    return true;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function releaseJobLease(jobId) {
+  const props = PropertiesService.getScriptProperties();
+  const lock = LockService.getScriptLock();
+  const gotLock = lock.tryLock(1000);
+  if (!gotLock) return;
+  try {
+    props.deleteProperty('PDF_JOB_ACTIVE_' + jobId);
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -439,28 +504,29 @@ async function mergePdfChunksAndFinish(jobId) {
 
   try {
     updateJobStatus(jobId, 'RUNNING', 85, undefined, undefined, undefined, 'Merging PDFs...');
+    logPdfEvent(jobId, 'INFO', 'Starting merge');
 
     const stateJson = props.getProperty('PDF_BATCH_STATE_' + jobId);
     const state = JSON.parse(stateJson);
     const job = getJobStatus(jobId);
 
-    // Get all partial PDFs
-    const pdfBlobs = state.partialPdfIds.map(fileId => {
-      const file = DriveApp.getFileById(fileId);
-      return file.getBlob();
-    });
-
-    // Merge PDFs (use PDFApp to preserve text streams)
-    const mergedPdf = await mergePdfBlobs(pdfBlobs);
+    // Merge PDFs incrementally across ticks to reduce memory pressure
+    const mergeResult = await mergePdfFileIdsIncremental(state.partialPdfIds, jobId, state.tempFolderId);
+    if (!mergeResult.done) {
+      updateJobStatus(jobId, 'RUNNING', 88, undefined, undefined, undefined, `Merging PDFs... (${mergeResult.index}/${mergeResult.total})`);
+      enqueuePdfJob(jobId);
+      return;
+    }
+    const mergedPdf = mergeResult.blob;
 
     updateJobStatus(jobId, 'RUNNING', 92, undefined, undefined, undefined, 'Saving to Drive...');
 
     // Save final PDF
     const dateFrom = typeof job.date_from === 'string' ? job.date_from : Utilities.formatDate(job.date_from, 'Europe/Paris', 'yyyy-MM-dd');
     const dateTo = typeof job.date_to === 'string' ? job.date_to : Utilities.formatDate(job.date_to, 'Europe/Paris', 'yyyy-MM-dd');
-    const fileName = `Livre_${job.year}_${dateFrom}-${dateTo}_gen-${formatTimestamp()}_v01.pdf`;
+    const fileName = `Livre_${dateFrom}-${dateTo}_gen-${formatTimestamp()}_v01.pdf`;
 
-    const pdfData = savePdfToFolder(mergedPdf, job.year, fileName);
+    const pdfData = savePdfToFolder(mergedPdf, fileName);
 
     // Update job status
     updateJobStatus(jobId, 'DONE', 100, pdfData.fileId, pdfData.url, undefined, 'Done!');
@@ -473,8 +539,154 @@ async function mergePdfChunksAndFinish(jobId) {
 
   } catch (error) {
     Logger.log('Error merging PDFs: ' + error.message);
+    logPdfEvent(jobId, 'ERROR', 'Merge failed', { message: String(error), stack: error && error.stack ? String(error.stack) : '' });
     updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error), 'Error during merge');
     cleanupBatchState(jobId);
+  }
+}
+
+function finalizePdfChunks(jobId) {
+  const props = PropertiesService.getScriptProperties();
+  try {
+    updateJobStatus(jobId, 'RUNNING', 92, undefined, undefined, undefined, 'Saving to Drive...');
+    const stateJson = props.getProperty('PDF_BATCH_STATE_' + jobId);
+    const state = stateJson ? JSON.parse(stateJson) : null;
+    const job = getJobStatus(jobId);
+    if (!state || !job) {
+      throw new Error('Missing batch state or job');
+    }
+
+    const folder = DriveApp.getFolderById(state.tempFolderId);
+    updateJobStatus(jobId, 'DONE', 100, folder.getId(), folder.getUrl(), undefined, 'Chunks ready (merge queued)');
+    sendPdfReadyEmail(jobId, folder.getUrl());
+    // Trigger merge workflow automatically
+    triggerPdfMergeWorkflow(jobId, folder.getId());
+    cleanupBatchState(jobId);
+  } catch (error) {
+    Logger.log('Error finalizing PDFs: ' + error.message);
+    logPdfEvent(jobId, 'ERROR', 'Finalize failed', { message: String(error), stack: error && error.stack ? String(error.stack) : '' });
+    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, String(error), 'Error during finalize');
+    cleanupBatchState(jobId);
+  }
+}
+
+function triggerPdfMergeWorkflow(jobId, folderId) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const githubToken = props.getProperty('GITHUB_TOKEN');
+    const repo = props.getProperty('GITHUB_REPO') || 'Grut505/Rememly';
+    const workflow = props.getProperty('GITHUB_PDF_MERGE_WORKFLOW') || 'pdf-merge.yml';
+    const ref = props.getProperty('GITHUB_PDF_MERGE_REF') || 'main';
+
+    if (!githubToken) {
+      logPdfEvent(jobId, 'ERROR', 'GitHub token missing for merge trigger');
+      return;
+    }
+
+    const response = UrlFetchApp.fetch(
+      `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + githubToken,
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        },
+        payload: JSON.stringify({
+          ref: ref,
+          inputs: {
+            job_id: jobId,
+            folder_id: folderId
+          }
+        }),
+        muteHttpExceptions: true
+      }
+    );
+
+    const code = response.getResponseCode();
+    logPdfEvent(jobId, 'INFO', 'Merge workflow trigger', { code });
+  } catch (e) {
+    logPdfEvent(jobId, 'ERROR', 'Merge workflow trigger failed', { message: String(e) });
+  }
+}
+
+function handlePdfMergeComplete(body) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const token = props.getProperty('PDF_MERGE_TOKEN');
+    if (!token || body?.token !== token) {
+      return createResponse({ ok: false, error: { code: 'FORBIDDEN', message: 'Invalid token' } });
+    }
+    const jobId = body?.job_id || getJobIdByChunksFolderId(body?.folder_id);
+    const fileId = body?.file_id;
+    const url = body?.url;
+    if (!jobId || !fileId || !url) {
+      return createResponse({ ok: false, error: { code: 'INVALID_PARAMS', message: 'Missing params' } });
+    }
+
+    updateJobStatus(jobId, 'DONE', 100, fileId, url, undefined, 'Merged');
+    if (body?.clean_chunks) {
+      updateJobChunksFolder(jobId, '', '');
+    }
+    sendPdfMergedEmail(jobId, url);
+    logPdfEvent(jobId, 'INFO', 'Merge complete', { fileId, url });
+
+    return createResponse({ ok: true, data: { ok: true } });
+  } catch (e) {
+    return createResponse({ ok: false, error: { code: 'MERGE_COMPLETE_FAILED', message: String(e) } });
+  }
+}
+
+function handlePdfJobByFolder(body) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const token = props.getProperty('PDF_MERGE_TOKEN');
+    if (!token || body?.token !== token) {
+      return createResponse({ ok: false, error: { code: 'FORBIDDEN', message: 'Invalid token' } });
+    }
+    const folderId = body?.folder_id;
+    if (!folderId) {
+      return createResponse({ ok: false, error: { code: 'INVALID_PARAMS', message: 'Missing folder_id' } });
+    }
+    const jobId = getJobIdByChunksFolderId(folderId);
+    if (!jobId) {
+      return createResponse({ ok: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    return createResponse({ ok: true, data: { job_id: jobId } });
+  } catch (e) {
+    return createResponse({ ok: false, error: { code: 'LOOKUP_FAILED', message: String(e) } });
+  }
+}
+
+function sendPdfMergedEmail(jobId, pdfUrl) {
+  try {
+    const job = getJobStatus(jobId);
+    if (!job || !job.created_by) return;
+
+    const familyName = getConfigValue('family_name') || 'your family';
+
+    MailApp.sendEmail({
+      to: job.created_by,
+      subject: `📚 Your memory book is ready!`,
+      htmlBody: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Your memory book is ready!</h2>
+          <p>Hello,</p>
+          <p>The generation of your <strong>${familyName}</strong> memory book is complete.</p>
+          <p>Period: from <strong>${job.date_from}</strong> to <strong>${job.date_to}</strong></p>
+          <p style="margin: 20px 0;">
+            <a href="${pdfUrl}" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px;">
+              📥 Download merged PDF
+            </a>
+          </p>
+          <p style="color: #666; font-size: 12px;">
+            This link gives you access to the merged PDF on Google Drive.
+          </p>
+        </div>
+      `
+    });
+  } catch (e) {
+    Logger.log('Failed to send merged email: ' + e.message);
   }
 }
 
@@ -724,18 +936,32 @@ function sendPdfReadyEmail(jobId, pdfUrl) {
           <p>Period: from <strong>${job.date_from}</strong> to <strong>${job.date_to}</strong></p>
           <p style="margin: 20px 0;">
             <a href="${pdfUrl}" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px;">
-              📥 Download PDF
+              📂 View generated PDFs
             </a>
           </p>
           <p style="color: #666; font-size: 12px;">
-            This link gives you access to the file on Google Drive.
+            This link gives you access to the folder containing all generated PDF parts.
           </p>
         </div>
       `
     });
+    Logger.log('Email sent to: ' + job.created_by);
   } catch (e) {
     Logger.log('Failed to send email: ' + e.message);
   }
+}
+
+/**
+ * Manual test helper for email sending
+ */
+function sendTestEmail(to) {
+  if (!to) to = "grutspam@gmail.com"
+  MailApp.sendEmail({
+    to: to,
+    subject: 'Rememly test email',
+    htmlBody: '<p>This is a test email from Rememly.</p>'
+  });
+  Logger.log('Test email sent to: ' + to);
 }
 
 /**
@@ -743,24 +969,11 @@ function sendPdfReadyEmail(jobId, pdfUrl) {
  */
 function cleanupBatchState(jobId) {
   const props = PropertiesService.getScriptProperties();
-  const optionsJson = props.getProperty('PDF_OPTIONS_' + jobId);
-  const pdfOptions = optionsJson ? JSON.parse(optionsJson) : {};
-  const keepTemp = pdfOptions.keepTemp === true || getConfigValue('pdf_keep_temp') === 'true';
 
   try {
     const stateJson = props.getProperty('PDF_BATCH_STATE_' + jobId);
     if (stateJson) {
       const state = JSON.parse(stateJson);
-
-      // Delete temp folder and its contents
-      if (state.tempFolderId && !keepTemp) {
-        try {
-          const tempFolder = DriveApp.getFolderById(state.tempFolderId);
-          tempFolder.setTrashed(true);
-        } catch (e) {
-          // Folder might not exist
-        }
-      }
     }
   } catch (e) {
     // Ignore cleanup errors
@@ -775,11 +988,12 @@ function cleanupBatchState(jobId) {
     // Ignore queue cleanup errors
   }
 
-  if (!keepTemp) {
-    // Delete properties
-    props.deleteProperty('PDF_BATCH_STATE_' + jobId);
-    props.deleteProperty('PDF_OPTIONS_' + jobId);
-  }
+  // Delete properties
+  props.deleteProperty('PDF_BATCH_STATE_' + jobId);
+  props.deleteProperty('PDF_OPTIONS_' + jobId);
+  // Always clean active/merge properties
+  props.deleteProperty('PDF_JOB_ACTIVE_' + jobId);
+  props.deleteProperty('PDF_MERGE_STATE_' + jobId);
 }
 
 // Legacy function for backward compatibility (simple generation without batch)
@@ -863,6 +1077,50 @@ ${getPdfStyles()}
       html += renderArticle(monthArticles[i + 1]);
     }
 
+    html += `    <div class="page-number">${currentPage} / ${totalPages}</div>\n`;
+    html += `  </div>\n`;
+  }
+
+  html += `
+</body>
+</html>
+`;
+
+  return html;
+}
+
+/**
+ * Generate HTML for a chunk of a month (optional divider + subset of articles)
+ */
+function generateMonthChunkHtml(monthArticles, chunkArticles, monthName, year, monthIndex, startPage, totalPages, options = {}, includeDivider) {
+  const { mosaicLayout = 'full', showSeasonalFruits = true } = options;
+
+  let currentPage = startPage;
+  let html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+${getPdfStyles()}
+  </style>
+</head>
+<body>
+`;
+
+  if (includeDivider) {
+    currentPage++;
+    const dividerHtml = generateMonthDivider(monthArticles, monthName, year, monthIndex, currentPage, totalPages, { mosaicLayout, showSeasonalFruits });
+    html += dividerHtml.replace('page-break-before: always;', '').replace('class="month-divider"', 'class="month-divider" style="page-break-before: auto;"');
+  }
+
+  for (let i = 0; i < chunkArticles.length; i += 2) {
+    currentPage++;
+    html += `  <div class="articles-page">\n`;
+    html += renderArticle(chunkArticles[i]);
+    if (i + 1 < chunkArticles.length) {
+      html += renderArticle(chunkArticles[i + 1]);
+    }
     html += `    <div class="page-number">${currentPage} / ${totalPages}</div>\n`;
     html += `  </div>\n`;
   }
@@ -1196,6 +1454,135 @@ async function mergePdfBlobs(pdfBlobs) {
   mergedBlob.setName('merged.pdf');
 
   return mergedBlob;
+}
+
+/**
+ * Incrementally merge PDFs by file ID to reduce memory pressure.
+ * Uses PDFApp on small pairs instead of loading all blobs at once.
+ */
+async function mergePdfFileIdsIncremental(fileIds, jobId, tempFolderId) {
+  if (!fileIds || fileIds.length === 0) {
+    throw new Error('No PDFs to merge');
+  }
+
+  if (fileIds.length === 1) {
+    const file = DriveApp.getFileById(fileIds[0]);
+    return { done: true, blob: file.getBlob(), index: 1, total: 1 };
+  }
+
+  logPdfEvent(jobId, 'INFO', 'Incremental merge', { files: fileIds.length });
+
+  const props = PropertiesService.getScriptProperties();
+  const BATCH_SIZE = 1; // number of additional files to merge per tick
+  const nativeThresholdMb = parseInt(getConfigValue('pdf_native_threshold_mb') || '', 10);
+  const NATIVE_THRESHOLD_BYTES = (nativeThresholdMb ? nativeThresholdMb : 20) * 1024 * 1024;
+  const mergeStrategy = (getConfigValue('pdf_merge_strategy') || 'native').toLowerCase();
+  const mergeKey = 'PDF_MERGE_STATE_' + jobId;
+  let mergeState = props.getProperty(mergeKey);
+  let state = mergeState ? JSON.parse(mergeState) : null;
+
+  if (!state) {
+    state = {
+      index: 1,
+      total: fileIds.length,
+      mergedFileId: fileIds[0],
+    };
+    props.setProperty(mergeKey, JSON.stringify(state));
+  }
+
+  if (state.index >= state.total) {
+    const finalFile = DriveApp.getFileById(state.mergedFileId);
+    props.deleteProperty(mergeKey);
+    return { done: true, blob: finalFile.getBlob(), index: state.index, total: state.total };
+  }
+
+  const startIndex = state.index;
+  const endIndex = Math.min(state.index + BATCH_SIZE, fileIds.length - 1);
+  const mergedFile = DriveApp.getFileById(state.mergedFileId);
+  const blobs = [mergedFile.getBlob()];
+  const batchMeta = [];
+  const batchStart = Date.now();
+
+  for (let i = startIndex; i <= endIndex; i++) {
+    const nextFileId = fileIds[i];
+    const nextFile = DriveApp.getFileById(nextFileId);
+    batchMeta.push({ index: i + 1, fileId: nextFileId, size: nextFile.getSize() });
+    blobs.push(nextFile.getBlob());
+  }
+
+  logPdfEvent(jobId, 'INFO', 'Merging batch', {
+    from: startIndex + 1,
+    to: endIndex + 1,
+    total: fileIds.length,
+    batch: batchMeta,
+  });
+
+  const estimatedSize = mergedFile.getSize() + batchMeta.reduce((sum, b) => sum + (b.size || 0), 0);
+  const useNative = mergeStrategy === 'native' || (mergeStrategy === 'auto' && estimatedSize >= NATIVE_THRESHOLD_BYTES);
+  logPdfEvent(jobId, 'INFO', 'Merge strategy', { strategy: mergeStrategy, useNative, estimatedSize });
+
+  let newMergedBlob;
+  if (useNative) {
+    try {
+      newMergedBlob = mergePdfBlobsNative(blobs);
+    } catch (e) {
+      logPdfEvent(jobId, 'WARN', 'Native merge failed, falling back to PDFApp', { message: String(e) });
+      newMergedBlob = await PDFApp.mergePDFs(blobs);
+    }
+  } else {
+    try {
+      newMergedBlob = await PDFApp.mergePDFs(blobs);
+    } catch (e) {
+      logPdfEvent(jobId, 'WARN', 'PDFApp merge failed, falling back to native', { message: String(e) });
+      newMergedBlob = mergePdfBlobsNative(blobs);
+    }
+  }
+  newMergedBlob.setName('merged.pdf');
+  logPdfEvent(jobId, 'INFO', 'Batch merged', { elapsedMs: Date.now() - batchStart });
+
+  const tempFolder = tempFolderId ? DriveApp.getFolderById(tempFolderId) : DriveApp.getRootFolder();
+  const newFile = tempFolder.createFile(newMergedBlob);
+  try {
+    mergedFile.setTrashed(true);
+  } catch (e) {
+    // ignore
+  }
+
+  state.mergedFileId = newFile.getId();
+  state.index = endIndex + 1;
+  props.setProperty(mergeKey, JSON.stringify(state));
+
+  return { done: false, index: state.index, total: state.total };
+}
+
+function cleanupOrphanPdfProperties() {
+  const props = PropertiesService.getScriptProperties();
+  const all = props.getProperties();
+  const jobIds = getAllJobIdsSet();
+  const prefixes = ['PDF_BATCH_STATE_', 'PDF_OPTIONS_', 'PDF_JOB_ACTIVE_', 'PDF_MERGE_STATE_'];
+  let deleted = 0;
+
+  Object.keys(all).forEach((key) => {
+    const prefix = prefixes.find((p) => key.startsWith(p));
+    if (!prefix) return;
+    const jobId = key.slice(prefix.length);
+    if (!jobIds.has(jobId)) {
+      props.deleteProperty(key);
+      deleted++;
+    }
+  });
+
+  let queueRemoved = 0;
+  try {
+    const queue = JSON.parse(props.getProperty('PDF_JOB_QUEUE') || '[]');
+    const filtered = queue.filter((id) => jobIds.has(id));
+    queueRemoved = queue.length - filtered.length;
+    props.setProperty('PDF_JOB_QUEUE', JSON.stringify(filtered));
+  } catch (e) {
+    // ignore
+  }
+
+  return { deleted, queueRemoved };
 }
 
 function getArticlesInRange(from, to) {
@@ -1761,6 +2148,33 @@ function getPngDimensions(bytes) {
   return null;
 }
 
+function resizeImageBlob(blob, maxDim) {
+  try {
+    const bytes = blob.getBytes();
+    const mimeType = blob.getContentType();
+    const dimensions = getImageDimensions(bytes, mimeType);
+    if (!dimensions) {
+      return { blob, dimensions: null };
+    }
+
+    const maxSide = Math.max(dimensions.width, dimensions.height);
+    if (!maxDim || maxSide <= maxDim) {
+      return { blob, dimensions };
+    }
+
+    const scale = maxDim / maxSide;
+    const targetW = Math.max(1, Math.round(dimensions.width * scale));
+    const targetH = Math.max(1, Math.round(dimensions.height * scale));
+    const resizedBlob = ImagesService.openImage(blob)
+      .resize(targetW, targetH)
+      .getBlob();
+
+    return { blob: resizedBlob, dimensions };
+  } catch (e) {
+    return { blob, dimensions: null };
+  }
+}
+
 /**
  * Generate a mosaic cover page with all article images
  * Uses a smart bin-packing algorithm that:
@@ -1779,16 +2193,17 @@ function generateCoverMosaic(articles, from, to, maxPhotos) {
   // Collect all images with their dimensions
   const images = [];
   const photoLimit = maxPhotos || articles.length;
+  const coverMaxDim = parseInt(getConfigValue('pdf_cover_max_dim') || '', 10) || 800;
 
   for (const article of articles) {
     if (article.image_file_id && images.length < photoLimit) {
       try {
         const file = DriveApp.getFileById(article.image_file_id);
-        const blob = file.getBlob();
-        const base64 = Utilities.base64Encode(blob.getBytes());
-        const mimeType = blob.getContentType();
-        const imageBytes = blob.getBytes();
-        const dimensions = getImageDimensions(imageBytes, mimeType);
+        const originalBlob = file.getBlob();
+        const resized = resizeImageBlob(originalBlob, coverMaxDim);
+        const base64 = Utilities.base64Encode(resized.blob.getBytes());
+        const mimeType = resized.blob.getContentType();
+        const dimensions = resized.dimensions;
 
         // Default to 4:3 if dimensions unknown
         const aspectRatio = dimensions ? dimensions.width / dimensions.height : 4/3;

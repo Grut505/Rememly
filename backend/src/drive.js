@@ -8,26 +8,15 @@ function getRootFolder() {
   return DriveApp.createFolder('Rememly');
 }
 
-function getYearFolder(year) {
+function ensureFolderStructure() {
   const rootFolder = getRootFolder();
-  const yearName = year.toString();
-
-  const folders = rootFolder.getFoldersByName(yearName);
-  if (folders.hasNext()) {
-    return folders.next();
-  }
-  return rootFolder.createFolder(yearName);
-}
-
-function ensureFolderStructure(year) {
-  const yearFolder = getYearFolder(year);
 
   const getFolderOrCreate = (name) => {
-    const folders = yearFolder.getFoldersByName(name);
+    const folders = rootFolder.getFoldersByName(name);
     if (folders.hasNext()) {
       return folders.next();
     }
-    return yearFolder.createFolder(name);
+    return rootFolder.createFolder(name);
   };
 
   return {
@@ -37,8 +26,23 @@ function ensureFolderStructure(year) {
   };
 }
 
+function getPdfFolder() {
+  const folders = ensureFolderStructure();
+  return folders.pdf;
+}
+
+function createPdfJobFolder(jobId) {
+  const pdfFolder = getPdfFolder();
+  const name = `pdf_job_${jobId}`;
+  const existing = pdfFolder.getFoldersByName(name);
+  if (existing.hasNext()) {
+    return existing.next();
+  }
+  return pdfFolder.createFolder(name);
+}
+
 function uploadImage(base64, fileName, year, folderType) {
-  const folders = ensureFolderStructure(year);
+  const folders = ensureFolderStructure();
   const folder = folders[folderType];
 
   const blob = base64ToBlob(base64, 'image/jpeg');
@@ -67,8 +71,8 @@ function getImageUrl(fileId) {
   }
 }
 
-function savePdfToFolder(pdfBlob, year, fileName) {
-  const folders = ensureFolderStructure(year);
+function savePdfToFolder(pdfBlob, fileName) {
+  const folders = ensureFolderStructure();
   const pdfFolder = folders.pdf;
 
   const file = pdfFolder.createFile(pdfBlob);

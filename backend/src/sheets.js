@@ -100,12 +100,101 @@ function getJobsSheet() {
   return sheet;
 }
 
+function getPdfLogsSheet() {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName('logs_pdf');
+
+  if (!sheet) {
+    sheet = ss.insertSheet('logs_pdf');
+    sheet.appendRow(['timestamp', 'job_id', 'level', 'message', 'meta']);
+  }
+
+  return sheet;
+}
+
+function logPdfEvent(jobId, level, message, meta) {
+  try {
+    const sheet = getPdfLogsSheet();
+    const ts = new Date().toISOString();
+    const metaStr = meta ? JSON.stringify(meta) : '';
+    sheet.appendRow([ts, jobId || '', level, message, metaStr]);
+  } catch (e) {
+    // Avoid throwing from logger
+  }
+}
+
+function getPdfLogsRange() {
+  const sheet = getPdfLogsSheet();
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return { min: null, max: null, count: 0 };
+  }
+
+  const data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  let min = null;
+  let max = null;
+  let count = 0;
+
+  for (let i = 0; i < data.length; i++) {
+    const value = data[i][0];
+    if (!value) continue;
+    const d = new Date(value);
+    if (isNaN(d.getTime())) continue;
+    const ts = d.toISOString();
+    if (!min || ts < min) min = ts;
+    if (!max || ts > max) max = ts;
+    count++;
+  }
+
+  return { min, max, count };
+}
+
+function clearPdfLogsRange(fromIso, toIso) {
+  const sheet = getPdfLogsSheet();
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return { deleted: 0, remaining: 0 };
+  }
+
+  const from = fromIso ? new Date(fromIso) : null;
+  const to = toIso ? new Date(toIso) : null;
+  if ((from && isNaN(from.getTime())) || (to && isNaN(to.getTime()))) {
+    throw new Error('Invalid date range');
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const header = data[0];
+  const rows = data.slice(1);
+  const keep = [];
+  let deleted = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const ts = rows[i][0];
+    const d = ts ? new Date(ts) : null;
+    const inRange = d && !isNaN(d.getTime()) &&
+      (!from || d >= from) &&
+      (!to || d <= to);
+    if (inRange) {
+      deleted++;
+    } else {
+      keep.push(rows[i]);
+    }
+  }
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  if (keep.length > 0) {
+    sheet.getRange(2, 1, keep.length, header.length).setValues(keep);
+  }
+
+  return { deleted, remaining: keep.length };
+}
+
 function getJobsHeaders() {
   return [
     'job_id',
     'created_at',
     'created_by',
-    'year',
     'date_from',
     'date_to',
     'status',
@@ -114,8 +203,8 @@ function getJobsHeaders() {
     'pdf_url',
     'error_message',
     'progress_message',
-    'temp_folder_id',
-    'temp_folder_url',
+    'chunks_folder_id',
+    'chunks_folder_url',
   ];
 }
 
@@ -124,6 +213,14 @@ function ensureJobsSheetColumns(sheet) {
   const lastCol = sheet.getLastColumn() || expected.length;
   const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
   let updated = false;
+  const lastRow = sheet.getLastRow();
+
+  // If legacy "year" column exists and sheet is empty, reset headers
+  if (headers.includes('year') && lastRow <= 1) {
+    sheet.clearContents();
+    sheet.getRange(1, 1, 1, expected.length).setValues([expected]);
+    return;
+  }
 
   expected.forEach((header) => {
     if (!headers.includes(header)) {

@@ -4,24 +4,26 @@ function createJob(from, to, userEmail) {
   const sheet = getJobsSheet();
   const jobId = generateId();
   const dateNow = now();
-  const year = getYear(from);
+  const headerMap = getJobsHeaderIndexMap(sheet);
+  const colCount = sheet.getLastColumn();
+  const row = new Array(colCount).fill('');
 
-  const row = [
-    jobId,
-    dateNow,
-    userEmail,
-    year,
-    from,
-    to,
-    'PENDING',
-    0,
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-  ];
+  row[headerMap.job_id] = jobId;
+  row[headerMap.created_at] = dateNow;
+  row[headerMap.created_by] = userEmail;
+  if (headerMap.year !== undefined) {
+    row[headerMap.year] = getYear(from);
+  }
+  row[headerMap.date_from] = from;
+  row[headerMap.date_to] = to;
+  row[headerMap.status] = 'PENDING';
+  row[headerMap.progress] = 0;
+  row[headerMap.pdf_file_id] = '';
+  row[headerMap.pdf_url] = '';
+  row[headerMap.error_message] = '';
+  row[headerMap.progress_message] = '';
+  if (headerMap.chunks_folder_id !== undefined) row[headerMap.chunks_folder_id] = '';
+  if (headerMap.chunks_folder_url !== undefined) row[headerMap.chunks_folder_url] = '';
 
   sheet.appendRow(row);
   return jobId;
@@ -83,7 +85,34 @@ function getJobsHeaderIndexMap(sheet) {
   return map;
 }
 
-function updateJobTempFolder(jobId, folderId, folderUrl) {
+function getAllJobIdsSet() {
+  const sheet = getJobsSheet();
+  const data = sheet.getDataRange().getValues();
+  const ids = new Set();
+  for (let i = 1; i < data.length; i++) {
+    const id = data[i][0];
+    if (id) ids.add(String(id));
+  }
+  return ids;
+}
+
+function getJobIdByChunksFolderId(folderId) {
+  if (!folderId) return null;
+  const sheet = getJobsSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const idx = headers.indexOf('chunks_folder_id');
+  if (idx === -1) return null;
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][idx] === folderId) {
+      return data[i][0];
+    }
+  }
+  return null;
+}
+
+function updateJobChunksFolder(jobId, folderId, folderUrl) {
   const sheet = getJobsSheet();
   const rowIndex = findRowById(sheet, jobId);
 
@@ -93,8 +122,8 @@ function updateJobTempFolder(jobId, folderId, folderUrl) {
   const colCount = sheet.getLastColumn();
   const row = sheet.getRange(rowIndex, 1, 1, colCount).getValues()[0];
 
-  if (folderId !== undefined) row[headerMap.temp_folder_id] = folderId;
-  if (folderUrl !== undefined) row[headerMap.temp_folder_url] = folderUrl;
+  if (folderId !== undefined) row[headerMap.chunks_folder_id] = folderId;
+  if (folderUrl !== undefined) row[headerMap.chunks_folder_url] = folderUrl;
 
   sheet.getRange(rowIndex, 1, 1, colCount).setValues([row]);
 }
@@ -225,7 +254,7 @@ function deletePdfJob(jobId) {
   // Get the job data to find the file ID
   const row = sheet.getRange(rowIndex, 1, 1, colCount).getValues()[0];
   const pdfFileId = row[headerMap.pdf_file_id];
-  const tempFolderId = row[headerMap.temp_folder_id];
+  const chunksFolderId = row[headerMap.chunks_folder_id];
 
   // Delete the file from Drive if it exists
   if (pdfFileId) {
@@ -237,9 +266,9 @@ function deletePdfJob(jobId) {
     }
   }
 
-  if (tempFolderId) {
+  if (chunksFolderId) {
     try {
-      const folder = DriveApp.getFolderById(tempFolderId);
+      const folder = DriveApp.getFolderById(chunksFolderId);
       folder.setTrashed(true);
     } catch (e) {
       // Folder might already be deleted, continue anyway

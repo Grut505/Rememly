@@ -1,0 +1,11 @@
+[merge]
+folder_id=YOUR_FOLDER_ID
+credentials=credentials.json
+token=token.json
+save_local=false
+open_local=false
+apps_script_url=
+merge_token=
+move_to_pdf_root=false
+clean_chunks=false
+delete_chunks_folder=false

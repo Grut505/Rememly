@@ -32,9 +32,11 @@ If you get **“Access blocked: app not verified”**, add your account as a tes
 
 ### 3) Configure folder id
 
-From the `scripts/` folder, edit `merge_pdf_from_drive.ini`:
+From the `scripts/` folder, copy the example file and edit `merge_pdf_from_drive.ini`:
 
 ```
+cp merge_pdf_from_drive.ini.example merge_pdf_from_drive.ini
+
 [merge]
 folder_id=YOUR_FOLDER_ID
 credentials=credentials.json

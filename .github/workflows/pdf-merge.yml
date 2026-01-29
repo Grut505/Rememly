@@ -46,9 +46,13 @@ jobs:
         run: |
           echo "${{ secrets.GDRIVE_CREDENTIALS_JSON }}" | base64 -d > credentials.json
           echo "${{ secrets.GDRIVE_TOKEN_JSON }}" | base64 -d > token.json
-          STATUS_CODE=$(curl -sS -L -o /tmp/merge_status_1.json -w "%{http_code}" -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
-            -H "Content-Type: application/json" \
-            -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${{ inputs.job_id }}\",\"progress\":20,\"message\":\"Downloading chunks\"}")
+          STATUS_CODE=$(curl -sS -G -o /tmp/merge_status_1.json -w "%{http_code}" \
+            --data-urlencode "path=pdf/merge-status" \
+            --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
+            --data-urlencode "job_id=${{ inputs.job_id }}" \
+            --data-urlencode "progress=20" \
+            --data-urlencode "message=Downloading chunks" \
+            "${CALLBACK_URL}")
           echo "merge-status(Downloading chunks) HTTP ${STATUS_CODE}"
           if [ "${STATUS_CODE}" -ge 400 ]; then
             cat /tmp/merge_status_1.json || true
@@ -58,9 +62,13 @@ jobs:
       - name: Merge PDFs
         id: merge
         run: |
-          STATUS_CODE=$(curl -sS -L -o /tmp/merge_status_2.json -w "%{http_code}" -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
-            -H "Content-Type: application/json" \
-            -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${{ inputs.job_id }}\",\"progress\":60,\"message\":\"Merging PDFs\"}")
+          STATUS_CODE=$(curl -sS -G -o /tmp/merge_status_2.json -w "%{http_code}" \
+            --data-urlencode "path=pdf/merge-status" \
+            --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
+            --data-urlencode "job_id=${{ inputs.job_id }}" \
+            --data-urlencode "progress=60" \
+            --data-urlencode "message=Merging PDFs" \
+            "${CALLBACK_URL}")
           echo "merge-status(Merging PDFs) HTTP ${STATUS_CODE}"
           if [ "${STATUS_CODE}" -ge 400 ]; then
             cat /tmp/merge_status_2.json || true
@@ -73,9 +81,13 @@ jobs:
         run: |
           JOB_ID="${{ inputs.job_id }}"
           RESULT='${{ steps.merge.outputs.result }}'
-          STATUS_CODE=$(curl -sS -L -o /tmp/merge_status_3.json -w "%{http_code}" -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
-            -H "Content-Type: application/json" \
-            -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${JOB_ID}\",\"progress\":85,\"message\":\"Uploading merged PDF\"}")
+          STATUS_CODE=$(curl -sS -G -o /tmp/merge_status_3.json -w "%{http_code}" \
+            --data-urlencode "path=pdf/merge-status" \
+            --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
+            --data-urlencode "job_id=${JOB_ID}" \
+            --data-urlencode "progress=85" \
+            --data-urlencode "message=Uploading merged PDF" \
+            "${CALLBACK_URL}")
           echo "merge-status(Uploading merged PDF) HTTP ${STATUS_CODE}"
           if [ "${STATUS_CODE}" -ge 400 ]; then
             cat /tmp/merge_status_3.json || true
@@ -93,17 +105,25 @@ jobs:
           print(data['url'])
           PY
           )
-          STATUS_CODE=$(curl -sS -L -o /tmp/merge_status_4.json -w "%{http_code}" -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
-            -H "Content-Type: application/json" \
-            -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${JOB_ID}\",\"progress\":92,\"message\":\"Finalizing\"}")
+          STATUS_CODE=$(curl -sS -G -o /tmp/merge_status_4.json -w "%{http_code}" \
+            --data-urlencode "path=pdf/merge-status" \
+            --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
+            --data-urlencode "job_id=${JOB_ID}" \
+            --data-urlencode "progress=92" \
+            --data-urlencode "message=Finalizing" \
+            "${CALLBACK_URL}")
           echo "merge-status(Finalizing) HTTP ${STATUS_CODE}"
           if [ "${STATUS_CODE}" -ge 400 ]; then
             cat /tmp/merge_status_4.json || true
             exit 1
           fi
-          STATUS_CODE=$(curl -sS -L -o /tmp/merge_complete.json -w "%{http_code}" -X POST "${CALLBACK_URL}?path=pdf/merge-complete" \
-            -H "Content-Type: application/json" \
-            -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${JOB_ID}\",\"file_id\":\"${FILE_ID}\",\"url\":\"${URL}\"}")
+          STATUS_CODE=$(curl -sS -G -o /tmp/merge_complete.json -w "%{http_code}" \
+            --data-urlencode "path=pdf/merge-complete" \
+            --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
+            --data-urlencode "job_id=${JOB_ID}" \
+            --data-urlencode "file_id=${FILE_ID}" \
+            --data-urlencode "url=${URL}" \
+            "${CALLBACK_URL}")
           echo "merge-complete HTTP ${STATUS_CODE}"
           if [ "${STATUS_CODE}" -ge 400 ]; then
             cat /tmp/merge_complete.json || true
@@ -115,9 +135,12 @@ jobs:
       - name: Notify backend (merge failed)
         if: ${{ failure() }}
         run: |
-          STATUS_CODE=$(curl -sS -L -o /tmp/merge_failed.json -w "%{http_code}" -X POST "${CALLBACK_URL}?path=pdf/merge-failed" \
-            -H "Content-Type: application/json" \
-            -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${{ inputs.job_id }}\",\"message\":\"GitHub Action failed\"}")
+          STATUS_CODE=$(curl -sS -G -o /tmp/merge_failed.json -w "%{http_code}" \
+            --data-urlencode "path=pdf/merge-failed" \
+            --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
+            --data-urlencode "job_id=${{ inputs.job_id }}" \
+            --data-urlencode "message=GitHub Action failed" \
+            "${CALLBACK_URL}")
           echo "merge-failed HTTP ${STATUS_CODE}"
           if [ "${STATUS_CODE}" -ge 400 ]; then
             cat /tmp/merge_failed.json || true

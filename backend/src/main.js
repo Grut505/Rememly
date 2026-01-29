@@ -1,9 +1,53 @@
 // Main entry point for Google Apps Script Web App
 
 function doGet(e) {
-  return ContentService.createTextOutput(
-    JSON.stringify({ error: 'Use POST requests' })
-  ).setMimeType(ContentService.MimeType.JSON);
+  try {
+    const params = e.parameter || {};
+    const path = params.path || '';
+
+    // Allow GitHub Actions callbacks via GET (Apps Script redirects break POST)
+    if (path === 'pdf/merge-status') {
+      const body = {
+        token: params.token,
+        job_id: params.job_id,
+        progress: params.progress ? Number(params.progress) : undefined,
+        message: params.message,
+      };
+      return handlePdfMergeStatus(body);
+    }
+    if (path === 'pdf/merge-complete') {
+      const body = {
+        token: params.token,
+        job_id: params.job_id,
+        file_id: params.file_id,
+        url: params.url,
+        clean_chunks: params.clean_chunks === 'true',
+      };
+      return handlePdfMergeComplete(body);
+    }
+    if (path === 'pdf/merge-failed') {
+      const body = {
+        token: params.token,
+        job_id: params.job_id,
+        message: params.message,
+      };
+      return handlePdfMergeFailed(body);
+    }
+    if (path === 'pdf/merge-cancel') {
+      const body = {
+        job_id: params.job_id,
+      };
+      return handlePdfMergeCancel(body);
+    }
+
+    return ContentService.createTextOutput(
+      JSON.stringify({ error: 'Use POST requests' })
+    ).setMimeType(ContentService.MimeType.JSON);
+  } catch (e) {
+    return ContentService.createTextOutput(
+      JSON.stringify({ error: String(e) })
+    ).setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 function doPost(e) {

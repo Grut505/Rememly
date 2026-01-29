@@ -696,6 +696,7 @@ function handlePdfMergeStatus(body) {
     if (runId) {
       props.setProperty('PDF_MERGE_RUN_' + jobId, String(runId));
     }
+    logPdfEvent(jobId, 'INFO', 'Merge status update', { progress, message, runId: runId || null });
     updateJobStatus(jobId, 'RUNNING', progress, undefined, undefined, undefined, message);
     return createResponse({ ok: true, data: { ok: true } });
   } catch (e) {

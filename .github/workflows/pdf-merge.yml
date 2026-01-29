@@ -46,7 +46,7 @@ jobs:
         run: |
           echo "${{ secrets.GDRIVE_CREDENTIALS_JSON }}" | base64 -d > credentials.json
           echo "${{ secrets.GDRIVE_TOKEN_JSON }}" | base64 -d > token.json
-          STATUS_CODE=$(curl -sS -G -o /tmp/merge_status_1.json -w "%{http_code}" \
+          STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_status_1.json -w "%{http_code}" \
             --data-urlencode "path=pdf/merge-status" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${{ inputs.job_id }}" \
@@ -62,7 +62,7 @@ jobs:
       - name: Merge PDFs
         id: merge
         run: |
-          STATUS_CODE=$(curl -sS -G -o /tmp/merge_status_2.json -w "%{http_code}" \
+          STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_status_2.json -w "%{http_code}" \
             --data-urlencode "path=pdf/merge-status" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${{ inputs.job_id }}" \
@@ -81,7 +81,7 @@ jobs:
         run: |
           JOB_ID="${{ inputs.job_id }}"
           RESULT='${{ steps.merge.outputs.result }}'
-          STATUS_CODE=$(curl -sS -G -o /tmp/merge_status_3.json -w "%{http_code}" \
+          STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_status_3.json -w "%{http_code}" \
             --data-urlencode "path=pdf/merge-status" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${JOB_ID}" \
@@ -105,7 +105,7 @@ jobs:
           print(data['url'])
           PY
           )
-          STATUS_CODE=$(curl -sS -G -o /tmp/merge_status_4.json -w "%{http_code}" \
+          STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_status_4.json -w "%{http_code}" \
             --data-urlencode "path=pdf/merge-status" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${JOB_ID}" \
@@ -117,7 +117,7 @@ jobs:
             cat /tmp/merge_status_4.json || true
             exit 1
           fi
-          STATUS_CODE=$(curl -sS -G -o /tmp/merge_complete.json -w "%{http_code}" \
+          STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_complete.json -w "%{http_code}" \
             --data-urlencode "path=pdf/merge-complete" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${JOB_ID}" \
@@ -135,7 +135,7 @@ jobs:
       - name: Notify backend (merge failed)
         if: ${{ failure() }}
         run: |
-          STATUS_CODE=$(curl -sS -G -o /tmp/merge_failed.json -w "%{http_code}" \
+          STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_failed.json -w "%{http_code}" \
             --data-urlencode "path=pdf/merge-failed" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${{ inputs.job_id }}" \

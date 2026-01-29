@@ -34,7 +34,7 @@ jobs:
           echo "${{ secrets.GDRIVE_CREDENTIALS_JSON }}" | base64 -d > credentials.json
           echo "${{ secrets.GDRIVE_TOKEN_JSON }}" | base64 -d > token.json
           CALLBACK_URL="${{ secrets.APPS_SCRIPT_URL || secrets.BACKEND_URL }}"
-          curl -s -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
+          curl -sL -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
             -H "Content-Type: application/json" \
             -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${{ inputs.job_id }}\",\"progress\":20,\"message\":\"Downloading chunks\"}"
 
@@ -42,7 +42,7 @@ jobs:
         id: merge
         run: |
           CALLBACK_URL="${{ secrets.APPS_SCRIPT_URL || secrets.BACKEND_URL }}"
-          curl -s -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
+          curl -sL -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
             -H "Content-Type: application/json" \
             -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${{ inputs.job_id }}\",\"progress\":60,\"message\":\"Merging PDFs\"}"
           RESULT=$(python scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --no-browser)
@@ -53,7 +53,7 @@ jobs:
           JOB_ID="${{ inputs.job_id }}"
           RESULT='${{ steps.merge.outputs.result }}'
           CALLBACK_URL="${{ secrets.APPS_SCRIPT_URL || secrets.BACKEND_URL }}"
-          curl -s -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
+          curl -sL -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
             -H "Content-Type: application/json" \
             -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${JOB_ID}\",\"progress\":85,\"message\":\"Uploading merged PDF\"}"
           FILE_ID=$(python - <<'PY'
@@ -68,10 +68,10 @@ jobs:
           print(data['url'])
           PY
           )
-          curl -s -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
+          curl -sL -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
             -H "Content-Type: application/json" \
             -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${JOB_ID}\",\"progress\":92,\"message\":\"Finalizing\"}"
-          curl -s -X POST "${CALLBACK_URL}?path=pdf/merge-complete" \
+          curl -sL -X POST "${CALLBACK_URL}?path=pdf/merge-complete" \
             -H "Content-Type: application/json" \
             -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${JOB_ID}\",\"file_id\":\"${FILE_ID}\",\"url\":\"${URL}\"}"
         env:
@@ -81,6 +81,6 @@ jobs:
         if: ${{ failure() }}
         run: |
           CALLBACK_URL="${{ secrets.APPS_SCRIPT_URL || secrets.BACKEND_URL }}"
-          curl -s -X POST "${CALLBACK_URL}?path=pdf/merge-failed" \
+          curl -sL -X POST "${CALLBACK_URL}?path=pdf/merge-failed" \
             -H "Content-Type: application/json" \
             -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${{ inputs.job_id }}\",\"message\":\"GitHub Action failed\"}"

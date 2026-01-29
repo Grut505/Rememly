@@ -253,7 +253,7 @@ Famileo is integrated to import family posts from the Famileo service. The integ
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     GitHub Actions (Nightly)                     │
+│                  GitHub Actions (On-demand)                      │
 │  ┌─────────────────┐    ┌──────────────────┐                    │
 │  │  login.js       │───>│ update-backend.js│                    │
 │  │  (Puppeteer)    │    │                  │                    │
@@ -298,7 +298,7 @@ Famileo is integrated to import family posts from the Famileo service. The integ
 
 #### 1. GitHub Actions Workflow (`.github/workflows/famileo-refresh.yml`)
 
-Runs every night at 3:00 AM UTC (or manually via `workflow_dispatch`).
+Runs on-demand via `workflow_dispatch` (manual trigger) when a session refresh is needed.
 
 **Steps:**
 1. Installs Puppeteer
@@ -364,8 +364,8 @@ Cookies are stored in a `config` sheet tab:
 ### Troubleshooting
 
 **"Session expired" error:**
-- The nightly refresh should handle this automatically
-- To force refresh: trigger the GitHub Action manually
+- The app auto-triggers a refresh when the session is invalid
+- If needed, you can still trigger the GitHub Action manually as a fallback
 
 **"Endpoint not found" error:**
 - Check that the backend URL in GitHub Secrets matches the current Apps Script deployment

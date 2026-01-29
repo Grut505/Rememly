@@ -54,8 +54,11 @@ export const famileoApi = {
   status: (params?: { validate?: string; family_id?: string }) =>
     apiClient.get<FamileoStatusResponse>('famileo/status', params),
 
-  posts: (params?: { limit?: string; timestamp?: string; family_id?: string }) =>
-    apiClient.get<FamileoPostsResponse>('famileo/posts', params),
+  posts: (
+    params?: { limit?: string; timestamp?: string; family_id?: string },
+    options?: RequestInit
+  ) =>
+    apiClient.get<FamileoPostsResponse>('famileo/posts', params, options),
 
   image: (url: string) =>
     apiClient.get<FamileoImageResponse>('famileo/image', { url: encodeURIComponent(url) }),

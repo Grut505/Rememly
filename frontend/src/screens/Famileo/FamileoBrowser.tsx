@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../../ui/AppHeader'
 import { famileoApi, FamileoPost, FamileoFamily } from '../../api/famileo'
@@ -24,6 +24,7 @@ export function FamileoBrowser() {
   const [posts, setPosts] = useState<FamileoPost[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
@@ -32,6 +33,8 @@ export function FamileoBrowser() {
   // Bulk create state
   const [bulkCreating, setBulkCreating] = useState(false)
   const [bulkProgress, setBulkProgress] = useState<BulkProgress | null>(null)
+  const cancelBulkRef = useRef(false)
+  const [bulkCanceling, setBulkCanceling] = useState(false)
 
   // Refresh session state
   const [refreshing, setRefreshing] = useState(false)
@@ -108,7 +111,7 @@ export function FamileoBrowser() {
     return false
   }
 
-  const fetchPosts = async () => {
+  const fetchPosts = async (signal?: AbortSignal) => {
     const allPosts: FamileoPost[] = []
     let shouldContinue = true
 
@@ -117,11 +120,14 @@ export function FamileoBrowser() {
     let timestamp: string | null = new Date(endDate + 'T23:59:59.999Z').toISOString()
 
     while (shouldContinue) {
-      const response = await famileoApi.posts({
-        limit: '50',
-        timestamp: timestamp,
-        family_id: selectedFamilyId || undefined,
-      })
+      const response = await famileoApi.posts(
+        {
+          limit: '50',
+          timestamp: timestamp,
+          family_id: selectedFamilyId || undefined,
+        },
+        { signal }
+      )
 
       for (const post of response.posts) {
         const postTs = new Date(post.date).getTime()
@@ -151,6 +157,9 @@ export function FamileoBrowser() {
       return
     }
 
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setLoading(true)
     setError(null)
     setRefreshMessage(null)
@@ -159,12 +168,16 @@ export function FamileoBrowser() {
     setImageCache({})
 
     try {
-      const allPosts = await fetchPosts()
+      const allPosts = await fetchPosts(controller.signal)
       setPosts(allPosts)
       if (allPosts.length === 0) {
         setError('No posts found in this date range')
       }
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        setLoading(false)
+        return
+      }
       const message = err instanceof Error ? err.message : 'Failed to fetch posts'
       if (isSessionError(message) && !autoRefreshing) {
         setAutoRefreshing(true)
@@ -174,7 +187,7 @@ export function FamileoBrowser() {
           await famileoApi.triggerRefresh()
           const ok = await waitForSessionValid()
           if (ok) {
-            const allPosts = await fetchPosts()
+            const allPosts = await fetchPosts(controller.signal)
             setPosts(allPosts)
             if (allPosts.length === 0) {
               setError('No posts found in this date range')
@@ -196,6 +209,17 @@ export function FamileoBrowser() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleCancelGetPosts = () => {
+    if (abortRef.current) {
+      abortRef.current.abort()
+      abortRef.current = null
+    }
+    setLoading(false)
+    setRefreshing(false)
+    setAutoRefreshing(false)
+    setRefreshMessage(null)
   }
 
   const handleBack = () => {
@@ -238,11 +262,15 @@ export function FamileoBrowser() {
     // Sort by date ascending (oldest first)
     selectedPosts.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
+    cancelBulkRef.current = false
     setBulkCreating(true)
     setBulkProgress({ current: 0, total: selectedPosts.length, currentPostText: '' })
 
     try {
       for (let i = 0; i < selectedPosts.length; i++) {
+        if (cancelBulkRef.current) {
+          break
+        }
         const post = selectedPosts[i]
         setBulkProgress({
           current: i + 1,
@@ -290,13 +318,23 @@ export function FamileoBrowser() {
 
       // Success - clear selection and show success message
       setSelectedIds(new Set())
-      setRefreshMessage(`Successfully created ${selectedPosts.length} article${selectedPosts.length > 1 ? 's' : ''}`)
+      if (cancelBulkRef.current) {
+        setRefreshMessage('Bulk creation cancelled.')
+      } else {
+        setRefreshMessage(`Successfully created ${selectedPosts.length} article${selectedPosts.length > 1 ? 's' : ''}`)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create articles')
     } finally {
       setBulkCreating(false)
       setBulkProgress(null)
+      setBulkCanceling(false)
     }
+  }
+
+  const handleCancelBulkCreate = () => {
+    cancelBulkRef.current = true
+    setBulkCanceling(true)
   }
 
   const handleRefreshSession = async () => {
@@ -438,6 +476,13 @@ export function FamileoBrowser() {
             <p className="text-sm text-gray-500 truncate">
               {bulkProgress.currentPostText}
             </p>
+            <button
+              onClick={handleCancelBulkCreate}
+              disabled={bulkCanceling}
+              className="mt-4 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-60 rounded-lg transition-colors"
+            >
+              {bulkCanceling ? 'Cancel in progress...' : 'Cancel'}
+            </button>
           </div>
         </div>
       )}
@@ -456,10 +501,17 @@ export function FamileoBrowser() {
         </div>
       )}
 
-      {/* Loading spinner */}
+      {/* Loading indicator */}
       {loading && (
-        <div className="flex-1 flex items-center justify-center py-12">
+        <div className="flex flex-col items-center justify-center py-10">
           <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
+          <p className="mt-3 text-sm text-gray-600">Loading posts...</p>
+          <button
+            onClick={handleCancelGetPosts}
+            className="mt-4 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
         </div>
       )}
 
@@ -518,8 +570,8 @@ export function FamileoBrowser() {
       )}
 
       {/* Bulk create button - fixed at bottom */}
-      {!loading && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-20">
+      {!loading && posts.length > 0 && (
+        <div className={`fixed bottom-16 left-0 right-0 bg-white border-t border-gray-200 p-4 z-40 ${bulkCreating ? 'pointer-events-none' : ''}`}>
           <div className="max-w-content mx-auto">
             <button
               onClick={handleBulkCreate}

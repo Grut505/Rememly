@@ -60,7 +60,11 @@ class ApiClient {
     }
   }
 
-  async get<T>(endpoint: string, params?: Record<string, string | undefined>): Promise<T> {
+  async get<T>(
+    endpoint: string,
+    params?: Record<string, string | undefined>,
+    options: RequestInit = {}
+  ): Promise<T> {
     // Filter out undefined values
     const filteredParams = params
       ? Object.fromEntries(
@@ -74,13 +78,15 @@ class ApiClient {
     // Use POST for all requests to avoid CORS issues with Apps Script
     return this.request<T>(`${endpoint}${queryString}`, {
       method: 'POST',
+      ...options,
     })
   }
 
-  async post<T>(endpoint: string, body?: unknown): Promise<T> {
+  async post<T>(endpoint: string, body?: unknown, options: RequestInit = {}): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: JSON.stringify(body),
+      ...options,
     })
   }
 

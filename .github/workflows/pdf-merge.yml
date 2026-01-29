@@ -45,7 +45,7 @@ jobs:
           curl -s -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
             -H "Content-Type: application/json" \
             -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${{ inputs.job_id }}\",\"progress\":60,\"message\":\"Merging PDFs\"}"
-          RESULT=$(python scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json)
+          RESULT=$(python scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --no-browser)
           echo "result=$RESULT" >> $GITHUB_OUTPUT
 
       - name: Notify backend

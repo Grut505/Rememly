@@ -76,3 +76,11 @@ jobs:
             -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${JOB_ID}\",\"file_id\":\"${FILE_ID}\",\"url\":\"${URL}\"}"
         env:
           RESULT: ${{ steps.merge.outputs.result }}
+
+      - name: Notify backend (merge failed)
+        if: ${{ failure() }}
+        run: |
+          CALLBACK_URL="${{ secrets.APPS_SCRIPT_URL || secrets.BACKEND_URL }}"
+          curl -s -X POST "${CALLBACK_URL}?path=pdf/merge-failed" \
+            -H "Content-Type: application/json" \
+            -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${{ inputs.job_id }}\",\"message\":\"GitHub Action failed\"}"

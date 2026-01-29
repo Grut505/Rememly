@@ -647,11 +647,11 @@ export function PdfExport() {
                           <p className="text-sm text-gray-500 mt-1">
                             Created on {formatDate(pdf.created_at)}
                           </p>
-                          {pdf.status === 'ERROR' && pdf.error_message && (
-                            <p className="text-xs text-red-500 mt-0.5 truncate" title={pdf.error_message}>
-                              {pdf.error_message}
-                            </p>
-                          )}
+                            {pdf.status === 'ERROR' && (
+                              <p className="text-xs text-red-500 mt-0.5 truncate" title={pdf.error_message || 'Merge failed'}>
+                                {pdf.error_message || 'Merge failed'}
+                              </p>
+                            )}
                           {pdf.status === 'DONE' && !pdf.pdf_url && pdf.progress_message && (
                             <p className="text-xs text-amber-600 mt-0.5 truncate" title={pdf.progress_message}>
                               {pdf.progress_message}
@@ -690,7 +690,7 @@ export function PdfExport() {
                                 </svg>
                               </a>
                             )}
-                            {!pdf.pdf_url && pdf.status === 'DONE' && pdf.chunks_folder_id && (
+                            {!pdf.pdf_url && (pdf.status === 'DONE' || pdf.status === 'ERROR') && pdf.chunks_folder_id && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()

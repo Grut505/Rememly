@@ -698,6 +698,29 @@ function handlePdfMergeStatus(body) {
   }
 }
 
+function handlePdfMergeFailed(body) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const token = props.getProperty('PDF_MERGE_TOKEN');
+    if (!token || body?.token !== token) {
+      return createResponse({ ok: false, error: { code: 'FORBIDDEN', message: 'Invalid token' } });
+    }
+    const jobId = body?.job_id;
+    const message = body?.message || 'Merge failed';
+    if (!jobId) {
+      return createResponse({ ok: false, error: { code: 'INVALID_PARAMS', message: 'Missing job_id' } });
+    }
+    const job = getJobStatus(jobId);
+    if (!job) {
+      return createResponse({ ok: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, message, 'Merge failed');
+    return createResponse({ ok: true, data: { ok: true } });
+  } catch (e) {
+    return createResponse({ ok: false, error: { code: 'MERGE_FAILED', message: String(e) } });
+  }
+}
+
 function handlePdfMergeTrigger(body) {
   try {
     const jobId = body?.job_id;

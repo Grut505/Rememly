@@ -24,6 +24,10 @@ function doPost(e) {
       const body = e.postData ? JSON.parse(e.postData.contents) : {};
       return handlePdfMergeStatus(body);
     }
+    if (path === 'pdf/merge-failed') {
+      const body = e.postData ? JSON.parse(e.postData.contents) : {};
+      return handlePdfMergeFailed(body);
+    }
     if (path === 'pdf/merge-cancel') {
       const body = e.postData ? JSON.parse(e.postData.contents) : {};
       return handlePdfMergeCancel(body);

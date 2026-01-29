@@ -53,6 +53,17 @@ def list_pdf_files(service, folder_id: str) -> List[dict]:
     return files
 
 
+def ensure_folder_exists(service, folder_id: str):
+    try:
+        folder = service.files().get(fileId=folder_id, fields="id,mimeType,trashed").execute()
+    except Exception as exc:
+        raise SystemExit(f"Folder not found or inaccessible: {folder_id}") from exc
+    if folder.get("trashed"):
+        raise SystemExit(f"Folder is trashed: {folder_id}")
+    if folder.get("mimeType") != "application/vnd.google-apps.folder":
+        raise SystemExit(f"Not a folder: {folder_id}")
+
+
 def download_file(service, file_id: str) -> bytes:
     request = service.files().get_media(fileId=file_id)
     fh = io.BytesIO()
@@ -165,6 +176,7 @@ def main():
         raise SystemExit("Missing folder_id. Set it in config or pass --folder-id.")
 
     service = get_drive_service(credentials, token, args.no_browser)
+    ensure_folder_exists(service, folder_id)
     print("Listing PDFs in folder...")
     files = list_pdf_files(service, folder_id)
     if not files:

@@ -191,7 +191,9 @@ export function PdfExport() {
 
   const isMergeInProgress = (pdf: PdfListItem) => {
     const message = (pdf.progress_message || '').toLowerCase()
-    return pdf.status === 'RUNNING' && message.includes('merge')
+    if (pdf.status !== 'RUNNING') return false
+    if (pdf.chunks_folder_id && !pdf.pdf_url) return true
+    return message.includes('merge')
   }
 
   const getAuthorLabel = useCallback((email?: string, pseudo?: string) => {
@@ -296,9 +298,10 @@ export function PdfExport() {
         if (pdf.job_id !== jobId) return pdf
         return {
           ...pdf,
-          status: 'DONE',
-          progress: 100,
-          progress_message: 'Chunks ready (merge pending)',
+          status: 'ERROR',
+          progress: 0,
+          progress_message: 'Merge failed',
+          error_message: 'Merge failed',
         }
       }))
     } catch (err) {
@@ -317,7 +320,7 @@ export function PdfExport() {
         return {
           ...pdf,
           status: 'RUNNING',
-          progress: 95,
+          progress: 10,
           progress_message: 'Merge queued',
           error_message: undefined,
         }

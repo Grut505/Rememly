@@ -50,6 +50,7 @@ jobs:
             --data-urlencode "path=pdf/merge-status" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${{ inputs.job_id }}" \
+            --data-urlencode "run_id=${{ github.run_id }}" \
             --data-urlencode "progress=20" \
             --data-urlencode "message=Downloading chunks" \
             "${CALLBACK_URL}")
@@ -62,10 +63,12 @@ jobs:
       - name: Merge PDFs
         id: merge
         run: |
+          set -e
           STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_status_2.json -w "%{http_code}" \
             --data-urlencode "path=pdf/merge-status" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${{ inputs.job_id }}" \
+            --data-urlencode "run_id=${{ github.run_id }}" \
             --data-urlencode "progress=60" \
             --data-urlencode "message=Merging PDFs" \
             "${CALLBACK_URL}")
@@ -74,7 +77,13 @@ jobs:
             cat /tmp/merge_status_2.json || true
             exit 1
           fi
-          RESULT=$(python scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --no-browser)
+          python scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --no-browser \
+            1> /tmp/merge_out.txt 2> /tmp/merge_err.txt
+          echo "---- merge stdout (tail) ----"
+          tail -n 50 /tmp/merge_out.txt || true
+          echo "---- merge stderr (tail) ----"
+          tail -n 50 /tmp/merge_err.txt || true
+          RESULT=$(cat /tmp/merge_out.txt | tail -n 1)
           echo "result=$RESULT" >> $GITHUB_OUTPUT
 
       - name: Notify backend
@@ -85,6 +94,7 @@ jobs:
             --data-urlencode "path=pdf/merge-status" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${JOB_ID}" \
+            --data-urlencode "run_id=${{ github.run_id }}" \
             --data-urlencode "progress=85" \
             --data-urlencode "message=Uploading merged PDF" \
             "${CALLBACK_URL}")
@@ -109,6 +119,7 @@ jobs:
             --data-urlencode "path=pdf/merge-status" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${JOB_ID}" \
+            --data-urlencode "run_id=${{ github.run_id }}" \
             --data-urlencode "progress=92" \
             --data-urlencode "message=Finalizing" \
             "${CALLBACK_URL}")
@@ -135,11 +146,12 @@ jobs:
       - name: Notify backend (merge failed)
         if: ${{ failure() }}
         run: |
+          ERROR_MSG="$(tail -c 1500 /tmp/merge_err.txt 2>/dev/null || echo 'GitHub Action failed')"
           STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_failed.json -w "%{http_code}" \
             --data-urlencode "path=pdf/merge-failed" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${{ inputs.job_id }}" \
-            --data-urlencode "message=GitHub Action failed" \
+            --data-urlencode "message=${ERROR_MSG}" \
             "${CALLBACK_URL}")
           echo "merge-failed HTTP ${STATUS_CODE}"
           if [ "${STATUS_CODE}" -ge 400 ]; then

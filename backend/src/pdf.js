@@ -664,6 +664,7 @@ function handlePdfMergeComplete(body) {
     }
     sendPdfMergedEmail(jobId, url);
     logPdfEvent(jobId, 'INFO', 'Merge complete', { fileId, url });
+    props.deleteProperty('PDF_MERGE_RUN_' + jobId);
 
     return createResponse({ ok: true, data: { ok: true } });
   } catch (e) {
@@ -681,6 +682,7 @@ function handlePdfMergeStatus(body) {
     const jobId = body?.job_id;
     const progress = body?.progress;
     const message = body?.message;
+    const runId = body?.run_id;
     if (!jobId || progress === undefined || message === undefined) {
       return createResponse({ ok: false, error: { code: 'INVALID_PARAMS', message: 'Missing params' } });
     }
@@ -688,8 +690,11 @@ function handlePdfMergeStatus(body) {
     if (!job) {
       return createResponse({ ok: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
     }
-    if ((job.status === 'DONE' && job.pdf_url) || job.status === 'CANCELLED') {
+    if ((job.status === 'DONE' && job.pdf_url) || job.status === 'CANCELLED' || job.status === 'ERROR') {
       return createResponse({ ok: true, data: { ok: true, skipped: true } });
+    }
+    if (runId) {
+      props.setProperty('PDF_MERGE_RUN_' + jobId, String(runId));
     }
     updateJobStatus(jobId, 'RUNNING', progress, undefined, undefined, undefined, message);
     return createResponse({ ok: true, data: { ok: true } });
@@ -715,6 +720,7 @@ function handlePdfMergeFailed(body) {
       return createResponse({ ok: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
     }
     updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, message, 'Merge failed');
+    props.deleteProperty('PDF_MERGE_RUN_' + jobId);
     return createResponse({ ok: true, data: { ok: true } });
   } catch (e) {
     return createResponse({ ok: false, error: { code: 'MERGE_FAILED', message: String(e) } });
@@ -747,7 +753,7 @@ function handlePdfMergeTrigger(body) {
       return createResponse({ ok: false, error: { code: 'MISSING_GITHUB_TOKEN', message: 'GitHub token missing' } });
     }
 
-    updateJobStatus(jobId, 'RUNNING', 10, undefined, undefined, undefined, 'Merge queued');
+    updateJobStatus(jobId, 'RUNNING', 10, undefined, undefined, '', 'Merge queued');
     const triggerResult = triggerPdfMergeWorkflow(jobId, job.chunks_folder_id);
     if (!triggerResult.ok) {
       updateJobStatus(
@@ -786,7 +792,28 @@ function handlePdfMergeCancel(body) {
       return createResponse({ ok: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
     }
 
-    updateJobStatus(jobId, 'DONE', 100, undefined, undefined, undefined, 'Chunks ready (merge pending)');
+    const props = PropertiesService.getScriptProperties();
+    const runId = props.getProperty('PDF_MERGE_RUN_' + jobId);
+    const githubToken = props.getProperty('GITHUB_TOKEN');
+    const repo = props.getProperty('GITHUB_REPO') || 'Grut505/Rememly';
+    if (runId && githubToken) {
+      const response = UrlFetchApp.fetch(
+        `https://api.github.com/repos/${repo}/actions/runs/${runId}/cancel`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + githubToken,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+          },
+          muteHttpExceptions: true
+        }
+      );
+      logPdfEvent(jobId, 'INFO', 'Merge workflow cancel', { runId, code: response.getResponseCode() });
+    }
+
+    updateJobStatus(jobId, 'ERROR', 0, undefined, undefined, 'Merge failed', 'Merge failed');
+    props.deleteProperty('PDF_MERGE_RUN_' + jobId);
     return createResponse({ ok: true, data: { cancelled: true } });
   } catch (e) {
     return createResponse({ ok: false, error: { code: 'MERGE_CANCEL_FAILED', message: String(e) } });

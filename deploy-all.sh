@@ -21,21 +21,6 @@ update_about_date() {
     fi
 }
 
-cleanup_vite_temp_files() {
-    echo "🧹 Nettoyage des fichiers Vite temporaires..."
-    local tracked
-    tracked=$(git ls-files "frontend/vite.config.ts.timestamp-*.mjs")
-    if [ -z "$tracked" ]; then
-        echo "  ✓ Rien à nettoyer"
-        return
-    fi
-    while IFS= read -r file; do
-        if [ -n "$file" ] && [ ! -e "$file" ]; then
-            git rm --cached --ignore-unmatch -- "$file" >/dev/null 2>&1 || true
-            echo "  ✓ Retiré de l’index: $file"
-        fi
-    done <<< "$tracked"
-}
 
 echo "🚀 Déploiement complet de Rememly"
 echo ""
@@ -73,12 +58,7 @@ echo "✅ Backend déployé @$VERSION"
 echo ""
 
 # Git commit and push
-echo "📦 Commit et push vers GitHub..."
-cleanup_vite_temp_files
-git add -A
-git commit -m "Deploy: $(date '+%Y-%m-%d %H:%M:%S')" || echo "Rien à commiter"
-git push
-echo "✅ Pushé vers GitHub"
+./deploy-git.sh "Deploy: $(date '+%Y-%m-%d %H:%M:%S')"
 echo ""
 
 # Deploy to GitHub Pages

@@ -24,7 +24,7 @@ interface PdfGenerationState {
     mosaic_layout?: 'full' | 'centered'
     show_seasonal_fruits?: boolean
     max_mosaic_photos?: number
-    keep_temp?: boolean
+    auto_merge?: boolean
   }, onComplete?: () => void) => Promise<PdfListItem | null>
   pollJobStatus: (jobId: string) => Promise<void>
   setLastCompletedJob: (job: PdfListItem | null) => void
@@ -195,7 +195,7 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
   setLastCompletedJob: (job) => {
     set({
       lastCompletedJob: job,
-      showSuccess: job !== null,
+      showSuccess: !!job?.pdf_url,
       pdfUrl: job?.pdf_url || null,
     })
   },

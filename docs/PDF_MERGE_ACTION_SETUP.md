@@ -112,7 +112,8 @@ In **GitHub → Settings → Secrets and variables → Actions**, add:
 - `GDRIVE_TOKEN_JSON`  
   base64 of `token.json`
 - `APPS_SCRIPT_URL`  
-  your Apps Script Web App URL (https://script.google.com/.../exec)
+  your Apps Script Web App URL (https://script.google.com/.../exec).  
+  If your repo already defines `BACKEND_URL`, you can use that instead and omit `APPS_SCRIPT_URL`.
 - `PDF_MERGE_TOKEN`  
   secret string used by Apps Script to validate merge completion
 
@@ -122,6 +123,8 @@ Encode secrets:
 base64 -w 0 credentials.json
 base64 -w 0 token.json
 ```
+
+Note: if your terminal output ends with a trailing `%`, **do not include it** in the secret value. It is not part of the base64 string.
 
 ---
 
@@ -138,6 +141,8 @@ Optional (defaults shown):
 - `GITHUB_REPO` = `Grut505/Rememly`
 - `GITHUB_PDF_MERGE_WORKFLOW` = `pdf-merge.yml`
 - `GITHUB_PDF_MERGE_REF` = `main`
+
+Note: if any of these are missing or invalid, the GitHub dispatch can fail with HTTP 422.
 
 ---
 

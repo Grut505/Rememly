@@ -20,6 +20,14 @@ function doPost(e) {
       const body = e.postData ? JSON.parse(e.postData.contents) : {};
       return handlePdfMergeComplete(body);
     }
+    if (path === 'pdf/merge-status') {
+      const body = e.postData ? JSON.parse(e.postData.contents) : {};
+      return handlePdfMergeStatus(body);
+    }
+    if (path === 'pdf/merge-cancel') {
+      const body = e.postData ? JSON.parse(e.postData.contents) : {};
+      return handlePdfMergeCancel(body);
+    }
     if (path === 'pdf/job-by-folder') {
       const body = e.postData ? JSON.parse(e.postData.contents) : {};
       return handlePdfJobByFolder(body);
@@ -79,6 +87,9 @@ function doPost(e) {
 
       case 'pdf/cancel':
         return handlePdfCancel(body);
+
+      case 'pdf/merge-trigger':
+        return handlePdfMergeTrigger(body);
 
       case 'pdf/cleanup-properties':
         return createResponse({ ok: true, data: cleanupOrphanPdfProperties() });

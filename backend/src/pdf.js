@@ -103,7 +103,7 @@ function handlePdfCreate(body, user) {
     mosaicLayout: body.options?.mosaic_layout || 'full',
     showSeasonalFruits: body.options?.show_seasonal_fruits !== false,
     maxMosaicPhotos: body.options?.max_mosaic_photos || undefined,
-    keepTemp: body.options?.keep_temp !== false
+    autoMerge: body.options?.auto_merge === true
   }));
 
   // Return immediately with PENDING status
@@ -304,8 +304,7 @@ async function processNextPdfChunk(jobId) {
     const optionsJson = props.getProperty('PDF_OPTIONS_' + jobId);
     const pdfOptions = optionsJson ? JSON.parse(optionsJson) : {
       mosaicLayout: 'full',
-      showSeasonalFruits: true,
-      keepTemp: false
+      showSeasonalFruits: true
     };
 
     const monthsFr = [
@@ -556,11 +555,37 @@ function finalizePdfChunks(jobId) {
       throw new Error('Missing batch state or job');
     }
 
+    const optionsJson = props.getProperty('PDF_OPTIONS_' + jobId);
+    const pdfOptions = optionsJson ? JSON.parse(optionsJson) : {
+      autoMerge: false
+    };
+    let autoMerge = pdfOptions.autoMerge === true;
+    if (autoMerge && !props.getProperty('GITHUB_TOKEN')) {
+      autoMerge = false;
+    }
+
     const folder = DriveApp.getFolderById(state.tempFolderId);
-    updateJobStatus(jobId, 'DONE', 100, folder.getId(), folder.getUrl(), undefined, 'Chunks ready (merge queued)');
+    if (autoMerge) {
+      updateJobStatus(jobId, 'RUNNING', 10, undefined, undefined, undefined, 'Merge queued');
+    } else {
+      updateJobStatus(jobId, 'DONE', 100, undefined, undefined, undefined, 'Chunks ready (merge pending)');
+    }
     sendPdfReadyEmail(jobId, folder.getUrl());
-    // Trigger merge workflow automatically
-    triggerPdfMergeWorkflow(jobId, folder.getId());
+    if (autoMerge) {
+      // Trigger merge workflow automatically
+      const triggerResult = triggerPdfMergeWorkflow(jobId, folder.getId());
+      if (!triggerResult.ok) {
+        updateJobStatus(
+          jobId,
+          'DONE',
+          100,
+          undefined,
+          undefined,
+          undefined,
+          `Merge trigger failed (code ${triggerResult.code || 'n/a'})`
+        );
+      }
+    }
     cleanupBatchState(jobId);
   } catch (error) {
     Logger.log('Error finalizing PDFs: ' + error.message);
@@ -580,7 +605,7 @@ function triggerPdfMergeWorkflow(jobId, folderId) {
 
     if (!githubToken) {
       logPdfEvent(jobId, 'ERROR', 'GitHub token missing for merge trigger');
-      return;
+      return { ok: false, code: 0, message: 'Missing GitHub token' };
     }
 
     const response = UrlFetchApp.fetch(
@@ -604,9 +629,13 @@ function triggerPdfMergeWorkflow(jobId, folderId) {
     );
 
     const code = response.getResponseCode();
-    logPdfEvent(jobId, 'INFO', 'Merge workflow trigger', { code });
+    const body = response.getContentText ? response.getContentText() : '';
+    const ok = code >= 200 && code < 300;
+    logPdfEvent(jobId, ok ? 'INFO' : 'ERROR', 'Merge workflow trigger', { code, body });
+    return { ok, code, body };
   } catch (e) {
     logPdfEvent(jobId, 'ERROR', 'Merge workflow trigger failed', { message: String(e) });
+    return { ok: false, code: 0, message: String(e) };
   }
 }
 
@@ -624,6 +653,11 @@ function handlePdfMergeComplete(body) {
       return createResponse({ ok: false, error: { code: 'INVALID_PARAMS', message: 'Missing params' } });
     }
 
+    const existingJob = getJobStatus(jobId);
+    if (existingJob && existingJob.status === 'CANCELLED') {
+      return createResponse({ ok: true, data: { ok: true, skipped: true } });
+    }
+
     updateJobStatus(jobId, 'DONE', 100, fileId, url, undefined, 'Merged');
     if (body?.clean_chunks) {
       updateJobChunksFolder(jobId, '', '');
@@ -634,6 +668,105 @@ function handlePdfMergeComplete(body) {
     return createResponse({ ok: true, data: { ok: true } });
   } catch (e) {
     return createResponse({ ok: false, error: { code: 'MERGE_COMPLETE_FAILED', message: String(e) } });
+  }
+}
+
+function handlePdfMergeStatus(body) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const token = props.getProperty('PDF_MERGE_TOKEN');
+    if (!token || body?.token !== token) {
+      return createResponse({ ok: false, error: { code: 'FORBIDDEN', message: 'Invalid token' } });
+    }
+    const jobId = body?.job_id;
+    const progress = body?.progress;
+    const message = body?.message;
+    if (!jobId || progress === undefined || message === undefined) {
+      return createResponse({ ok: false, error: { code: 'INVALID_PARAMS', message: 'Missing params' } });
+    }
+    const job = getJobStatus(jobId);
+    if (!job) {
+      return createResponse({ ok: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    if ((job.status === 'DONE' && job.pdf_url) || job.status === 'CANCELLED') {
+      return createResponse({ ok: true, data: { ok: true, skipped: true } });
+    }
+    updateJobStatus(jobId, 'RUNNING', progress, undefined, undefined, undefined, message);
+    return createResponse({ ok: true, data: { ok: true } });
+  } catch (e) {
+    return createResponse({ ok: false, error: { code: 'MERGE_STATUS_FAILED', message: String(e) } });
+  }
+}
+
+function handlePdfMergeTrigger(body) {
+  try {
+    const jobId = body?.job_id;
+    if (!jobId) {
+      return createResponse({ ok: false, error: { code: 'INVALID_PARAMS', message: 'Missing job_id' } });
+    }
+
+    const job = getJobStatus(jobId);
+    if (!job) {
+      return createResponse({ ok: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+
+    if (job.pdf_file_id || job.pdf_url) {
+      return createResponse({ ok: true, data: { queued: false, message: 'Already merged' } });
+    }
+
+    if (!job.chunks_folder_id) {
+      return createResponse({ ok: false, error: { code: 'MISSING_CHUNKS_FOLDER', message: 'Chunks folder not found' } });
+    }
+
+    const props = PropertiesService.getScriptProperties();
+    const githubToken = props.getProperty('GITHUB_TOKEN');
+    if (!githubToken) {
+      return createResponse({ ok: false, error: { code: 'MISSING_GITHUB_TOKEN', message: 'GitHub token missing' } });
+    }
+
+    updateJobStatus(jobId, 'RUNNING', 10, undefined, undefined, undefined, 'Merge queued');
+    const triggerResult = triggerPdfMergeWorkflow(jobId, job.chunks_folder_id);
+    if (!triggerResult.ok) {
+      updateJobStatus(
+        jobId,
+        'DONE',
+        100,
+        undefined,
+        undefined,
+        undefined,
+        `Merge trigger failed (code ${triggerResult.code || 'n/a'})`
+      );
+      return createResponse({
+        ok: false,
+        error: {
+          code: 'MERGE_TRIGGER_FAILED',
+          message: `GitHub trigger failed (code ${triggerResult.code || 'n/a'})`
+        }
+      });
+    }
+
+    return createResponse({ ok: true, data: { queued: true, code: triggerResult.code } });
+  } catch (e) {
+    return createResponse({ ok: false, error: { code: 'MERGE_TRIGGER_FAILED', message: String(e) } });
+  }
+}
+
+function handlePdfMergeCancel(body) {
+  try {
+    const jobId = body?.job_id;
+    if (!jobId) {
+      return createResponse({ ok: false, error: { code: 'INVALID_PARAMS', message: 'Missing job_id' } });
+    }
+
+    const job = getJobStatus(jobId);
+    if (!job) {
+      return createResponse({ ok: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+
+    updateJobStatus(jobId, 'DONE', 100, undefined, undefined, undefined, 'Chunks ready (merge pending)');
+    return createResponse({ ok: true, data: { cancelled: true } });
+  } catch (e) {
+    return createResponse({ ok: false, error: { code: 'MERGE_CANCEL_FAILED', message: String(e) } });
   }
 }
 
@@ -664,6 +797,7 @@ function sendPdfMergedEmail(jobId, pdfUrl) {
     if (!job || !job.created_by) return;
 
     const familyName = getConfigValue('family_name') || 'your family';
+    const chunksFolderId = job.chunks_folder_id || '';
 
     MailApp.sendEmail({
       to: job.created_by,
@@ -939,6 +1073,14 @@ function sendPdfReadyEmail(jobId, pdfUrl) {
               📂 View generated PDFs
             </a>
           </p>
+          ${chunksFolderId ? `
+          <p style="margin: 12px 0 4px; font-size: 13px; color: #333;">
+            Chunks folder ID (for merge script):
+          </p>
+          <div style="font-family: monospace; font-size: 12px; background: #f5f5f5; padding: 8px 10px; border-radius: 4px; word-break: break-all;">
+            ${chunksFolderId}
+          </div>
+          ` : ''}
           <p style="color: #666; font-size: 12px;">
             This link gives you access to the folder containing all generated PDF parts.
           </p>

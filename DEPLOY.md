@@ -48,6 +48,7 @@ AKfycbyBK-9iXQ7bXvd26EN4qCz6DT2V_Z9pniGS2qrLaBP7pqXIQ29hGtmnQj2PP2LYCPHf
 | `./deploy-all.sh` | Déploie backend + frontend (complet) |
 | `./deploy-backend.sh` | Déploie uniquement le backend Apps Script |
 | `./deploy-frontend.sh` | Déploie uniquement le frontend GitHub Pages |
+| `./deploy-git.sh` | Commit + push GitHub uniquement |
 
 ### Option 1 : Déploiement complet (recommandé)
 
@@ -60,7 +61,7 @@ Ce script :
 2. Crée un nouveau déploiement @X
 3. **Met à jour automatiquement** `.env` et `.env.production` avec la nouvelle version
 4. Build le frontend
-5. Commit et push vers GitHub
+5. Commit et push vers GitHub (via `./deploy-git.sh`)
 6. Déploie sur GitHub Pages via `gh-pages`
 7. Affiche l'URL des GitHub Actions pour suivre le déploiement
 
@@ -92,6 +93,16 @@ Ce script :
 1. Build le frontend
 2. Déploie vers GitHub Pages
 3. Affiche l'URL des GitHub Actions pour suivre le déploiement
+
+### Option 4 : Git uniquement
+
+```bash
+./deploy-git.sh
+```
+
+Ce script :
+1. Nettoie les fichiers Vite temporaires
+2. Commit et push vers GitHub
 
 ---
 
@@ -198,4 +209,3 @@ Vérifier que `VITE_APPS_SCRIPT_URL` pointe vers le bon deployment ID (pas @HEAD
 | Backend | https://script.google.com/home/projects/122_ruL8YAsD0Mp8KUsUnf9tn_KA6wuhkWlOOwD2Tip6PsKwsviL9RqmT |
 | GitHub | https://github.com/Grut505/Rememly |
 | Google Cloud Client ID | https://console.cloud.google.com/auth/clients/175845978100-rqclosiat622f3b7ijpg17t2fnrnb522.apps.googleusercontent.com?project=rememly |
-

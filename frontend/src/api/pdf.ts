@@ -5,7 +5,7 @@ export interface PdfOptions {
   mosaic_layout?: 'full' | 'centered'
   show_seasonal_fruits?: boolean
   max_mosaic_photos?: number
-  keep_temp?: boolean
+  auto_merge?: boolean
 }
 
 export interface CreatePdfPayload {
@@ -69,6 +69,12 @@ export const pdfApi = {
 
   delete: (jobId: string) =>
     apiClient.post<{ deleted: boolean }>('pdf/delete', { job_id: jobId }),
+
+  triggerMerge: (jobId: string) =>
+    apiClient.post<{ queued: boolean; message?: string }>('pdf/merge-trigger', { job_id: jobId }),
+
+  cancelMerge: (jobId: string) =>
+    apiClient.post<{ cancelled: boolean }>('pdf/merge-cancel', { job_id: jobId }),
 
   cancel: (jobId: string) =>
     apiClient.post<{ cancelled: boolean; job_id: string }>('pdf/cancel', { job_id: jobId }),

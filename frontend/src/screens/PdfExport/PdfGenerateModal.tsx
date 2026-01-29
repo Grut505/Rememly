@@ -40,7 +40,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const [mosaicLayout, setMosaicLayout] = useState<'full' | 'centered'>('full')
   const [showSeasonalFruits, setShowSeasonalFruits] = useState(true)
   const [maxMosaicPhotos, setMaxMosaicPhotos] = useState<number>(0) // 0 = all photos
-  const [keepTempFiles, setKeepTempFiles] = useState(false)
+  const [autoMerge, setAutoMerge] = useState(false)
 
   const reset = () => {
     setStep('dates')
@@ -52,7 +52,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     setMosaicLayout('full')
     setShowSeasonalFruits(true)
     setMaxMosaicPhotos(0)
-    setKeepTempFiles(false)
+    setAutoMerge(false)
   }
 
   const handleClose = () => {
@@ -135,7 +135,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       mosaic_layout: mosaicLayout,
       show_seasonal_fruits: showSeasonalFruits,
       max_mosaic_photos: maxMosaicPhotos > 0 ? maxMosaicPhotos : undefined,
-      keep_temp: keepTempFiles,
+      auto_merge: autoMerge,
     })
 
     // Close modal immediately - progress will show in global notification
@@ -330,17 +330,17 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                 </div>
               </label>
 
-              {/* Keep temp files toggle */}
+              {/* Auto merge toggle */}
               <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                 <input
                   type="checkbox"
-                  checked={keepTempFiles}
-                  onChange={(e) => setKeepTempFiles(e.target.checked)}
+                  checked={autoMerge}
+                  onChange={(e) => setAutoMerge(e.target.checked)}
                   className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
                 <div>
-                  <span className="text-sm font-medium text-gray-700">Keep temporary PDF files</span>
-                  <p className="text-xs text-gray-500">Preserve intermediate PDFs and show a folder link</p>
+                  <span className="text-sm font-medium text-gray-700">Auto-merge via GitHub Action</span>
+                  <p className="text-xs text-gray-500">Triggers the merge workflow after chunks are generated</p>
                 </div>
               </label>
 

@@ -184,11 +184,8 @@ function getAllPdfJobs(dateFrom, dateTo, author, includeInProgress) {
     if (includeInProgress) {
       // Include all valid statuses (including CANCELLED for history)
       if (!['PENDING', 'RUNNING', 'DONE', 'ERROR', 'CANCELLED'].includes(job.status)) continue;
-      // Skip DONE jobs without PDF URL (incomplete)
-      if (job.status === 'DONE' && !job.pdf_url) continue;
     } else {
-      // Only include completed jobs (DONE with URL, ERROR, or CANCELLED)
-      if (job.status === 'DONE' && !job.pdf_url) continue;
+      // Only include completed jobs (DONE/ERROR/CANCELLED)
       if (!['DONE', 'ERROR', 'CANCELLED'].includes(job.status)) continue;
     }
 

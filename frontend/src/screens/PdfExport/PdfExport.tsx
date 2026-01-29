@@ -25,6 +25,7 @@ export function PdfExport() {
 
   // Filters
   const [filterAuthor, setFilterAuthor] = useState<string>('')
+  const [mergeFilter, setMergeFilter] = useState<'all' | 'merged' | 'pending'>('all')
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [availableAuthors, setAvailableAuthors] = useState<string[]>([])
@@ -40,6 +41,7 @@ export function PdfExport() {
 
   // Cancel state
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null)
+  const [mergingJobIds, setMergingJobIds] = useState<Set<string>>(new Set())
 
   // Generate modal
   const [showGenerateModal, setShowGenerateModal] = useState(false)
@@ -98,6 +100,7 @@ export function PdfExport() {
             progress: update.progress,
             progress_message: update.progress_message,
             pdf_url: update.pdf_url,
+            pdf_file_id: update.pdf_file_id,
             error_message: update.error_message,
           }
         }
@@ -139,6 +142,15 @@ export function PdfExport() {
   // Filter and sort list (only completed jobs - in-progress jobs are shown separately)
   const filteredList = completedJobs
     .filter(pdf => !filterAuthor || pdf.created_by === filterAuthor)
+    .filter(pdf => {
+      if (mergeFilter === 'merged') {
+        return !!pdf.pdf_url
+      }
+      if (mergeFilter === 'pending') {
+        return pdf.status === 'DONE' && !pdf.pdf_url
+      }
+      return true
+    })
     .sort((a, b) => {
       let comparison = 0
       if (sortField === 'created_at') {
@@ -175,6 +187,11 @@ export function PdfExport() {
     } catch {
       return `${from} → ${to}`
     }
+  }
+
+  const isMergeInProgress = (pdf: PdfListItem) => {
+    const message = (pdf.progress_message || '').toLowerCase()
+    return pdf.status === 'RUNNING' && message.includes('merge')
   }
 
   const getAuthorLabel = useCallback((email?: string, pseudo?: string) => {
@@ -271,6 +288,51 @@ export function PdfExport() {
     }
   }
 
+  const handleCancelMerge = async (jobId: string) => {
+    setCancellingJobId(jobId)
+    try {
+      await pdfApi.cancelMerge(jobId)
+      setPdfList(prev => prev.map(pdf => {
+        if (pdf.job_id !== jobId) return pdf
+        return {
+          ...pdf,
+          status: 'DONE',
+          progress: 100,
+          progress_message: 'Chunks ready (merge pending)',
+        }
+      }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel merge')
+    } finally {
+      setCancellingJobId(null)
+    }
+  }
+
+  const handleTriggerMerge = async (jobId: string) => {
+    setMergingJobIds(prev => new Set(prev).add(jobId))
+    try {
+      await pdfApi.triggerMerge(jobId)
+      setPdfList(prev => prev.map(pdf => {
+        if (pdf.job_id !== jobId) return pdf
+        return {
+          ...pdf,
+          status: 'RUNNING',
+          progress: 95,
+          progress_message: 'Merge queued',
+          error_message: undefined,
+        }
+      }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to trigger merge')
+    } finally {
+      setMergingJobIds(prev => {
+        const next = new Set(prev)
+        next.delete(jobId)
+        return next
+      })
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <AppHeader />
@@ -326,6 +388,16 @@ export function PdfExport() {
               ))}
             </select>
           )}
+
+            <select
+              value={mergeFilter}
+              onChange={(e) => setMergeFilter(e.target.value as 'all' | 'merged' | 'pending')}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 max-w-32 truncate"
+            >
+              <option value="all">All PDFs</option>
+              <option value="merged">Merged</option>
+              <option value="pending">Merge pending</option>
+            </select>
 
             {/* Sort toggle */}
             <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
@@ -487,10 +559,14 @@ export function PdfExport() {
                         </div>
                         {/* Cancel button */}
                         <button
-                          onClick={() => handleCancelJob(pdf.job_id)}
+                          onClick={() => (
+                            isMergeInProgress(pdf)
+                              ? handleCancelMerge(pdf.job_id)
+                              : handleCancelJob(pdf.job_id)
+                          )}
                           disabled={cancellingJobId === pdf.job_id}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                          title="Cancel"
+                          title={isMergeInProgress(pdf) ? 'Cancel merge' : 'Cancel'}
                         >
                           {cancellingJobId === pdf.job_id ? (
                             <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -552,6 +628,11 @@ export function PdfExport() {
                             <p className="font-medium text-gray-900">
                               {formatDateRange(pdf.date_from, pdf.date_to)}
                             </p>
+                            {!pdf.pdf_url && pdf.status === 'DONE' && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-yellow-50 text-yellow-700 rounded">
+                                Merge pending
+                              </span>
+                            )}
                             {pdf.status === 'ERROR' && (
                               <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
                                 Error
@@ -569,6 +650,11 @@ export function PdfExport() {
                           {pdf.status === 'ERROR' && pdf.error_message && (
                             <p className="text-xs text-red-500 mt-0.5 truncate" title={pdf.error_message}>
                               {pdf.error_message}
+                            </p>
+                          )}
+                          {pdf.status === 'DONE' && !pdf.pdf_url && pdf.progress_message && (
+                            <p className="text-xs text-amber-600 mt-0.5 truncate" title={pdf.progress_message}>
+                              {pdf.progress_message}
                             </p>
                           )}
                           <p className="text-xs text-gray-400 mt-0.5">
@@ -603,6 +689,28 @@ export function PdfExport() {
                                   <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
                                 </svg>
                               </a>
+                            )}
+                            {!pdf.pdf_url && pdf.status === 'DONE' && pdf.chunks_folder_id && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleTriggerMerge(pdf.job_id)
+                                }}
+                                className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
+                                title="Trigger merge"
+                                disabled={mergingJobIds.has(pdf.job_id)}
+                              >
+                                {mergingJobIds.has(pdf.job_id) ? (
+                                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                ) : (
+                                  <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                  </svg>
+                                )}
+                              </button>
                             )}
                             <button
                               onClick={(e) => {

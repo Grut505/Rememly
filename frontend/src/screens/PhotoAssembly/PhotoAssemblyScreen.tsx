@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { PhotoAssembly } from '../../modules/photo-assembly/PhotoAssembly'
+import { AppHeader } from '../../ui/AppHeader'
 import { useAuth } from '../../auth/AuthContext'
 import { articlesService } from '../../services/articles.service'
 import { useArticlesStore } from '../../state/articlesStore'
@@ -42,7 +43,7 @@ export function PhotoAssemblyScreen() {
       } else {
         // Create new article
         await articlesService.createArticle(
-          user.name,
+          user.email,
           texte,
           file,
           dateModification,
@@ -65,5 +66,19 @@ export function PhotoAssemblyScreen() {
     navigate(editMode && articleId ? `/editor/${articleId}` : '/editor')
   }
 
-  return <PhotoAssembly onComplete={handleComplete} onCancel={handleCancel} />
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <AppHeader />
+      <div className="fixed inset-0 top-14 z-20 bg-black/30 flex items-start justify-center p-3 sm:p-6">
+        <div className="bg-white w-full h-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-center">
+            <h1 className="text-lg font-semibold text-gray-900">Photo Assembly</h1>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <PhotoAssembly onComplete={handleComplete} onCancel={handleCancel} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }

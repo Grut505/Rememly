@@ -14,6 +14,7 @@ import { Settings } from './screens/Settings/Settings'
 import { UpdatePrompt } from './components/UpdatePrompt'
 import { PdfGenerationNotification } from './components/PdfGenerationNotification'
 import { UnsavedChangesGuard } from './components/UnsavedChangesGuard'
+import { OrientationLockOverlay } from './components/OrientationLockOverlay'
 import { BottomNav } from './ui/BottomNav'
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
         <UpdatePrompt />
         <PdfGenerationNotification />
         <UnsavedChangesGuard />
+        <OrientationLockOverlay />
         <div className="min-h-screen max-w-content mx-auto bg-white">
           <Routes>
           <Route path="/auth" element={<GoogleAuth />} />

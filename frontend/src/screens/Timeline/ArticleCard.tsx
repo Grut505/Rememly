@@ -158,20 +158,23 @@ export function ArticleCard({ article, onDeleted, onRestored, selectionMode, sel
 
         {/* Header: Avatar, Author, Date, Edit/Delete buttons */}
         {/* Status badges */}
-        {(isDeleted || article.famileo_post_id) && (
-          <div className="flex">
-            {article.famileo_post_id && (
-              <div className="flex-1 bg-purple-500 text-white text-xs font-semibold px-2 py-1 text-center">
-                Famileo
-              </div>
-            )}
-            {isDeleted && (
-              <div className="flex-1 bg-red-500 text-white text-xs font-semibold px-2 py-1 text-center">
-                Deleted
-              </div>
-            )}
-          </div>
-        )}
+        <div className="flex min-h-[24px]">
+          {!article.famileo_post_id && (
+            <div className="flex-1 bg-green-500 text-white text-xs font-semibold px-2 py-1 text-center">
+              Local
+            </div>
+          )}
+          {article.famileo_post_id && (
+            <div className="flex-1 bg-purple-500 text-white text-xs font-semibold px-2 py-1 text-center">
+              Famileo
+            </div>
+          )}
+          {isDeleted && (
+            <div className="flex-1 bg-red-500 text-white text-xs font-semibold px-2 py-1 text-center">
+              Deleted
+            </div>
+          )}
+        </div>
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {selectionMode && (
@@ -228,7 +231,7 @@ export function ArticleCard({ article, onDeleted, onRestored, selectionMode, sel
         {/* Image */}
         <div
           onClick={handleCardClick}
-          className="w-full cursor-pointer bg-gray-50 relative"
+          className="w-full cursor-pointer bg-gray-50 relative min-h-[160px] sm:min-h-[200px]"
         >
           {imageLoading && !imageError && (
             <div className="absolute inset-0 flex items-center justify-center">

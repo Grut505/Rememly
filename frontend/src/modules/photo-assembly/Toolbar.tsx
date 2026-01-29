@@ -1,7 +1,6 @@
 import { Button } from '../../ui/Button'
 
 interface ToolbarProps {
-  onAddPhoto: () => void
   onValidate: () => void
   onCancel: () => void
   onOpenZones: () => void
@@ -9,7 +8,6 @@ interface ToolbarProps {
 }
 
 export function Toolbar({
-  onAddPhoto,
   onValidate,
   onCancel,
   onOpenZones,
@@ -17,9 +15,6 @@ export function Toolbar({
 }: ToolbarProps) {
   return (
     <div className="bg-white border-t border-gray-200 p-4 space-y-2">
-      <Button onClick={onAddPhoto} variant="secondary" fullWidth>
-        Ajouter des photos
-      </Button>
       <Button onClick={onOpenZones} variant="secondary" fullWidth>
         Zones
       </Button>

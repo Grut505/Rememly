@@ -13,19 +13,82 @@ export function TemplateSelector({
   layouts,
 }: TemplateSelectorProps) {
   const [activeCount, setActiveCount] = useState<number | 'all'>('all')
+  const [activeRatio, setActiveRatio] = useState<string | 'all'>('all')
+
+  const ratioPresets = [
+    { label: '1:1', value: 1 },
+    { label: '4:3', value: 4 / 3 },
+    { label: '3:4', value: 3 / 4 },
+    { label: '16:9', value: 16 / 9 },
+    { label: '9:16', value: 9 / 16 },
+    { label: '3:2', value: 3 / 2 },
+    { label: '2:3', value: 2 / 3 },
+  ]
+
+  const getRatioLabel = (ratio: number) => {
+    const preset = ratioPresets.find((item) => Math.abs(item.value - ratio) < 0.03)
+    return preset ? preset.label : ratio.toFixed(2)
+  }
 
   const counts = useMemo(
     () => Array.from(new Set(layouts.map((layout) => layout.zones.length))).sort((a, b) => a - b),
     [layouts]
   )
 
+  const ratios = useMemo(() => {
+    const labels = Array.from(new Set(layouts.map((layout) => getRatioLabel(layout.aspectRatio))))
+    const presetOrder = ratioPresets.map((preset) => preset.label)
+    return labels.sort((a, b) => {
+      const aIndex = presetOrder.indexOf(a)
+      const bIndex = presetOrder.indexOf(b)
+      if (aIndex === -1 && bIndex === -1) return a.localeCompare(b)
+      if (aIndex === -1) return 1
+      if (bIndex === -1) return -1
+      return aIndex - bIndex
+    })
+  }, [layouts])
+
   const visibleLayouts = useMemo(() => {
-    if (activeCount === 'all') return layouts
-    return layouts.filter((layout) => layout.zones.length === activeCount)
-  }, [activeCount, layouts])
+    return layouts.filter((layout) => {
+      const countMatch = activeCount === 'all' || layout.zones.length === activeCount
+      const ratioMatch = activeRatio === 'all' || getRatioLabel(layout.aspectRatio) === activeRatio
+      return countMatch && ratioMatch
+    })
+  }, [activeCount, activeRatio, layouts])
 
   return (
     <div className="p-4 space-y-4">
+      <div>
+        <h3 className="text-sm font-medium text-gray-700 mb-2">
+          Ratio
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setActiveRatio('all')}
+            className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+              activeRatio === 'all'
+                ? 'bg-primary-600 text-white border-primary-600'
+                : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+            }`}
+          >
+            Tous
+          </button>
+          {ratios.map((ratio) => (
+            <button
+              key={ratio}
+              onClick={() => setActiveRatio(ratio)}
+              className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                activeRatio === ratio
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+              }`}
+            >
+              {ratio}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div>
         <h3 className="text-sm font-medium text-gray-700 mb-2">
           Nombre de photos

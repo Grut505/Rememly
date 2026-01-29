@@ -10,6 +10,7 @@ interface AssemblyCanvasProps {
   onZoneSelect: (zoneIndex: number) => void
   onStateChange: () => void
   stateVersion: number
+  separatorWidth: number
 }
 
 export function AssemblyCanvas({
@@ -19,6 +20,7 @@ export function AssemblyCanvas({
   onZoneSelect,
   onStateChange,
   stateVersion,
+  separatorWidth,
 }: AssemblyCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [images, setImages] = useState<Map<number, HTMLImageElement>>(new Map())
@@ -31,6 +33,19 @@ export function AssemblyCanvas({
     startDist: 0,
     startCenter: { x: 0, y: 0 },
   })
+  const swapRef = useRef<{
+    timer: number | null
+    fromZone: number | null
+    targetZone: number | null
+    startPoint: { x: number; y: number } | null
+    isSwapMode: boolean
+  }>({
+    timer: null,
+    fromZone: null,
+    targetZone: null,
+    startPoint: null,
+    isSwapMode: false,
+  })
 
   useEffect(() => {
     loadImages()
@@ -38,7 +53,7 @@ export function AssemblyCanvas({
 
   useEffect(() => {
     drawCanvas()
-  }, [template, images, stateVersion, selectedZoneIndex])
+  }, [template, images, stateVersion, selectedZoneIndex, separatorWidth])
 
   const loadImages = async () => {
     const newImages = new Map<number, HTMLImageElement>()
@@ -77,7 +92,6 @@ export function AssemblyCanvas({
     ctx.fillStyle = '#f3f4f6'
     ctx.fillRect(0, 0, width, height)
 
-    const colors = ['#2563eb', '#16a34a', '#f97316', '#7c3aed', '#0ea5e9', '#ef4444', '#a855f7']
     const state = stateManager.getState()
 
     template.zones.forEach((zone, index) => {
@@ -92,8 +106,8 @@ export function AssemblyCanvas({
       ctx.fillStyle = index === selectedZoneIndex ? 'rgba(37, 99, 235, 0.08)' : 'rgba(255, 255, 255, 0.6)'
       ctx.fillRect(zoneX, zoneY, zoneWidth, zoneHeight)
 
-      ctx.strokeStyle = index === selectedZoneIndex ? '#2563eb' : colors[index % colors.length]
-      ctx.lineWidth = index === selectedZoneIndex ? 3 : 2
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = Math.max(1, separatorWidth)
       ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
 
       if (img) {
@@ -129,6 +143,18 @@ export function AssemblyCanvas({
       ctx.textBaseline = 'top'
       ctx.fillText(`${index + 1}`, zoneX + 6, zoneY + 6)
     })
+
+    const swapTarget = swapRef.current.targetZone
+    if (swapTarget !== null && swapTarget >= 0) {
+      const zone = template.zones[swapTarget]
+      const zoneX = (zone.x / 100) * width
+      const zoneY = (zone.y / 100) * height
+      const zoneWidth = (zone.width / 100) * width
+      const zoneHeight = (zone.height / 100) * height
+      ctx.strokeStyle = '#10b981'
+      ctx.lineWidth = 3
+      ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
+    }
   }
 
   const getCanvasPoint = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -196,6 +222,30 @@ export function AssemblyCanvas({
       gesture.startY = zoneState.y
       gesture.startZoom = zoneState.zoom
     }
+
+    const swap = swapRef.current
+    if (pointers.size > 1) {
+      if (swap.timer) {
+        window.clearTimeout(swap.timer)
+        swap.timer = null
+      }
+      swap.isSwapMode = false
+      swap.fromZone = null
+      swap.targetZone = null
+      swap.startPoint = null
+      return
+    }
+    swap.startPoint = point
+    swap.fromZone = zoneIndex
+    swap.targetZone = null
+    swap.isSwapMode = false
+    if (swap.timer) {
+      window.clearTimeout(swap.timer)
+    }
+    swap.timer = window.setTimeout(() => {
+      swap.isSwapMode = true
+      drawCanvas()
+    }, 250)
   }
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -208,6 +258,25 @@ export function AssemblyCanvas({
     const pointers = pointersRef.current
     if (!pointers.has(e.pointerId)) return
     pointers.set(e.pointerId, { x: point.x, y: point.y })
+
+    const swap = swapRef.current
+    if (swap.startPoint && !swap.isSwapMode) {
+      const dx = point.x - swap.startPoint.x
+      const dy = point.y - swap.startPoint.y
+      if (Math.hypot(dx, dy) > 8) {
+        if (swap.timer) {
+          window.clearTimeout(swap.timer)
+          swap.timer = null
+        }
+      }
+    }
+
+    if (swap.isSwapMode) {
+      const target = hitTestZone(point)
+      swap.targetZone = target >= 0 ? target : null
+      drawCanvas()
+      return
+    }
 
     const gesture = gestureRef.current
 
@@ -245,6 +314,28 @@ export function AssemblyCanvas({
     const pointers = pointersRef.current
     if (!pointers.has(e.pointerId)) return
     pointers.delete(e.pointerId)
+
+    const swap = swapRef.current
+    if (swap.timer) {
+      window.clearTimeout(swap.timer)
+      swap.timer = null
+    }
+
+    if (swap.isSwapMode && swap.fromZone !== null && swap.targetZone !== null && swap.fromZone !== swap.targetZone) {
+      stateManager.swapZoneStates(swap.fromZone, swap.targetZone)
+      onZoneSelect(swap.targetZone)
+      onStateChange()
+      swap.isSwapMode = false
+      swap.fromZone = null
+      swap.targetZone = null
+      swap.startPoint = null
+      drawCanvas()
+    } else {
+      swap.isSwapMode = false
+      swap.fromZone = null
+      swap.targetZone = null
+      swap.startPoint = null
+    }
 
     if (pointers.size === 1) {
       const remaining = Array.from(pointers.values())[0]
@@ -297,7 +388,7 @@ export function AssemblyCanvas({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         onWheel={handleWheel}
-        className="w-full h-auto cursor-pointer touch-none"
+        className="w-full h-auto max-h-[55vh] cursor-pointer touch-none"
       />
     </div>
   )

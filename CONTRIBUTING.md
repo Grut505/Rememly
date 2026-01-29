@@ -40,7 +40,7 @@ Rememly/
 │       └── package.json
 └── .github/
     └── workflows/
-        └── famileo-refresh.yml # Nightly cookie refresh
+        └── famileo-refresh.yml # On-demand cookie refresh
 ```
 
 ## Development Workflow

@@ -4,10 +4,10 @@ import { StateManager } from './StateManager'
 import { TemplateSelector } from './TemplateSelector'
 import { AssemblyCanvas } from './AssemblyCanvas'
 import { ZoneController } from './ZoneController'
-import { Toolbar } from './Toolbar'
 import { canvasToBase64 } from '../../utils/image'
 import { useUiStore } from '../../state/uiStore'
 import { Modal } from '../../ui/Modal'
+import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { CONSTANTS } from '../../utils/constants'
 
 interface PhotoAssemblyProps {
@@ -17,7 +17,6 @@ interface PhotoAssemblyProps {
 
 export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   const { showToast } = useUiStore()
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const zoneFileInputRef = useRef<HTMLInputElement>(null)
 
   const [selectedTemplate, setSelectedTemplate] = useState<LayoutTemplate>(LAYOUTS[0])
@@ -29,19 +28,81 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   const [stateVersion, setStateVersion] = useState(0)
   const [isLayoutModalOpen, setIsLayoutModalOpen] = useState(false)
   const [isZonesModalOpen, setIsZonesModalOpen] = useState(false)
+  const [separatorWidth, setSeparatorWidth] = useState(4)
   const [pendingZoneIndex, setPendingZoneIndex] = useState<number | null>(null)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+
+  const getOverlapScore = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => {
+    const ax2 = a.x + a.width
+    const ay2 = a.y + a.height
+    const bx2 = b.x + b.width
+    const by2 = b.y + b.height
+    const overlapX = Math.max(0, Math.min(ax2, bx2) - Math.max(a.x, b.x))
+    const overlapY = Math.max(0, Math.min(ay2, by2) - Math.max(a.y, b.y))
+    const intersection = overlapX * overlapY
+    if (intersection === 0) return 0
+    const areaA = a.width * a.height
+    const areaB = b.width * b.height
+    const union = areaA + areaB - intersection
+    return union > 0 ? intersection / union : 0
+  }
+
+  const buildZoneMapping = (fromTemplate: LayoutTemplate, toTemplate: LayoutTemplate) => {
+    const used = new Set<number>()
+    return toTemplate.zones.map((zone) => {
+      let bestIndex = -1
+      let bestScore = 0
+      fromTemplate.zones.forEach((oldZone, index) => {
+        if (used.has(index)) return
+        const score = getOverlapScore(oldZone, zone)
+        if (score > bestScore) {
+          bestScore = score
+          bestIndex = index
+        }
+      })
+      if (bestScore >= 0.45 && bestIndex >= 0) {
+        used.add(bestIndex)
+        return bestIndex
+      }
+      return -1
+    })
+  }
 
   const handleTemplateSelect = (template: LayoutTemplate) => {
+    const previousTemplate = selectedTemplate
+    const previousState = stateManager.getState()
+    const mapping = buildZoneMapping(previousTemplate, template)
+    const newZoneStates = Array(template.zones.length)
+      .fill(null)
+      .map(() => ({
+        photoIndex: -1,
+        zoom: 1,
+        x: 0,
+        y: 0,
+        rotation: 0,
+      }))
+
+    mapping.forEach((oldIndex, newIndex) => {
+      if (oldIndex >= 0 && previousState.zoneStates[oldIndex]) {
+        newZoneStates[newIndex] = { ...previousState.zoneStates[oldIndex] }
+      }
+    })
+
     setSelectedTemplate(template)
-    setStateManager(new StateManager(template.id, template.zones.length))
+    setStateManager(StateManager.fromState(template.id, previousState.photos, newZoneStates))
     setSelectedZoneIndex(null)
     setCanvasKey((k) => k + 1)
     setStateVersion((v) => v + 1)
     setIsLayoutModalOpen(false)
   }
 
-  const handleAddPhoto = () => {
-    fileInputRef.current?.click()
+  const handleCancelRequest = () => {
+    const hasPhotos = stateManager.getState().zoneStates.some((zone) => zone.photoIndex >= 0)
+    if (hasPhotos) {
+      setShowCancelConfirm(true)
+      return
+    }
+    onCancel()
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -173,24 +234,33 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center sticky top-0 z-10">
-        <button
-          onClick={onCancel}
-          className="text-gray-600 touch-manipulation"
-        >
-          ← Back
-        </button>
-        <h1 className="text-lg font-semibold ml-4">Photo Assembly</h1>
-      </header>
-
+    <div className="h-full flex flex-col bg-gray-50 relative">
       {/* Layout bar */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-14 z-10">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
         <div>
-          <div className="text-sm text-gray-600">Layout</div>
+          <div className="text-sm text-gray-600 flex items-center gap-2">
+            <span>Layout</span>
+            <button
+              onClick={() => setIsLayoutModalOpen(true)}
+              className="px-2 py-1 rounded-md border border-gray-300 text-xs text-gray-700 hover:border-gray-400"
+            >
+              Choisir
+            </button>
+          </div>
           <div className="text-sm font-semibold text-gray-900">
             {selectedTemplate?.name} • {selectedTemplate?.zones.length} photos
+          </div>
+          <div className="mt-2 flex items-center gap-3">
+            <span className="text-xs text-gray-500">Épaisseur liseré</span>
+            <input
+              type="range"
+              min={1}
+              max={24}
+              value={separatorWidth}
+              onChange={(e) => setSeparatorWidth(Number(e.target.value))}
+              className="w-24 accent-primary-600"
+            />
+            <span className="text-xs text-gray-600 w-4 text-right">{separatorWidth}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -201,17 +271,31 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
             Zones
           </button>
           <button
-            onClick={() => setIsLayoutModalOpen(true)}
-            className="px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700"
+            onClick={handleValidate}
+            disabled={!stateManager.isComplete()}
+            className={`px-3 py-2 rounded-lg text-sm font-medium ${
+              stateManager.isComplete()
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+            }`}
           >
-            Choisir
+            Valider
+          </button>
+          <button
+            onClick={handleCancelRequest}
+            className="p-2 rounded-full border border-red-200 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
+            aria-label="Annuler"
+          >
+            <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+              <path d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
           </button>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 pb-32">
-        <div className="p-4">
+      <div className="flex-1 overflow-y-auto pb-6">
+        <div className="p-4 max-w-3xl mx-auto w-full">
           <AssemblyCanvas
             key={canvasKey}
             template={selectedTemplate}
@@ -220,6 +304,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
             onZoneSelect={handleZoneClick}
             onStateChange={() => setStateVersion((v) => v + 1)}
             stateVersion={stateVersion}
+            separatorWidth={separatorWidth}
           />
         </div>
       </div>
@@ -240,25 +325,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
         />
       )}
 
-      {/* Toolbar */}
-      <Toolbar
-        onAddPhoto={handleAddPhoto}
-        onValidate={handleValidate}
-        onCancel={onCancel}
-        isValid={stateManager.isComplete()}
-        onOpenZones={() => setIsZonesModalOpen(true)}
-      />
-
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        capture="environment"
-        onChange={handleFileSelect}
-        className="hidden"
-      />
+      {/* Footer removed: controls moved to header */}
 
       {/* Hidden file input for zone replace */}
       <input
@@ -281,6 +348,17 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
           layouts={LAYOUTS}
         />
       </Modal>
+
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        title="Annuler l'assemblage ?"
+        message="Des photos sont déjà placées. Voulez-vous vraiment fermer l'assemblage ?"
+        confirmLabel="Annuler"
+        cancelLabel="Retour"
+        onConfirm={onCancel}
+        onCancel={() => setShowCancelConfirm(false)}
+        variant="danger"
+      />
 
       <Modal
         isOpen={isZonesModalOpen}
@@ -314,7 +392,6 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
                 <button
                   onClick={() => {
                     setPendingZoneIndex(index)
-                    setIsZonesModalOpen(false)
                     zoneFileInputRef.current?.click()
                   }}
                   className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700"

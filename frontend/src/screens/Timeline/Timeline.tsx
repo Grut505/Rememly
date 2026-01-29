@@ -6,6 +6,8 @@ import { FloatingActionButton } from '../../ui/FloatingActionButton'
 import { Spinner } from '../../ui/Spinner'
 import { ErrorMessage } from '../../ui/ErrorMessage'
 import { ArticleCard } from './ArticleCard'
+import { ArticleRow } from './ArticleRow'
+import { ArticleTile } from './ArticleTile'
 import { EmptyState } from './EmptyState'
 import { MonthSeparator } from './MonthSeparator'
 import { AppHeader } from '../../ui/AppHeader'
@@ -28,6 +30,13 @@ export function Timeline() {
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
   const [showPermanentDeleteConfirm, setShowPermanentDeleteConfirm] = useState(false)
   const [deleteProgress, setDeleteProgress] = useState<{ current: number; total: number } | null>(null)
+  const [viewMode, setViewMode] = useState<'cards' | 'list' | 'mosaic'>(() => {
+    const saved = localStorage.getItem('articles_view_mode')
+    if (saved === 'list' || saved === 'mosaic') return saved
+    return 'cards'
+  })
+  const [mosaicZoom, setMosaicZoom] = useState(2)
+  const [isMobile, setIsMobile] = useState(false)
   const {
     articles,
     isLoading,
@@ -59,6 +68,22 @@ export function Timeline() {
   useEffect(() => {
     cursorRef.current = cursor
   }, [cursor])
+
+  useEffect(() => {
+    localStorage.setItem('articles_view_mode', viewMode)
+  }, [viewMode])
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 640px)')
+    const update = () => setIsMobile(media.matches)
+    update()
+    if (media.addEventListener) {
+      media.addEventListener('change', update)
+      return () => media.removeEventListener('change', update)
+    }
+    media.addListener(update)
+    return () => media.removeListener(update)
+  }, [])
 
   const loadArticles = async () => {
     setLoading(true)
@@ -311,6 +336,33 @@ export function Timeline() {
     return acc
   }, {})
 
+  const monthGroups = articles.reduce<Array<{ key: string; label: string; items: typeof articles }>>((acc, article) => {
+    const key = getMonthYearKey(article.date)
+    const label = getMonthYear(article.date)
+    const lastGroup = acc[acc.length - 1]
+    if (!lastGroup || lastGroup.key !== key) {
+      acc.push({ key, label, items: [article] })
+    } else {
+      lastGroup.items.push(article)
+    }
+    return acc
+  }, [])
+
+  const mosaicSizes = isMobile ? [96, 120, 150, 180] : [120, 160, 200, 240]
+  const mosaicTileSize = mosaicSizes[Math.min(Math.max(mosaicZoom, 1), 4) - 1]
+  const getMonthAccent = (key: string) => {
+    let hash = 0
+    for (let i = 0; i < key.length; i++) {
+      hash = (hash * 31 + key.charCodeAt(i)) % 360
+    }
+    const hue = hash
+    return {
+      border: `hsl(${hue}, 35%, 70%)`,
+      bg: `hsl(${hue}, 45%, 92%)`,
+      text: `hsl(${hue}, 35%, 35%)`,
+    }
+  }
+
   const totalLoadedCount = articles.length
   const totalCountLabel = hasMore ? `${totalLoadedCount}+` : `${totalLoadedCount}`
   const lastLoadedMonthKey = articles.length > 0 ? getMonthYearKey(articles[articles.length - 1].date) : null
@@ -377,6 +429,87 @@ export function Timeline() {
             </button>
           ) : (
             <>
+              <div className="hidden sm:flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setViewMode('cards')}
+                  className={`px-2 py-1.5 text-xs font-medium transition-colors ${
+                    viewMode === 'cards' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Card view"
+                >
+                  Cards
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-2 py-1.5 text-xs font-medium transition-colors border-l border-gray-200 ${
+                    viewMode === 'list' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="List view"
+                >
+                  List
+                </button>
+                <button
+                  onClick={() => setViewMode('mosaic')}
+                  className={`px-2 py-1.5 text-xs font-medium transition-colors border-l border-gray-200 ${
+                    viewMode === 'mosaic' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Mosaic view"
+                >
+                  Mosaic
+                </button>
+              </div>
+              <div className="flex sm:hidden items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setViewMode('cards')}
+                  className={`px-2 py-1.5 text-xs font-medium transition-colors ${
+                    viewMode === 'cards' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Card view"
+                >
+                  1
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-2 py-1.5 text-xs font-medium transition-colors border-l border-gray-200 ${
+                    viewMode === 'list' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="List view"
+                >
+                  L
+                </button>
+                <button
+                  onClick={() => setViewMode('mosaic')}
+                  className={`px-2 py-1.5 text-xs font-medium transition-colors border-l border-gray-200 ${
+                    viewMode === 'mosaic' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Mosaic view"
+                >
+                  M
+                </button>
+              </div>
+              {viewMode === 'mosaic' && (
+                <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setMosaicZoom((z) => Math.max(1, z - 1))}
+                    disabled={mosaicZoom <= 1}
+                    className="px-2 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 disabled:opacity-40"
+                    title="Zoom out"
+                  >
+                    −
+                  </button>
+                  <div className="px-2 py-1.5 text-xs text-gray-600 border-x border-gray-200">
+                    {mosaicZoom}
+                  </div>
+                  <button
+                    onClick={() => setMosaicZoom((z) => Math.min(4, z + 1))}
+                    disabled={mosaicZoom >= 4}
+                    className="px-2 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 disabled:opacity-40"
+                    title="Zoom in"
+                  >
+                    +
+                  </button>
+                </div>
+              )}
               <button
                 onClick={refreshArticles}
                 className={`touch-manipulation text-sm font-medium flex items-center gap-2 hidden sm:flex ${
@@ -495,34 +628,95 @@ export function Timeline() {
           <EmptyState />
         ) : (
           <>
-            {articles.map((article, index) => {
-              const currentMonthKey = getMonthYearKey(article.date)
-              const previousMonthKey =
-                index > 0 ? getMonthYearKey(articles[index - 1].date) : null
-              const showMonthSeparator = currentMonthKey !== previousMonthKey
+            {viewMode !== 'mosaic' && (
+              <>
+                {articles.map((article, index) => {
+                  const currentMonthKey = getMonthYearKey(article.date)
+                  const previousMonthKey =
+                    index > 0 ? getMonthYearKey(articles[index - 1].date) : null
+                  const showMonthSeparator = currentMonthKey !== previousMonthKey
 
-              return (
-                <Fragment key={article.id}>
-                  {showMonthSeparator && (
-                    <MonthSeparator
-                      monthYear={getMonthYear(article.date)}
-                      count={monthCounts[currentMonthKey] || 0}
-                      showPlus={hasMore && lastLoadedMonthKey === currentMonthKey}
-                    />
-                  )}
-                  <div className={`relative z-0 ${showMonthSeparator ? 'pt-8' : ''}`}>
-                    <ArticleCard
-                      article={article}
-                      onDeleted={handleArticleDeleted}
-                      onRestored={handleArticleRestored}
-                      selectionMode={selectionMode}
-                      selected={selectedIds.has(article.id)}
-                      onSelectionChange={handleSelectionChange}
-                    />
+                  return (
+                    <Fragment key={article.id}>
+                      {showMonthSeparator && (
+                        <MonthSeparator
+                          monthYear={getMonthYear(article.date)}
+                          count={monthCounts[currentMonthKey] || 0}
+                          showPlus={hasMore && lastLoadedMonthKey === currentMonthKey}
+                        />
+                      )}
+                      <div className={`relative z-0 ${showMonthSeparator ? 'pt-8' : ''}`}>
+                        {viewMode === 'cards' ? (
+                          <ArticleCard
+                            article={article}
+                            onDeleted={handleArticleDeleted}
+                            onRestored={handleArticleRestored}
+                            selectionMode={selectionMode}
+                            selected={selectedIds.has(article.id)}
+                            onSelectionChange={handleSelectionChange}
+                          />
+                        ) : (
+                          <ArticleRow
+                            article={article}
+                            onDeleted={handleArticleDeleted}
+                            onRestored={handleArticleRestored}
+                            selectionMode={selectionMode}
+                            selected={selectedIds.has(article.id)}
+                            onSelectionChange={handleSelectionChange}
+                          />
+                        )}
+                      </div>
+                    </Fragment>
+                  )
+                })}
+              </>
+            )}
+            {viewMode === 'mosaic' && (
+              <>
+                {monthGroups.map((group, index) => {
+                  const accent = getMonthAccent(group.key)
+                  return (
+                  <div key={group.key} className={`px-4 mb-8 ${index === 0 ? 'mt-8' : ''}`}>
+                    <div className="mb-4">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="h-2 rounded-full flex-1"
+                          style={{ backgroundColor: accent.border }}
+                        />
+                        <div
+                          className="text-xs font-semibold px-2 py-1 rounded-full"
+                          style={{ backgroundColor: accent.bg, color: accent.text }}
+                        >
+                          {group.label}
+                        </div>
+                        <div className="text-xs text-gray-500">{monthCounts[group.key] || group.items.length}</div>
+                        <div
+                          className="h-2 rounded-full flex-1"
+                          style={{ backgroundColor: accent.border }}
+                        />
+                      </div>
+                    </div>
+                    <div
+                      className="grid gap-4"
+                      style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${mosaicTileSize}px, 1fr))` }}
+                    >
+                      {group.items.map((article) => (
+                        <ArticleTile
+                          key={article.id}
+                          article={article}
+                          onDeleted={handleArticleDeleted}
+                          onRestored={handleArticleRestored}
+                          selectionMode={selectionMode}
+                          selected={selectedIds.has(article.id)}
+                          onSelectionChange={handleSelectionChange}
+                        />
+                      ))}
+                    </div>
+                    <div className="border-b border-gray-200 mt-6" />
                   </div>
-                </Fragment>
-              )
-            })}
+                )})}
+              </>
+            )}
 
             {/* Sentinel element for infinite scroll */}
             {hasMore && !isLoadingMore && (

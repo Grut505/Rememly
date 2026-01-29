@@ -25,6 +25,16 @@ export class StateManager {
     }
   }
 
+  static fromState(templateId: string, photos: File[], zoneStates: ZoneState[]): StateManager {
+    const manager = new StateManager(templateId, zoneStates.length)
+    manager.state = {
+      templateId,
+      photos: [...photos],
+      zoneStates: zoneStates.map((zone) => ({ ...zone })),
+    }
+    return manager
+  }
+
   addPhoto(photo: File): number {
     this.state.photos.push(photo)
     return this.state.photos.length - 1
@@ -47,6 +57,15 @@ export class StateManager {
       if (transform.y !== undefined) zone.y = transform.y
       if (transform.rotation !== undefined) zone.rotation = transform.rotation
     }
+  }
+
+  swapZoneStates(a: number, b: number): void {
+    if (a === b) return
+    if (a < 0 || b < 0) return
+    if (a >= this.state.zoneStates.length || b >= this.state.zoneStates.length) return
+    const temp = this.state.zoneStates[a]
+    this.state.zoneStates[a] = this.state.zoneStates[b]
+    this.state.zoneStates[b] = temp
   }
 
   removePhotoFromZone(zoneIndex: number): void {

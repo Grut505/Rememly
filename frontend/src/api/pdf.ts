@@ -6,6 +6,7 @@ export interface PdfOptions {
   show_seasonal_fruits?: boolean
   max_mosaic_photos?: number
   auto_merge?: boolean
+  clean_chunks?: boolean
 }
 
 export interface CreatePdfPayload {
@@ -75,6 +76,9 @@ export const pdfApi = {
 
   cancelMerge: (jobId: string) =>
     apiClient.post<{ cancelled: boolean }>('pdf/merge-cancel', { job_id: jobId }),
+
+  cleanupMerge: (jobId: string) =>
+    apiClient.post<{ cleaned: boolean }>('pdf/merge-cleanup', { job_id: jobId }),
 
   cancel: (jobId: string) =>
     apiClient.post<{ cancelled: boolean; job_id: string }>('pdf/cancel', { job_id: jobId }),

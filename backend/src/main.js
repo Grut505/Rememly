@@ -73,6 +73,10 @@ function doPost(e) {
       const body = e.postData ? JSON.parse(e.postData.contents) : {};
       return handlePdfMergeFailed(body);
     }
+    if (path === 'pdf/merge-cleanup') {
+      const body = e.postData ? JSON.parse(e.postData.contents) : {};
+      return handlePdfMergeCleanup(body);
+    }
     if (path === 'pdf/merge-cancel') {
       const body = e.postData ? JSON.parse(e.postData.contents) : {};
       return handlePdfMergeCancel(body);
@@ -153,7 +157,7 @@ function doPost(e) {
         return handleImageFetch(params.fileId);
 
       case 'famileo/status':
-        return handleFamileoStatus();
+        return handleFamileoStatus(params);
 
       case 'famileo/posts':
         return handleFamileoPosts(params);

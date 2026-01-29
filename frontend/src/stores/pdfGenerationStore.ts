@@ -25,6 +25,7 @@ interface PdfGenerationState {
     show_seasonal_fruits?: boolean
     max_mosaic_photos?: number
     auto_merge?: boolean
+    clean_chunks?: boolean
   }, onComplete?: () => void) => Promise<PdfListItem | null>
   pollJobStatus: (jobId: string) => Promise<void>
   setLastCompletedJob: (job: PdfListItem | null) => void

@@ -38,10 +38,12 @@ export function PdfExport() {
   const [deleteJobId, setDeleteJobId] = useState<string | null>(null)
   const [deleteBulk, setDeleteBulk] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [cleanupJobId, setCleanupJobId] = useState<string | null>(null)
 
   // Cancel state
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null)
   const [mergingJobIds, setMergingJobIds] = useState<Set<string>>(new Set())
+  const [cleaningJobIds, setCleaningJobIds] = useState<Set<string>>(new Set())
 
   // Generate modal
   const [showGenerateModal, setShowGenerateModal] = useState(false)
@@ -290,6 +292,16 @@ export function PdfExport() {
     }
   }
 
+  const getDeleteMessage = (jobId: string | null) => {
+    if (!jobId) return 'The PDF will be permanently deleted from Google Drive.'
+    const job = pdfList.find(p => p.job_id === jobId)
+    if (!job) return 'The PDF will be permanently deleted from Google Drive.'
+    if (job.chunks_folder_id) {
+      return 'The merged PDF, the chunks folder, and all temporary files will be permanently deleted from Google Drive.'
+    }
+    return 'The merged PDF will be permanently deleted from Google Drive.'
+  }
+
   const handleCancelMerge = async (jobId: string) => {
     setCancellingJobId(jobId)
     try {
@@ -334,6 +346,36 @@ export function PdfExport() {
         return next
       })
     }
+  }
+
+  const handleCleanupMerge = async (jobId: string) => {
+    setCleaningJobIds(prev => new Set(prev).add(jobId))
+    try {
+      await pdfApi.cleanupMerge(jobId)
+      setPdfList(prev => prev.map(pdf => {
+        if (pdf.job_id !== jobId) return pdf
+        return {
+          ...pdf,
+          chunks_folder_id: undefined,
+          chunks_folder_url: undefined,
+          progress_message: 'Chunks cleaned',
+        }
+      }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clean chunks')
+    } finally {
+      setCleaningJobIds(prev => {
+        const next = new Set(prev)
+        next.delete(jobId)
+        return next
+      })
+    }
+  }
+
+  const handleCleanupConfirm = async () => {
+    if (!cleanupJobId) return
+    await handleCleanupMerge(cleanupJobId)
+    setCleanupJobId(null)
   }
 
   return (
@@ -631,6 +673,11 @@ export function PdfExport() {
                             <p className="font-medium text-gray-900">
                               {formatDateRange(pdf.date_from, pdf.date_to)}
                             </p>
+                            {pdf.pdf_url && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">
+                                Merged
+                              </span>
+                            )}
                             {!pdf.pdf_url && pdf.status === 'DONE' && (
                               <span className="px-2 py-0.5 text-xs font-medium bg-yellow-50 text-yellow-700 rounded">
                                 Merge pending
@@ -692,6 +739,28 @@ export function PdfExport() {
                                   <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
                                 </svg>
                               </a>
+                            )}
+                            {pdf.pdf_url && pdf.chunks_folder_id && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setCleanupJobId(pdf.job_id)
+                                }}
+                                className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                                title="Clean chunks"
+                                disabled={cleaningJobIds.has(pdf.job_id)}
+                              >
+                                {cleaningJobIds.has(pdf.job_id) ? (
+                                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                ) : (
+                                  <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6"></path>
+                                  </svg>
+                                )}
+                              </button>
                             )}
                             {!pdf.pdf_url && (pdf.status === 'DONE' || pdf.status === 'ERROR') && pdf.chunks_folder_id && (
                               <button
@@ -784,7 +853,7 @@ export function PdfExport() {
       <ConfirmDialog
         isOpen={!!deleteJobId}
         title="Delete PDF?"
-        message="The PDF will be permanently deleted from Google Drive."
+        message={getDeleteMessage(deleteJobId)}
         confirmLabel="Delete"
         cancelLabel="Cancel"
         onConfirm={handleDeleteSingle}
@@ -804,6 +873,18 @@ export function PdfExport() {
         onCancel={() => setDeleteBulk(false)}
         variant="danger"
         isLoading={deleting}
+      />
+
+      <ConfirmDialog
+        isOpen={!!cleanupJobId}
+        title="Clean chunks?"
+        message="This will delete the chunks folder and move the merged PDF to Rememly/pdf."
+        confirmLabel="Clean"
+        cancelLabel="Cancel"
+        onConfirm={handleCleanupConfirm}
+        onCancel={() => setCleanupJobId(null)}
+        variant="danger"
+        isLoading={cleaningJobIds.has(cleanupJobId || '')}
       />
     </div>
   )

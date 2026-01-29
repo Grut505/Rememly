@@ -41,6 +41,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const [showSeasonalFruits, setShowSeasonalFruits] = useState(true)
   const [maxMosaicPhotos, setMaxMosaicPhotos] = useState<number>(0) // 0 = all photos
   const [autoMerge, setAutoMerge] = useState(false)
+  const [cleanChunksAfterMerge, setCleanChunksAfterMerge] = useState(false)
 
   const reset = () => {
     setStep('dates')
@@ -53,6 +54,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     setShowSeasonalFruits(true)
     setMaxMosaicPhotos(0)
     setAutoMerge(false)
+    setCleanChunksAfterMerge(false)
   }
 
   const handleClose = () => {
@@ -136,6 +138,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       show_seasonal_fruits: showSeasonalFruits,
       max_mosaic_photos: maxMosaicPhotos > 0 ? maxMosaicPhotos : undefined,
       auto_merge: autoMerge,
+      clean_chunks: autoMerge ? cleanChunksAfterMerge : undefined,
     })
 
     // Close modal immediately - progress will show in global notification
@@ -343,6 +346,21 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                   <p className="text-xs text-gray-500">Triggers the merge workflow after chunks are generated</p>
                 </div>
               </label>
+
+              {autoMerge && (
+                <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={cleanChunksAfterMerge}
+                    onChange={(e) => setCleanChunksAfterMerge(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Delete chunks after merge</span>
+                    <p className="text-xs text-gray-500">Remove intermediate PDF parts once the merge succeeds</p>
+                  </div>
+                </label>
+              )}
 
               {/* Summary reminder */}
               <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">

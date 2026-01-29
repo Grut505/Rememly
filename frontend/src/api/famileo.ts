@@ -28,6 +28,7 @@ export interface FamileoImageResponse {
 
 export interface FamileoStatusResponse {
   configured: boolean
+  valid: boolean
   message: string
 }
 
@@ -50,8 +51,8 @@ export interface FamileoImportedIdsResponse {
 }
 
 export const famileoApi = {
-  status: () =>
-    apiClient.get<FamileoStatusResponse>('famileo/status'),
+  status: (params?: { validate?: string; family_id?: string }) =>
+    apiClient.get<FamileoStatusResponse>('famileo/status', params),
 
   posts: (params?: { limit?: string; timestamp?: string; family_id?: string }) =>
     apiClient.get<FamileoPostsResponse>('famileo/posts', params),

@@ -10,6 +10,10 @@ on:
       folder_id:
         description: "Drive folder id with PDF chunks"
         required: true
+      clean_chunks:
+        description: "Delete chunk PDFs after merge"
+        required: false
+        default: "false"
 
 jobs:
   merge:
@@ -77,7 +81,11 @@ jobs:
             cat /tmp/merge_status_2.json || true
             exit 1
           fi
-          timeout 45m python -u scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --no-browser \
+          CLEAN_FLAG=""
+          if [ "${{ inputs.clean_chunks }}" = "true" ]; then
+            CLEAN_FLAG="--clean-chunks"
+          fi
+          timeout 45m python -u scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --no-browser $CLEAN_FLAG \
             1> /tmp/merge_out.txt 2> /tmp/merge_err.txt
           echo "---- merge stdout (tail) ----"
           tail -n 50 /tmp/merge_out.txt || true
@@ -134,6 +142,7 @@ jobs:
             --data-urlencode "job_id=${JOB_ID}" \
             --data-urlencode "file_id=${FILE_ID}" \
             --data-urlencode "url=${URL}" \
+            --data-urlencode "clean_chunks=${{ inputs.clean_chunks }}" \
             "${CALLBACK_URL}")
           echo "merge-complete HTTP ${STATUS_CODE}"
           if [ "${STATUS_CODE}" -ge 400 ]; then

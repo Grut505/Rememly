@@ -36,6 +36,7 @@ export function FamileoBrowser() {
   // Refresh session state
   const [refreshing, setRefreshing] = useState(false)
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null)
+  const [autoRefreshing, setAutoRefreshing] = useState(false)
 
   // Families state
   const [families, setFamilies] = useState<FamileoFamily[]>([])
@@ -68,6 +69,82 @@ export function FamileoBrowser() {
     loadInitialData()
   }, [])
 
+  const isSessionError = (message: string) => {
+    const lower = message.toLowerCase()
+    return (
+      lower.includes('session expired') ||
+      lower.includes('famileo session not configured') ||
+      lower.includes('invalid famileo session')
+    )
+  }
+
+  const sanitizeSessionError = (message: string) => {
+    if (isSessionError(message)) {
+      return 'Session Famileo expirée. Rafraîchissement en cours...'
+    }
+    return message
+  }
+
+  const waitForSessionValid = async () => {
+    const maxAttempts = 20
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        const status = await famileoApi.status({
+          validate: 'true',
+          family_id: selectedFamilyId || undefined,
+        })
+        if (status.valid) {
+          // Clear refresh message once posts are available
+          setRefreshMessage(null)
+          return true
+        }
+        setRefreshMessage(status.message ? sanitizeSessionError(status.message) : 'Refreshing session...')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Refreshing session...'
+        setRefreshMessage(sanitizeSessionError(msg))
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+    }
+    return false
+  }
+
+  const fetchPosts = async () => {
+    const allPosts: FamileoPost[] = []
+    let shouldContinue = true
+
+    const startTs = new Date(startDate + 'T00:00:00').getTime()
+    const endTs = new Date(endDate + 'T23:59:59').getTime()
+    let timestamp: string | null = new Date(endDate + 'T23:59:59.999Z').toISOString()
+
+    while (shouldContinue) {
+      const response = await famileoApi.posts({
+        limit: '50',
+        timestamp: timestamp,
+        family_id: selectedFamilyId || undefined,
+      })
+
+      for (const post of response.posts) {
+        const postTs = new Date(post.date).getTime()
+        if (postTs >= startTs && postTs <= endTs) {
+          allPosts.push(post)
+        }
+      }
+
+      if (response.next_timestamp) {
+        const nextTs = new Date(response.next_timestamp).getTime()
+        if (nextTs >= startTs) {
+          timestamp = response.next_timestamp
+        } else {
+          shouldContinue = false
+        }
+      } else {
+        shouldContinue = false
+      }
+    }
+
+    return allPosts
+  }
+
   const handleGetPosts = async () => {
     if (!startDate || !endDate) {
       setError('Please select both start and end dates')
@@ -82,64 +159,40 @@ export function FamileoBrowser() {
     setImageCache({})
 
     try {
-      const allPosts: FamileoPost[] = []
-      let shouldContinue = true
-
-      // Convert dates to timestamps for comparison
-      const startTs = new Date(startDate + 'T00:00:00').getTime()
-      const endTs = new Date(endDate + 'T23:59:59').getTime()
-
-      // Start from end date (most recent) and paginate backwards
-      // First call: get posts before end date + 1 day to include end date posts
-      let timestamp: string | null = new Date(endDate + 'T23:59:59.999Z').toISOString()
-
-      console.log('Famileo fetch - startDate:', startDate, 'endDate:', endDate)
-      console.log('Famileo fetch - startTs:', new Date(startTs).toISOString(), 'endTs:', new Date(endTs).toISOString())
-      console.log('Famileo fetch - initial timestamp:', timestamp)
-
-      while (shouldContinue) {
-        console.log('Famileo fetch - calling API with timestamp:', timestamp)
-        const response = await famileoApi.posts({
-          limit: '50',
-          timestamp: timestamp,
-          family_id: selectedFamilyId || undefined,
-        })
-        console.log('Famileo fetch - got', response.posts.length, 'posts, has_more:', response.has_more, 'next_timestamp:', response.next_timestamp)
-
-        // Add posts that are within the date range
-        for (const post of response.posts) {
-          const postTs = new Date(post.date).getTime()
-          if (postTs >= startTs && postTs <= endTs) {
-            allPosts.push(post)
-          }
-        }
-
-        // Check if we should continue pagination
-        // Continue if: next_timestamp exists AND is >= startDate
-        if (response.next_timestamp) {
-          const nextTs = new Date(response.next_timestamp).getTime()
-          console.log('Famileo fetch - nextTs:', new Date(nextTs).toISOString(), 'startTs:', new Date(startTs).toISOString(), 'continue?', nextTs >= startTs)
-          if (nextTs >= startTs) {
-            timestamp = response.next_timestamp
-          } else {
-            // Next page would be before start date, stop
-            console.log('Famileo fetch - stopping, next page before start date')
-            shouldContinue = false
-          }
-        } else {
-          // No next_timestamp means no more pages
-          console.log('Famileo fetch - stopping, no next_timestamp')
-          shouldContinue = false
-        }
-      }
-
+      const allPosts = await fetchPosts()
       setPosts(allPosts)
-
       if (allPosts.length === 0) {
         setError('No posts found in this date range')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch posts')
+      const message = err instanceof Error ? err.message : 'Failed to fetch posts'
+      if (isSessionError(message) && !autoRefreshing) {
+        setAutoRefreshing(true)
+        setRefreshing(true)
+        setRefreshMessage('Refreshing Famileo session... This may take a few minutes.')
+        try {
+          await famileoApi.triggerRefresh()
+          const ok = await waitForSessionValid()
+          if (ok) {
+            const allPosts = await fetchPosts()
+            setPosts(allPosts)
+            if (allPosts.length === 0) {
+              setError('No posts found in this date range')
+            }
+            setRefreshMessage(null)
+          } else {
+            setError('Le rafraîchissement Famileo a expiré. Réessaie dans quelques minutes.')
+          }
+        } catch (refreshErr) {
+          const msg = refreshErr instanceof Error ? refreshErr.message : 'Failed to refresh session'
+          setError(sanitizeSessionError(msg))
+        } finally {
+          setRefreshing(false)
+          setAutoRefreshing(false)
+        }
+      } else {
+        setError(message)
+      }
     } finally {
       setLoading(false)
     }
@@ -465,7 +518,7 @@ export function FamileoBrowser() {
       )}
 
       {/* Bulk create button - fixed at bottom */}
-      {!loading && posts.length > 0 && (
+      {!loading && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-20">
           <div className="max-w-content mx-auto">
             <button

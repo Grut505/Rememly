@@ -332,7 +332,7 @@ function handleFamileoImage(params) {
 /**
  * Handler for famileo/status endpoint - check if session is valid
  */
-function handleFamileoStatus() {
+function handleFamileoStatus(params) {
   try {
     const props = PropertiesService.getScriptProperties();
     const sessionJson = props.getProperty('FAMILEO_SESSION');
@@ -340,14 +340,31 @@ function handleFamileoStatus() {
     if (!sessionJson) {
       return createResponse({
         ok: true,
-        data: { configured: false, message: 'No session configured' }
+        data: { configured: false, valid: false, message: 'No session configured' }
       });
     }
 
-    return createResponse({
-      ok: true,
-      data: { configured: true, message: 'Session configured' }
-    });
+    const shouldValidate = params && (params.validate === 'true' || params.validate === true);
+    if (!shouldValidate) {
+      return createResponse({
+        ok: true,
+        data: { configured: true, valid: true, message: 'Session configured' }
+      });
+    }
+
+    try {
+      const familyId = params && params.family_id ? params.family_id : null;
+      famileoFetchPosts(1, null, familyId);
+      return createResponse({
+        ok: true,
+        data: { configured: true, valid: true, message: 'Session valid' }
+      });
+    } catch (error) {
+      return createResponse({
+        ok: true,
+        data: { configured: true, valid: false, message: String(error) }
+      });
+    }
   } catch (error) {
     return createResponse({
       ok: false,

@@ -159,6 +159,7 @@ def main():
     parser.add_argument("--credentials", help="OAuth client secrets json")
     parser.add_argument("--token", help="Token cache json")
     parser.add_argument("--no-browser", action="store_true", help="Use console OAuth flow (no local browser)")
+    parser.add_argument("--clean-chunks", action="store_true", help="Delete chunk PDFs after successful merge")
     args = parser.parse_args()
 
     config = configparser.ConfigParser()
@@ -178,7 +179,7 @@ def main():
     merge_token = cfg.get("merge_token", "").strip()
     delete_chunks_folder = (cfg.get("delete_chunks_folder", "false").lower() == "true")
     move_to_pdf_root = (cfg.get("move_to_pdf_root", "false").lower() == "true")
-    clean_chunks = (cfg.get("clean_chunks", "false").lower() == "true")
+    clean_chunks = args.clean_chunks or (cfg.get("clean_chunks", "false").lower() == "true")
 
     if not folder_id:
         raise SystemExit("Missing folder_id. Set it in config or pass --folder-id.")

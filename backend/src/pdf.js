@@ -103,7 +103,8 @@ function handlePdfCreate(body, user) {
     mosaicLayout: body.options?.mosaic_layout || 'full',
     showSeasonalFruits: body.options?.show_seasonal_fruits !== false,
     maxMosaicPhotos: body.options?.max_mosaic_photos || undefined,
-    autoMerge: body.options?.auto_merge === true
+    autoMerge: body.options?.auto_merge === true,
+    cleanChunks: body.options?.clean_chunks === true
   }));
 
   // Return immediately with PENDING status
@@ -557,9 +558,11 @@ function finalizePdfChunks(jobId) {
 
     const optionsJson = props.getProperty('PDF_OPTIONS_' + jobId);
     const pdfOptions = optionsJson ? JSON.parse(optionsJson) : {
-      autoMerge: false
+      autoMerge: false,
+      cleanChunks: false
     };
     let autoMerge = pdfOptions.autoMerge === true;
+    const cleanChunks = pdfOptions.cleanChunks === true;
     if (autoMerge && !props.getProperty('GITHUB_TOKEN')) {
       autoMerge = false;
     }
@@ -573,7 +576,7 @@ function finalizePdfChunks(jobId) {
     sendPdfReadyEmail(jobId, folder.getUrl());
     if (autoMerge) {
       // Trigger merge workflow automatically
-      const triggerResult = triggerPdfMergeWorkflow(jobId, folder.getId());
+      const triggerResult = triggerPdfMergeWorkflow(jobId, folder.getId(), cleanChunks);
       if (!triggerResult.ok) {
         updateJobStatus(
           jobId,
@@ -595,7 +598,7 @@ function finalizePdfChunks(jobId) {
   }
 }
 
-function triggerPdfMergeWorkflow(jobId, folderId) {
+function triggerPdfMergeWorkflow(jobId, folderId, cleanChunks) {
   try {
     const props = PropertiesService.getScriptProperties();
     const githubToken = props.getProperty('GITHUB_TOKEN');
@@ -621,7 +624,8 @@ function triggerPdfMergeWorkflow(jobId, folderId) {
           ref: ref,
           inputs: {
             job_id: jobId,
-            folder_id: folderId
+            folder_id: folderId,
+            clean_chunks: cleanChunks ? 'true' : 'false'
           }
         }),
         muteHttpExceptions: true
@@ -660,6 +664,14 @@ function handlePdfMergeComplete(body) {
 
     updateJobStatus(jobId, 'DONE', 100, fileId, url, undefined, 'Merged');
     if (body?.clean_chunks) {
+      const job = getJobStatus(jobId);
+      if (job && job.chunks_folder_id) {
+        const pdfRoot = getPdfRootFolder();
+        if (pdfRoot) {
+          moveFileToFolder(fileId, pdfRoot);
+        }
+        trashFolder(job.chunks_folder_id);
+      }
       updateJobChunksFolder(jobId, '', '');
     }
     sendPdfMergedEmail(jobId, url);
@@ -821,6 +833,38 @@ function handlePdfMergeCancel(body) {
   }
 }
 
+function handlePdfMergeCleanup(body) {
+  try {
+    const jobId = body?.job_id;
+    if (!jobId) {
+      return createResponse({ ok: false, error: { code: 'INVALID_PARAMS', message: 'Missing job_id' } });
+    }
+    const job = getJobStatus(jobId);
+    if (!job) {
+      return createResponse({ ok: false, error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    if (!job.pdf_file_id || !job.pdf_url) {
+      return createResponse({ ok: false, error: { code: 'MISSING_MERGED_PDF', message: 'Merged PDF not found' } });
+    }
+    if (!job.chunks_folder_id) {
+      return createResponse({ ok: false, error: { code: 'NO_CHUNKS_FOLDER', message: 'No chunks folder to clean' } });
+    }
+
+    const pdfRoot = getPdfRootFolder();
+    if (pdfRoot) {
+      moveFileToFolder(job.pdf_file_id, pdfRoot);
+    }
+    trashFolder(job.chunks_folder_id);
+    updateJobChunksFolder(jobId, '', '');
+    updateJobStatus(jobId, job.status, undefined, undefined, undefined, undefined, 'Chunks cleaned');
+    logPdfEvent(jobId, 'INFO', 'Merge cleanup', { moved: !!pdfRoot });
+
+    return createResponse({ ok: true, data: { cleaned: true } });
+  } catch (e) {
+    return createResponse({ ok: false, error: { code: 'MERGE_CLEANUP_FAILED', message: String(e) } });
+  }
+}
+
 function handlePdfJobByFolder(body) {
   try {
     const props = PropertiesService.getScriptProperties();
@@ -872,6 +916,33 @@ function sendPdfMergedEmail(jobId, pdfUrl) {
     });
   } catch (e) {
     Logger.log('Failed to send merged email: ' + e.message);
+  }
+}
+
+function getPdfRootFolder() {
+  const roots = DriveApp.getFoldersByName('Rememly');
+  if (!roots.hasNext()) return null;
+  const rememly = roots.next();
+  const pdfFolders = rememly.getFoldersByName('pdf');
+  if (!pdfFolders.hasNext()) return null;
+  return pdfFolders.next();
+}
+
+function moveFileToFolder(fileId, folder) {
+  try {
+    const file = DriveApp.getFileById(fileId);
+    file.moveTo(folder);
+  } catch (e) {
+    // Ignore move errors
+  }
+}
+
+function trashFolder(folderId) {
+  try {
+    const folder = DriveApp.getFolderById(folderId);
+    folder.setTrashed(true);
+  } catch (e) {
+    // Ignore trash errors
   }
 }
 

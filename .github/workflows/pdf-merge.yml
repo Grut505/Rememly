@@ -77,7 +77,7 @@ jobs:
             cat /tmp/merge_status_2.json || true
             exit 1
           fi
-          python scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --no-browser \
+          timeout 45m python -u scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --no-browser \
             1> /tmp/merge_out.txt 2> /tmp/merge_err.txt
           echo "---- merge stdout (tail) ----"
           tail -n 50 /tmp/merge_out.txt || true

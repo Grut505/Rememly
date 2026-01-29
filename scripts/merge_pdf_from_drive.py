@@ -9,6 +9,7 @@ import urllib.request
 from typing import List, Optional
 
 from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
@@ -21,7 +22,14 @@ def get_drive_service(credentials_path: str, token_path: str, use_console: bool)
     creds = None
     if os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+    if creds and creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+        except Exception as exc:
+            creds = None
     if not creds or not creds.valid:
+        if use_console and os.getenv("GITHUB_ACTIONS") == "true":
+            raise SystemExit("No valid token.json found in CI. Re-auth locally to refresh token.json.")
         flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
         if use_console:
             # Print URL, user opens it manually; local server receives the redirect.
@@ -193,6 +201,8 @@ def main():
         print(f"[{idx}/{total}] Merging {name}...")
         with pikepdf.Pdf.open(io.BytesIO(data)) as src:
             pdf.pages.extend(src.pages)
+        if idx % 5 == 0 or idx == total:
+            print(f"[{idx}/{total}] Progress: merged {idx} file(s).")
 
     print("Saving merged PDF...")
     out_bytes = io.BytesIO()

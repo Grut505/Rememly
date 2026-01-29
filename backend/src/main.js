@@ -12,6 +12,7 @@ function doGet(e) {
         job_id: params.job_id,
         progress: params.progress ? Number(params.progress) : undefined,
         message: params.message,
+        run_id: params.run_id,
       };
       return handlePdfMergeStatus(body);
     }

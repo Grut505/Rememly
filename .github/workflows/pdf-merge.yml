@@ -15,9 +15,22 @@ jobs:
   merge:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      CALLBACK_URL: ${{ secrets.BACKEND_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate callback URL
+        run: |
+          if [ -z "$CALLBACK_URL" ]; then
+            echo "Missing CALLBACK_URL (set BACKEND_URL)"
+            exit 1
+          fi
+          case "$CALLBACK_URL" in
+            https://script.google.com/macros/s/*/exec) echo "Using Apps Script callback URL" ;;
+            *) echo "Warning: CALLBACK_URL is not an Apps Script URL (${CALLBACK_URL})" ;;
+          esac
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -33,7 +46,6 @@ jobs:
         run: |
           echo "${{ secrets.GDRIVE_CREDENTIALS_JSON }}" | base64 -d > credentials.json
           echo "${{ secrets.GDRIVE_TOKEN_JSON }}" | base64 -d > token.json
-          CALLBACK_URL="${{ secrets.APPS_SCRIPT_URL || secrets.BACKEND_URL }}"
           STATUS_CODE=$(curl -sS -L -o /tmp/merge_status_1.json -w "%{http_code}" -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
             -H "Content-Type: application/json" \
             -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${{ inputs.job_id }}\",\"progress\":20,\"message\":\"Downloading chunks\"}")
@@ -46,7 +58,6 @@ jobs:
       - name: Merge PDFs
         id: merge
         run: |
-          CALLBACK_URL="${{ secrets.APPS_SCRIPT_URL || secrets.BACKEND_URL }}"
           STATUS_CODE=$(curl -sS -L -o /tmp/merge_status_2.json -w "%{http_code}" -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
             -H "Content-Type: application/json" \
             -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${{ inputs.job_id }}\",\"progress\":60,\"message\":\"Merging PDFs\"}")
@@ -62,7 +73,6 @@ jobs:
         run: |
           JOB_ID="${{ inputs.job_id }}"
           RESULT='${{ steps.merge.outputs.result }}'
-          CALLBACK_URL="${{ secrets.APPS_SCRIPT_URL || secrets.BACKEND_URL }}"
           STATUS_CODE=$(curl -sS -L -o /tmp/merge_status_3.json -w "%{http_code}" -X POST "${CALLBACK_URL}?path=pdf/merge-status" \
             -H "Content-Type: application/json" \
             -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${JOB_ID}\",\"progress\":85,\"message\":\"Uploading merged PDF\"}")
@@ -105,7 +115,6 @@ jobs:
       - name: Notify backend (merge failed)
         if: ${{ failure() }}
         run: |
-          CALLBACK_URL="${{ secrets.APPS_SCRIPT_URL || secrets.BACKEND_URL }}"
           STATUS_CODE=$(curl -sS -L -o /tmp/merge_failed.json -w "%{http_code}" -X POST "${CALLBACK_URL}?path=pdf/merge-failed" \
             -H "Content-Type: application/json" \
             -d "{\"token\":\"${{ secrets.PDF_MERGE_TOKEN }}\",\"job_id\":\"${{ inputs.job_id }}\",\"message\":\"GitHub Action failed\"}")

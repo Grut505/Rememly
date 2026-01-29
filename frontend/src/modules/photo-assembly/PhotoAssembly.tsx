@@ -84,7 +84,14 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
 
     mapping.forEach((oldIndex, newIndex) => {
       if (oldIndex >= 0 && previousState.zoneStates[oldIndex]) {
-        newZoneStates[newIndex] = { ...previousState.zoneStates[oldIndex] }
+        const previousZone = previousState.zoneStates[oldIndex]
+        newZoneStates[newIndex] = {
+          photoIndex: previousZone.photoIndex,
+          zoom: previousZone.zoom,
+          x: previousZone.x,
+          y: previousZone.y,
+          rotation: previousZone.rotation ?? 0,
+        }
       }
     })
 

@@ -14,6 +14,7 @@ import { PhotoPicker } from './PhotoPicker'
 import { TextInput } from './TextInput'
 import { DateTimeInput } from './DateTimeInput'
 import { ArticleStatus } from '../../api/types'
+import { useImageLoader } from '../../hooks/useImageLoader'
 
 interface FamileoImportData {
   text: string
@@ -28,13 +29,15 @@ export function ArticleEditor() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user } = useAuth()
-  const { updateArticle: updateArticleInStore, deleteArticle: deleteArticleFromStore } = useArticlesStore()
+  const { articles, updateArticle: updateArticleInStore, deleteArticle: deleteArticleFromStore } = useArticlesStore()
   const { showToast } = useUiStore()
 
   const [texte, setTexte] = useState('')
   const [dateModification, setDateModification] = useState(new Date().toISOString())
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string>('')
+  const [articleImageUrl, setArticleImageUrl] = useState<string>('')
+  const [articleImageFileId, setArticleImageFileId] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -42,6 +45,7 @@ export function ArticleEditor() {
 
   const isEditMode = !!id
   const isDeleted = articleStatus === 'DELETED'
+  const { src: loadedImageSrc } = useImageLoader(articleImageUrl, articleImageFileId)
 
   // Check for Famileo import data
   useEffect(() => {
@@ -83,15 +87,32 @@ export function ArticleEditor() {
     }
   }, [id])
 
+  useEffect(() => {
+    if (isEditMode && !photoFile && loadedImageSrc) {
+      setPreviewUrl(loadedImageSrc)
+    }
+  }, [isEditMode, photoFile, loadedImageSrc])
+
   const loadArticle = async () => {
     if (!id) return
 
     setIsLoading(true)
     try {
+      const cached = articles.find((a) => a.id === id)
+      if (cached) {
+        setTexte(cached.texte || '')
+        setDateModification(cached.date)
+        setArticleImageUrl(cached.image_url || '')
+        setArticleImageFileId(cached.image_file_id || '')
+        setArticleStatus(cached.status || 'ACTIVE')
+        return
+      }
+
       const article = await articlesApi.get(id)
       setTexte(article.texte)
       setDateModification(article.date)
-      setPreviewUrl(article.image_url)
+      setArticleImageUrl(article.image_url || '')
+      setArticleImageFileId(article.image_file_id || '')
       setArticleStatus(article.status || 'ACTIVE')
     } catch (error) {
       showToast('Failed to load article', 'error')

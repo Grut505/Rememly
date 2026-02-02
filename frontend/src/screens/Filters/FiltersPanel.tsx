@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
-import { MONTHS_EN } from '../../utils/constants'
+import { MONTHS_EN, isStandalonePWA } from '../../utils/constants'
 import { getCurrentYear } from '../../utils/date'
 import { articlesApi } from '../../api/articles'
 
@@ -39,6 +39,7 @@ export interface FilterValues {
 }
 
 export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelProps) {
+  const isStandalone = isStandalonePWA()
   const [year, setYear] = useState(initialFilters?.year ?? DEFAULT_FILTERS.year)
   const [month, setMonth] = useState(initialFilters?.month ?? DEFAULT_FILTERS.month)
   const [dateFrom, setDateFrom] = useState(initialFilters?.dateFrom ?? DEFAULT_FILTERS.dateFrom)
@@ -126,7 +127,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
           placeholder="Search in loaded articles..."
         />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className={`grid gap-3 ${isStandalone ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
           {/* Year */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -182,7 +183,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
         </div>
 
         {/* Date Range */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className={`grid gap-3 w-full ${isStandalone ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
           <Input
             type="date"
             label="From"

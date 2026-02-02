@@ -30,9 +30,7 @@ export function ArticleTile({ article, isDuplicate, onDeleted, onRestored, selec
   const handleTileClick = () => {
     if (selectionMode) {
       onSelectionChange?.(article.id, !selected)
-      return
     }
-    navigate(`/editor/${article.id}`)
   }
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {

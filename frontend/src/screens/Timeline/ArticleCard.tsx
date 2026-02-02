@@ -95,7 +95,9 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
   }
 
   const handleCardClick = () => {
-    navigate(`/editor/${article.id}`)
+    if (selectionMode) {
+      onSelectionChange?.(article.id, !selected)
+    }
   }
 
   const handleDeleteClick = (e: React.MouseEvent) => {
@@ -154,7 +156,7 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
         className={`bg-white rounded-lg shadow-md overflow-hidden border hover:shadow-lg transition-shadow max-w-2xl mx-auto relative z-0 ${
           isDeleted ? 'border-red-300' : selected ? 'border-primary-500 ring-2 ring-primary-200' : 'border-gray-200'
         }`}
-        onClick={selectionMode ? () => onSelectionChange?.(article.id, !selected) : undefined}
+        onClick={handleCardClick}
       >
 
         {/* Header: Avatar, Author, Date, Edit/Delete buttons */}
@@ -263,10 +265,7 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
 
         {/* Text Content */}
         {article.texte && (
-          <div
-            onClick={handleCardClick}
-            className="p-4 transition-colors cursor-pointer hover:bg-gray-50"
-          >
+          <div className="p-4 transition-colors">
             <p className="whitespace-pre-wrap text-gray-900">{article.texte}</p>
           </div>
         )}

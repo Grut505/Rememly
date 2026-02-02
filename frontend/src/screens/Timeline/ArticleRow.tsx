@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Article } from '../../api/types'
+import { useNavigate } from 'react-router-dom'
 import { formatDateTimeFull } from '../../utils/date'
 import { useImageLoader } from '../../hooks/useImageLoader'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
@@ -30,9 +30,7 @@ export function ArticleRow({ article, isDuplicate, onDeleted, onRestored, select
   const handleRowClick = () => {
     if (selectionMode) {
       onSelectionChange?.(article.id, !selected)
-      return
     }
-    navigate(`/editor/${article.id}`)
   }
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -29,15 +29,24 @@ export function ConfirmDialog({
   if (!isOpen) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      onClick={(e) => e.stopPropagation()}
+    >
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black bg-opacity-50"
-        onClick={onCancel}
+        onClick={(e) => {
+          e.stopPropagation()
+          onCancel()
+        }}
       />
 
       {/* Dialog */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+      <div
+        className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 className="text-xl font-semibold mb-2">{title}</h2>
         <p className="text-gray-600 mb-4">{message}</p>
 
@@ -63,7 +72,10 @@ export function ConfirmDialog({
           <Button
             variant="secondary"
             fullWidth
-            onClick={onCancel}
+            onClick={(e) => {
+              e.stopPropagation()
+              onCancel()
+            }}
             disabled={isLoading}
           >
             {cancelLabel}
@@ -71,7 +83,10 @@ export function ConfirmDialog({
           <Button
             variant={variant}
             fullWidth
-            onClick={onConfirm}
+            onClick={(e) => {
+              e.stopPropagation()
+              onConfirm()
+            }}
             disabled={isLoading}
           >
             {isLoading ? 'Deleting...' : confirmLabel}

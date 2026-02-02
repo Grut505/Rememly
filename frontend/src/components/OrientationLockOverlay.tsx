@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 function isPwaStandalone() {
   if (typeof window === 'undefined') return false
   const nav = window.navigator as Navigator & { standalone?: boolean }
   return window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true
+}
+
+function isIOS() {
+  if (typeof window === 'undefined') return false
+  return /iPad|iPhone|iPod/.test(window.navigator.userAgent)
 }
 
 function isLandscape() {
@@ -16,10 +21,17 @@ function isLandscape() {
 
 export function OrientationLockOverlay() {
   const [show, setShow] = useState(false)
+  const wasLandscapeRef = useRef(false)
 
   useEffect(() => {
     const update = () => {
-      setShow(isPwaStandalone() && isLandscape())
+      const landscape = isPwaStandalone() && isLandscape()
+      if (!landscape && wasLandscapeRef.current && isIOS()) {
+        window.location.reload()
+        return
+      }
+      wasLandscapeRef.current = landscape
+      setShow(landscape)
     }
 
     update()

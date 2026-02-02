@@ -15,6 +15,7 @@ function handleArticlesList(params) {
   const cursor = params.cursor ? parseInt(params.cursor) : 0; // Offset-based cursor
   const statusFilter = params.status_filter || 'active'; // 'active', 'all', or 'deleted'
   const sourceFilter = params.source_filter || 'all'; // 'all', 'famileo', or 'local'
+  const duplicatesOnly = params.duplicates_only === 'true' || params.duplicates_only === true;
 
   // Build a cache of email -> pseudo for all users
   const userPseudoCache = buildUserPseudoCache();
@@ -82,15 +83,33 @@ function handleArticlesList(params) {
     articles.push(article);
   }
 
+  const duplicateCounts = {};
+  articles.forEach((article) => {
+    if (!article.famileo_post_id) return;
+    duplicateCounts[article.famileo_post_id] = (duplicateCounts[article.famileo_post_id] || 0) + 1;
+  });
+
+  articles.forEach((article) => {
+    if (!article.famileo_post_id) {
+      article.is_duplicate = false;
+      return;
+    }
+    article.is_duplicate = duplicateCounts[article.famileo_post_id] > 1;
+  });
+
+  const filteredArticles = duplicatesOnly
+    ? articles.filter((article) => article.is_duplicate)
+    : articles;
+
   // Sort by date descending
-  articles.sort((a, b) => {
+  filteredArticles.sort((a, b) => {
     return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 
   // Apply cursor (offset) and limit
-  const paginatedArticles = articles.slice(cursor, cursor + limit);
+  const paginatedArticles = filteredArticles.slice(cursor, cursor + limit);
   const nextOffset = cursor + limit;
-  const hasMore = nextOffset < articles.length;
+  const hasMore = nextOffset < filteredArticles.length;
 
   return createResponse({
     ok: true,

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useUiStore } from '../state/uiStore'
 
@@ -62,6 +63,22 @@ export function BottomNav() {
   const location = useLocation()
   const hasUnsavedChanges = useUiStore((state) => state.hasUnsavedChanges)
   const setPendingNavigationPath = useUiStore((state) => state.setPendingNavigationPath)
+  const [isStandalone, setIsStandalone] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia('(display-mode: standalone)')
+    const update = () => {
+      const nav = window.navigator as Navigator & { standalone?: boolean }
+      setIsStandalone(media.matches || nav.standalone === true)
+    }
+    update()
+    if (media.addEventListener) {
+      media.addEventListener('change', update)
+      return () => media.removeEventListener('change', update)
+    }
+    media.addListener(update)
+    return () => media.removeListener(update)
+  }, [])
 
   if (HIDDEN_PATHS.some((p) => location.pathname.startsWith(p))) {
     return null
@@ -69,11 +86,11 @@ export function BottomNav() {
 
   return (
     <>
-      <div className="h-16" aria-hidden="true" />
+      <div className={isStandalone ? 'h-20' : 'h-16'} aria-hidden="true" />
       <div className="fixed bottom-0 left-0 right-0 z-40">
         <div className="max-w-content mx-auto w-full">
           <div className="bg-primary-600 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
-            <div className="flex items-center justify-between px-2 py-1">
+            <div className={`flex items-center justify-between px-2 ${isStandalone ? 'pt-0.5 pb-6' : 'py-1'}`}>
             {NAV_ITEMS.map((item) => {
               const isActive = location.pathname === item.path
               const handleClick = () => {

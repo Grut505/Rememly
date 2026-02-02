@@ -13,7 +13,7 @@ A Progressive Web App (PWA) for creating and managing family photo articles and 
 - **PDF Generation**: Generate annual photo books in A4 format with cover, month dividers, and articles
 - **Google Workspace Integration**: Uses Google Sheets for data and Google Drive for storage
 - **Offline Support**: Service Worker for caching and offline access
-- **Private & Secure**: Whitelist-based authentication, no public sharing
+- **Private & Secure**: Whitelist-based authentication via the `users` sheet, no public sharing
 
 ## Tech Stack
 
@@ -129,9 +129,13 @@ In the editor:
 
 Configure Script Properties:
 1. Go to Project Settings
-2. Add Script Property:
-   - Key: `AUTHORIZED_EMAILS`
-   - Value: `["your-email@gmail.com"]` (JSON array)
+2. (Optional) Add Script Property:
+   - Key: `SPREADSHEET_ID` (will be created automatically on first run)
+
+Configure authorized users:
+1. Open the spreadsheet
+2. In the `users` sheet, add authorized emails in the `email` column
+3. Set `status` to `ACTIVE` (only `ACTIVE` is allowed; new users auto-added as `PENDING` on first access)
 
 See [backend/README.md](backend/README.md) for detailed backend setup.
 

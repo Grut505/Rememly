@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --safe-area-top: 0px;
+  }
+
   html {
     @apply min-h-screen;
   }
@@ -17,6 +21,18 @@
 }
 
 @layer utilities {
+  .app-safe-top-offset {
+    top: max(env(safe-area-inset-top), var(--safe-area-top));
+  }
+
+  .app-safe-top {
+    padding-top: max(env(safe-area-inset-top), var(--safe-area-top));
+  }
+
+  .app-safe-top-height {
+    height: calc(3.5rem + max(env(safe-area-inset-top), var(--safe-area-top)));
+  }
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;

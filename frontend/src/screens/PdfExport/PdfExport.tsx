@@ -385,12 +385,17 @@ export function PdfExport() {
       {/* Header bar */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-14 z-20">
         {/* Row 1: Title and actions */}
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-gray-900 flex-1">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-gray-900">
             {selectionMode ? `${selectedIds.size} selected` : 'Generated PDFs'}
           </h2>
+          {!selectionMode && (
+            <span className="text-xs font-semibold text-gray-600 bg-gray-100 border border-gray-200 rounded-full px-2.5 py-1">
+              {filteredList.length}
+            </span>
+          )}
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 ml-auto">
             {selectionMode && (
               <button
                 onClick={selectAll}
@@ -508,10 +513,7 @@ export function PdfExport() {
               </button>
             </div>
 
-            {/* Count */}
-            <span className="text-sm text-gray-500 ml-auto">
-              {filteredList.length} PDF{filteredList.length > 1 ? 's' : ''}
-            </span>
+            {/* Count moved to header badge */}
           </>
         )}
         </div>
@@ -832,6 +834,7 @@ export function PdfExport() {
             <FloatingActionButton
               onClick={() => setShowGenerateModal(true)}
               className="bg-primary-600 hover:bg-primary-700 active:bg-primary-800 transition-all hover:scale-105 active:scale-95"
+              pwaOffsetClassName="-translate-y-3"
               icon={
                 <svg className="w-8 h-8" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                   <path d="M12 4v16m8-8H4"></path>

@@ -12,6 +12,7 @@ export interface Article {
   full_page?: boolean
   status?: ArticleStatus
   famileo_post_id?: string
+  is_duplicate?: boolean
 }
 
 export interface AssemblyState {

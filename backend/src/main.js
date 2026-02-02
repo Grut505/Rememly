@@ -90,7 +90,7 @@ function doPost(e) {
     const token = getAuthToken(e);
 
     // Check authentication
-    const authResult = checkAuth(token);
+    const authResult = checkAuth(token, { allowPendingCreate: path === 'auth/check' });
     if (!authResult.ok) {
       return createResponse({ ok: false, error: authResult.error });
     }

@@ -13,7 +13,7 @@ declare global {
 }
 
 export function GoogleAuth() {
-  const { login, isAuthenticated } = useAuth()
+  const { login } = useAuth()
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -21,10 +21,38 @@ export function GoogleAuth() {
   const [showStandaloneHelp, setShowStandaloneHelp] = useState(false)
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/')
+    const savedUser = localStorage.getItem('user')
+    if (!savedUser) return
+
+    let email = ''
+    try {
+      email = JSON.parse(savedUser)?.email || ''
+    } catch {
+      localStorage.removeItem('user')
+      return
     }
-  }, [isAuthenticated, navigate])
+
+    if (!email) return
+
+    setIsLoading(true)
+    const baseUrl = import.meta.env.VITE_APPS_SCRIPT_URL
+    const authParam = `&auth=${encodeURIComponent('Email ' + email)}`
+    fetch(`${baseUrl}?path=auth/check${authParam}`, { method: 'POST' })
+      .then((authRes) => authRes.json())
+      .then((authData) => {
+        if (authData?.ok) {
+          navigate('/')
+          return
+        }
+        localStorage.removeItem('user')
+      })
+      .catch(() => {
+        localStorage.removeItem('user')
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
+  }, [navigate])
 
   // Check for stored auth error on mount
   useEffect(() => {
@@ -65,11 +93,29 @@ export function GoogleAuth() {
           })
             .then((res) => res.json())
             .then((data) => {
-              login(response.access_token, {
-                email: data.email,
-                name: data.name,
-              })
-              setIsLoading(false)
+              const email = data.email
+              const name = data.name
+              const baseUrl = import.meta.env.VITE_APPS_SCRIPT_URL
+              const authParam = `&auth=${encodeURIComponent('Email ' + email)}`
+
+              fetch(`${baseUrl}?path=auth/check${authParam}`, { method: 'POST' })
+                .then((authRes) => authRes.json())
+                .then((authData) => {
+                  if (!authData?.ok) {
+                    setError(authData?.error?.message || 'Your account is not authorized to access this application.')
+                    return
+                  }
+                  login(response.access_token, {
+                    email: email,
+                    name: name,
+                  })
+                })
+                .catch(() => {
+                  setError('Failed to verify authorization')
+                })
+                .finally(() => {
+                  setIsLoading(false)
+                })
             })
             .catch(() => {
               setError('Failed to get user information')

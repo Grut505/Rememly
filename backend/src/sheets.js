@@ -234,42 +234,202 @@ function ensureJobsSheetColumns(sheet) {
   }
 }
 
+function getUsersHeaders() {
+  return [
+    'email',
+    'pseudo',
+    'avatar_url',
+    'avatar_file_id',
+    'status',
+    'date_created',
+    'date_updated',
+  ];
+}
+
+function ensureUsersSheetColumns(sheet) {
+  const expected = getUsersHeaders();
+  const lastCol = sheet.getLastColumn() || expected.length;
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  let updated = false;
+
+  expected.forEach((header) => {
+    if (!headers.includes(header)) {
+      headers.push(header);
+      updated = true;
+    }
+  });
+
+  if (updated) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+
+  const headerMap = getUsersHeaderMap(sheet);
+  const statusIndex = headerMap.status;
+  const emailIndex = headerMap.email;
+  const lastRow = sheet.getLastRow();
+
+  if (statusIndex === undefined || emailIndex === undefined || lastRow <= 1) return;
+
+  const numRows = lastRow - 1;
+  const statusRange = sheet.getRange(2, statusIndex + 1, numRows, 1);
+  const emailRange = sheet.getRange(2, emailIndex + 1, numRows, 1);
+  const statuses = statusRange.getValues();
+  const emails = emailRange.getValues();
+  let dirty = false;
+
+  for (let i = 0; i < numRows; i++) {
+    if (emails[i][0] && !statuses[i][0]) {
+      statuses[i][0] = 'ACTIVE';
+      dirty = true;
+    }
+  }
+
+  if (dirty) {
+    statusRange.setValues(statuses);
+  }
+}
+
+function getUsersHeaderMap(sheet) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn() || getUsersHeaders().length)
+    .getValues()[0];
+  const map = {};
+  headers.forEach((header, index) => {
+    if (header) map[header] = index;
+  });
+  return map;
+}
+
+function appendUserRow(sheet, valuesByHeader) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const row = headers.map((header) => (header in valuesByHeader ? valuesByHeader[header] : ''));
+  sheet.appendRow(row);
+}
+
 function getUsersSheet() {
   const ss = getSpreadsheet();
   let sheet = ss.getSheetByName('users');
 
   if (!sheet) {
     sheet = ss.insertSheet('users');
-    sheet.appendRow([
-      'email',
-      'pseudo',
-      'avatar_url',
-      'avatar_file_id',
-      'date_created',
-      'date_updated',
-    ]);
+    sheet.appendRow(getUsersHeaders());
   }
 
+  ensureUsersSheetColumns(sheet);
   return sheet;
+}
+
+function normalizeEmail(email) {
+  if (!email) return '';
+  return String(email).trim().toLowerCase();
+}
+
+function getUserRowData(row, headerMap) {
+  return {
+    email: row[headerMap.email],
+    pseudo: headerMap.pseudo === undefined ? null : row[headerMap.pseudo],
+    avatar_url: headerMap.avatar_url === undefined ? null : row[headerMap.avatar_url],
+    avatar_file_id: headerMap.avatar_file_id === undefined ? null : row[headerMap.avatar_file_id],
+    status: headerMap.status === undefined ? null : row[headerMap.status],
+    date_created: headerMap.date_created === undefined ? null : row[headerMap.date_created],
+    date_updated: headerMap.date_updated === undefined ? null : row[headerMap.date_updated],
+  };
+}
+
+function findUserRowsByEmail(email) {
+  const sheet = getUsersSheet();
+  const headerMap = getUsersHeaderMap(sheet);
+  const data = sheet.getDataRange().getValues();
+  const emailIndex = headerMap.email;
+  if (emailIndex === undefined) return [];
+  const normalized = normalizeEmail(email);
+  if (!normalized) return [];
+
+  const matches = [];
+  for (let i = 1; i < data.length; i++) {
+    if (normalizeEmail(data[i][emailIndex]) === normalized) {
+      matches.push({
+        rowIndex: i + 1,
+        data: getUserRowData(data[i], headerMap),
+      });
+    }
+  }
+  return matches;
+}
+
+function pickPreferredUserRow(matches) {
+  if (matches.length === 0) return null;
+  const active = matches.find((match) => String(match.data.status).toUpperCase() === 'ACTIVE');
+  return active || matches[0];
+}
+
+function dedupeUserRows(email) {
+  const sheet = getUsersSheet();
+  const matches = findUserRowsByEmail(email);
+  if (matches.length <= 1) return pickPreferredUserRow(matches);
+
+  const keep = pickPreferredUserRow(matches);
+  const toDelete = matches
+    .filter((match) => match.rowIndex !== keep.rowIndex)
+    .sort((a, b) => b.rowIndex - a.rowIndex);
+
+  toDelete.forEach((match) => sheet.deleteRow(match.rowIndex));
+  SpreadsheetApp.flush();
+  return keep;
+}
+
+function getOrCreateUser(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  const existing = findUserByEmail(normalized);
+  if (existing) return existing;
+  return addPendingUser(normalized);
 }
 
 function findUserByEmail(email) {
   const sheet = getUsersSheet();
+  const headerMap = getUsersHeaderMap(sheet);
   const data = sheet.getDataRange().getValues();
+  const emailIndex = headerMap.email;
+  if (emailIndex === undefined) return null;
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === email) {
+    if (normalizeEmail(data[i][emailIndex]) === normalized) {
       return {
-        email: data[i][0],
-        pseudo: data[i][1],
-        avatar_url: data[i][2],
-        avatar_file_id: data[i][3],
-        date_created: data[i][4],
-        date_updated: data[i][5],
-        rowIndex: i + 1
+        ...getUserRowData(data[i], headerMap),
+        rowIndex: i + 1,
       };
     }
   }
   return null;
+}
+
+function addPendingUser(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  const lock = LockService.getScriptLock();
+  const hasLock = lock.tryLock(2000);
+  if (!hasLock) return null;
+
+  try {
+    const existing = dedupeUserRows(normalized);
+    if (existing) return existing;
+
+    const sheet = getUsersSheet();
+    const now = new Date().toISOString();
+    appendUserRow(sheet, {
+      email: normalized,
+      status: 'PENDING',
+      date_created: now,
+      date_updated: now,
+    });
+
+    SpreadsheetApp.flush();
+    return findUserByEmail(normalized);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**
@@ -278,11 +438,16 @@ function findUserByEmail(email) {
  */
 function buildUserPseudoCache() {
   const sheet = getUsersSheet();
+  const headerMap = getUsersHeaderMap(sheet);
   const data = sheet.getDataRange().getValues();
   const cache = {};
+  const emailIndex = headerMap.email;
+  const pseudoIndex = headerMap.pseudo;
+  if (emailIndex === undefined) return cache;
+
   for (let i = 1; i < data.length; i++) {
-    const email = data[i][0];
-    const pseudo = data[i][1];
+    const email = data[i][emailIndex];
+    const pseudo = pseudoIndex === undefined ? null : data[i][pseudoIndex];
     if (email) {
       cache[email] = pseudo || email.split('@')[0];
     }

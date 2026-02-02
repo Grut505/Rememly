@@ -1,3 +1,4 @@
+import { Suspense, lazy, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthContext'
 import { ProfileProvider } from './contexts/ProfileContext'
@@ -6,7 +7,12 @@ import { GoogleAuth } from './auth/GoogleAuth'
 import { Timeline } from './screens/Timeline/Timeline'
 import { ArticleEditor } from './screens/Editor/ArticleEditor'
 import { Statistics } from './screens/Stats/Statistics'
-import { PhotoAssemblyScreen } from './screens/PhotoAssembly/PhotoAssemblyScreen'
+import { LoadingScreen } from './ui/Spinner'
+const PhotoAssemblyScreen = lazy(() =>
+  import('./screens/PhotoAssembly/PhotoAssemblyScreen').then((module) => ({
+    default: module.PhotoAssemblyScreen,
+  }))
+)
 import { Profile } from './screens/Profile/Profile'
 import { FamileoBrowser } from './screens/Famileo/FamileoBrowser'
 import { PdfExport } from './screens/PdfExport/PdfExport'
@@ -18,6 +24,57 @@ import { OrientationLockOverlay } from './components/OrientationLockOverlay'
 import { BottomNav } from './ui/BottomNav'
 
 function App() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const nav = window.navigator as Navigator & { standalone?: boolean }
+    const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || nav.standalone === true
+    const isIOS = /iPad|iPhone|iPod/.test(window.navigator.userAgent)
+
+    if (!isStandalone || !isIOS) return
+
+    const measure = document.createElement('div')
+    measure.style.position = 'fixed'
+    measure.style.top = '0'
+    measure.style.left = '0'
+    measure.style.width = '0'
+    measure.style.height = 'env(safe-area-inset-top)'
+    measure.style.pointerEvents = 'none'
+    measure.style.visibility = 'hidden'
+    document.body.appendChild(measure)
+
+    const storageKey = 'safe_area_top'
+    let lastValue = Number(localStorage.getItem(storageKey) || 0)
+    if (lastValue > 0) {
+      document.documentElement.style.setProperty('--safe-area-top', `${lastValue}px`)
+    }
+    const updateSafeArea = () => {
+      const height = Math.round(measure.getBoundingClientRect().height)
+      if (height > 0) {
+        lastValue = height
+        localStorage.setItem(storageKey, String(lastValue))
+      }
+      if (lastValue > 0) {
+        document.documentElement.style.setProperty('--safe-area-top', `${lastValue}px`)
+      }
+    }
+
+    const scheduleUpdate = () => {
+      requestAnimationFrame(updateSafeArea)
+      setTimeout(updateSafeArea, 300)
+      setTimeout(updateSafeArea, 1000)
+    }
+
+    scheduleUpdate()
+    window.addEventListener('orientationchange', scheduleUpdate)
+    window.addEventListener('resize', scheduleUpdate)
+
+    return () => {
+      window.removeEventListener('orientationchange', scheduleUpdate)
+      window.removeEventListener('resize', scheduleUpdate)
+      measure.remove()
+    }
+  }, [])
+
   return (
     <AuthProvider>
       <ProfileProvider>
@@ -64,7 +121,9 @@ function App() {
             path="/photo-assembly"
             element={
               <ProtectedRoute>
-                <PhotoAssemblyScreen />
+                <Suspense fallback={<LoadingScreen message="Loading photo assembly..." />}>
+                  <PhotoAssemblyScreen />
+                </Suspense>
               </ProtectedRoute>
             }
           />

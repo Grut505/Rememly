@@ -8,6 +8,7 @@ import { articlesService } from '../../services/articles.service'
 
 interface ArticleRowProps {
   article: Article
+  isDuplicate?: boolean
   onDeleted?: (id: string) => void
   onRestored?: (id: string) => void
   selectionMode?: boolean
@@ -15,7 +16,7 @@ interface ArticleRowProps {
   onSelectionChange?: (id: string, selected: boolean) => void
 }
 
-export function ArticleRow({ article, onDeleted, onRestored, selectionMode, selected, onSelectionChange }: ArticleRowProps) {
+export function ArticleRow({ article, isDuplicate, onDeleted, onRestored, selectionMode, selected, onSelectionChange }: ArticleRowProps) {
   const navigate = useNavigate()
   const { src: imageSrc, isLoading: imageLoading, error: imageError } = useImageLoader(article.image_url, article.image_file_id)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -120,6 +121,11 @@ export function ArticleRow({ article, onDeleted, onRestored, selectionMode, sele
             {article.famileo_post_id && (
               <span className="text-[10px] uppercase tracking-wide bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
                 Famileo
+              </span>
+            )}
+            {isDuplicate && (
+              <span className="text-[10px] uppercase tracking-wide bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
+                Duplicate
               </span>
             )}
             {isDeleted && (

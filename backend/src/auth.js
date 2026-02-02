@@ -1,25 +1,11 @@
 // Authentication and authorization
 
-function checkAuth(authHeader) {
-  const scriptProperties = PropertiesService.getScriptProperties();
-  const whitelistJson = scriptProperties.getProperty('AUTHORIZED_EMAILS');
-
-  if (!whitelistJson) {
-    return {
-      ok: false,
-      error: {
-        code: 'AUTH_REQUIRED',
-        message: 'No authorized users configured',
-      },
-    };
-  }
-
-  const whitelist = JSON.parse(whitelistJson);
-
+function checkAuth(authHeader, options = {}) {
+  const allowPendingCreate = options.allowPendingCreate === true;
   // If no auth header provided, check session user
   if (!authHeader) {
     const sessionEmail = Session.getActiveUser().getEmail();
-    if (sessionEmail && whitelist.includes(sessionEmail)) {
+    if (sessionEmail && isEmailAuthorized(sessionEmail, allowPendingCreate)) {
       return {
         ok: true,
         user: {
@@ -41,7 +27,7 @@ function checkAuth(authHeader) {
   if (authHeader.startsWith('Email ')) {
     const email = authHeader.substring(6).trim();
 
-    if (!email || !whitelist.includes(email)) {
+    if (!email || !isEmailAuthorized(email, allowPendingCreate)) {
       return {
         ok: false,
         error: {
@@ -74,7 +60,7 @@ function checkAuth(authHeader) {
     };
   }
 
-  if (!whitelist.includes(tokenInfo.email)) {
+  if (!isEmailAuthorized(tokenInfo.email, allowPendingCreate)) {
     return {
       ok: false,
       error: {
@@ -106,14 +92,12 @@ function verifyGoogleToken(token) {
   }
 }
 
-function isEmailAuthorized(email) {
-  const scriptProperties = PropertiesService.getScriptProperties();
-  const whitelistJson = scriptProperties.getProperty('AUTHORIZED_EMAILS');
+function isEmailAuthorized(email, allowPendingCreate) {
+  if (!email) return false;
+  const user = allowPendingCreate ? getOrCreateUser(email) : findUserByEmail(email);
+  if (!user) return false;
 
-  if (!whitelistJson) return false;
-
-  const whitelist = JSON.parse(whitelistJson);
-  return whitelist.includes(email);
+  return String(user.status || '').toUpperCase() === 'ACTIVE';
 }
 
 function handleAuthCheck(user) {

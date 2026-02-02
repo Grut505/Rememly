@@ -148,7 +148,7 @@ export function Statistics() {
       <AppHeader />
 
       {/* Content */}
-      <div className="flex-1 p-4 pb-20">
+      <div className="flex-1 p-4 pb-24">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center">
@@ -167,7 +167,7 @@ export function Statistics() {
                 const isSelected = selectedYear === year.year
                 return (
                   <div key={year.year} className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50">
+                    <div className="w-full px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-left hover:bg-gray-50">
                       <div
                         role="button"
                         tabIndex={0}
@@ -186,21 +186,19 @@ export function Statistics() {
                           {year.total} total • {year.active} active • {year.deleted} deleted
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
                         <button
                           onClick={() => openYear(year.year, 'active')}
                           className="text-xs font-medium text-primary-600 hover:text-primary-700"
                         >
                           View active
                         </button>
-                        <span className="text-gray-300">|</span>
                         <button
                           onClick={() => openYear(year.year, 'deleted')}
                           className="text-xs font-medium text-red-600 hover:text-red-700"
                         >
                           View deleted
                         </button>
-                        <span className="text-gray-300">|</span>
                         <button
                           onClick={() => setSelectedYear(isSelected ? null : year.year)}
                           className="text-xs font-medium text-gray-600 hover:text-gray-800"
@@ -216,7 +214,7 @@ export function Statistics() {
                           {year.months.map((month) => (
                             <div
                               key={`${year.year}-${month.monthIndex}`}
-                              className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0"
+                              className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 border-b border-gray-100 last:border-b-0"
                             >
                               <div>
                                 <div className="text-sm text-gray-900">
@@ -226,14 +224,13 @@ export function Statistics() {
                                   {month.total} total • {month.active} active • {month.deleted} deleted
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <button
                                   onClick={() => openMonth(year.year, month.monthIndex, 'active')}
                                   className="text-xs font-medium text-primary-600 hover:text-primary-700"
                                 >
                                   View active
                                 </button>
-                                <span className="text-gray-300">|</span>
                                 <button
                                   onClick={() => openMonth(year.year, month.monthIndex, 'deleted')}
                                   className="text-xs font-medium text-red-600 hover:text-red-700"

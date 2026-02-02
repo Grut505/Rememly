@@ -1,49 +1,5 @@
-Famileo
-- progress dans le scrapper avec petites anims ou anecdote sympas
-- décoreller le chargement des données de celui des images, donc on rend la main et on affiche la liste au plus vite et ensuite, les images s'affichent au fur et à mesure
-
-Vue articles
-- Layout
--- Ensuite, la liste avec les headers des mois et les items, ça bouge au swipe vers le bas oui
--- Et ajoute un système de pull to refresh au passage, pour recharger les articles en tenant bien sur en compte les filtres
--- Dans les sous header de mois, on ajoute le nombre d'articles chargés pour ce mois - attention il faut gérer le fait qu'on lest charge petit à petit en auto suite à du scroll
-- On va ajouter un sort, par date ou par auteur
-- Dans le filtre, on va ajouter les auteurs aussi et on va mettre from et to sur la même ligne, ça prend trop de place là sur 2 lignes
-
-Dans les différents système de filtre
-- Quand on a une date from/start et to/end, on va mettre des règles pour que la to ne puisse pas être avant le from
-
-Global
-- Enlever le français qu'il y a un peu partout
-
-Backend
-- Le système de refresh cookie en auto (qui tourne toute les nuits sur git) ne fonctionne pas
-
-Statistique
-- Il faut une navigation en mode drill down année -> mois avec le compteur correspondant à chaque fois
-- Ajouter la répartition entre articles actifs ou supprimés
-- Faire des raccourcis dans le système de navigation vers la vue des articles préfiltrées par année ou mois
-- Il faut virer le bouton export pdf d'ici
-
-
-Vue articles p2
-- Pouvoir basculer en différent mode de vue
--- La liste 1 par 1 comme actullement
--- Une vue mode liste brute, avec les articles 1 par 1 une ligne, mode Excel quoi. On aura juste une miniature de l'image dans ce cas
--- Mode mosaique
---- Avec possibilité de zoomer / dézoomer sur cette mosaique et les items serait des boites comme actuellement
---- On affichera les mois sous forme de catégories qui contiennent les items
---- Un truc plus graphique et souple en terme de navigation quoi
 
 Module d'assemblage des photos à revoir
 
 P3
 -- Le post vers famileo
-
-
---------------------------
---------------------------
-ça marche pas, ça reste en mode running da la sheet en progress à 10% mais ça n'avance pas...
-Le problème est que le trigger initial ne trouve pas le job. Regardons le code actuel : handlePdfProcess ajoute le job à la queue mais ne crée pas le mapping PDF_TRIGGER_ + triggerId. Le trigger se déclenche, cherche d'abord le mapping (pas trouvé), puis la queue (peut-être déjà vidée ou problème).
-
-Je vais corriger en stockant le mapping du trigger dans handlePdfProcess:

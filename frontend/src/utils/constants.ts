@@ -6,7 +6,7 @@ export const CONSTANTS = {
   PDF_POLL_INTERVAL_MS: 3000,
   INFINITE_SCROLL_THRESHOLD: 0.8,
   TARGET_IMAGE_WIDTH_PX: 2480, // A4 width at 300dpi
-  ARTICLES_PER_PAGE: 5, // Number of articles to load per batch in timeline
+  ARTICLES_PER_PAGE: 10, // Number of articles to load per batch in timeline
 } as const
 
 export const MONTHS_EN = [

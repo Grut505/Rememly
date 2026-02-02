@@ -8,6 +8,7 @@ import { articlesService } from '../../services/articles.service'
 
 interface ArticleTileProps {
   article: Article
+  isDuplicate?: boolean
   onDeleted?: (id: string) => void
   onRestored?: (id: string) => void
   selectionMode?: boolean
@@ -15,7 +16,7 @@ interface ArticleTileProps {
   onSelectionChange?: (id: string, selected: boolean) => void
 }
 
-export function ArticleTile({ article, onDeleted, onRestored, selectionMode, selected, onSelectionChange }: ArticleTileProps) {
+export function ArticleTile({ article, isDuplicate, onDeleted, onRestored, selectionMode, selected, onSelectionChange }: ArticleTileProps) {
   const navigate = useNavigate()
   const { src: imageSrc, isLoading: imageLoading, error: imageError } = useImageLoader(article.image_url, article.image_file_id)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -96,6 +97,11 @@ export function ArticleTile({ article, onDeleted, onRestored, selectionMode, sel
         {article.famileo_post_id && (
           <div className="flex-1 bg-purple-500 text-white text-[10px] font-semibold px-2 py-0.5 text-center">
             Famileo
+          </div>
+        )}
+        {isDuplicate && (
+          <div className="flex-1 bg-yellow-500 text-white text-[10px] font-semibold px-2 py-0.5 text-center">
+            Duplicate
           </div>
         )}
         {isDeleted && (

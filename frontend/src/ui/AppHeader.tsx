@@ -20,7 +20,7 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
 
   return (
     <>
-      <header className="bg-primary-600 text-white fixed top-0 left-0 right-0 z-30 shadow-md">
+      <header className="bg-primary-600 text-white fixed left-0 right-0 z-30 shadow-md app-safe-top-offset">
         <div className="max-w-content mx-auto w-full h-14 flex items-center px-4 relative">
           {/* True centered title across full app width */}
           <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold leading-none text-center pointer-events-none">
@@ -62,12 +62,13 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
         </div>
       </header>
       {/* Spacer to offset fixed header */}
-      <div className="h-14 flex-shrink-0" />
+      <div className="app-safe-top-height flex-shrink-0" />
 
       <Modal
         isOpen={showAbout}
         onClose={() => setShowAbout(false)}
         title="About"
+        align="center"
       >
         <div className="px-4 py-4 space-y-4 text-sm text-gray-700">
           <div className="space-y-2">

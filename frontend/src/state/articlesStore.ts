@@ -8,6 +8,8 @@ export interface ArticleFilters {
   from?: string
   to?: string
   author?: string
+  search?: string
+  duplicatesOnly?: boolean
   statusFilter?: StatusFilter
   sourceFilter?: SourceFilter
 }
@@ -18,6 +20,8 @@ const defaultFilters: ArticleFilters = {
   from: '',
   to: '',
   author: '',
+  search: '',
+  duplicatesOnly: false,
   statusFilter: 'active',
   sourceFilter: 'all',
 }

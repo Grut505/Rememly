@@ -11,6 +11,8 @@ const DEFAULT_FILTERS: FilterValues = {
   dateFrom: '',
   dateTo: '',
   author: '',
+  search: '',
+  duplicatesOnly: false,
   statusFilter: 'active',
   sourceFilter: 'all',
 }
@@ -30,6 +32,8 @@ export interface FilterValues {
   dateFrom: string
   dateTo: string
   author: string
+  search: string
+  duplicatesOnly: boolean
   statusFilter: StatusFilter
   sourceFilter: SourceFilter
 }
@@ -40,6 +44,8 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
   const [dateFrom, setDateFrom] = useState(initialFilters?.dateFrom ?? DEFAULT_FILTERS.dateFrom)
   const [dateTo, setDateTo] = useState(initialFilters?.dateTo ?? DEFAULT_FILTERS.dateTo)
   const [author, setAuthor] = useState(initialFilters?.author ?? DEFAULT_FILTERS.author)
+  const [search, setSearch] = useState(initialFilters?.search ?? DEFAULT_FILTERS.search)
+  const [duplicatesOnly, setDuplicatesOnly] = useState(initialFilters?.duplicatesOnly ?? DEFAULT_FILTERS.duplicatesOnly)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilters?.statusFilter ?? DEFAULT_FILTERS.statusFilter)
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialFilters?.sourceFilter ?? DEFAULT_FILTERS.sourceFilter)
   const [authors, setAuthors] = useState<{ email: string; pseudo: string }[]>([])
@@ -52,6 +58,8 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
       setDateFrom(initialFilters.dateFrom ?? DEFAULT_FILTERS.dateFrom)
       setDateTo(initialFilters.dateTo ?? DEFAULT_FILTERS.dateTo)
       setAuthor(initialFilters.author ?? DEFAULT_FILTERS.author)
+      setSearch(initialFilters.search ?? DEFAULT_FILTERS.search)
+      setDuplicatesOnly(initialFilters.duplicatesOnly ?? DEFAULT_FILTERS.duplicatesOnly)
       setStatusFilter(initialFilters.statusFilter ?? DEFAULT_FILTERS.statusFilter)
       setSourceFilter(initialFilters.sourceFilter ?? DEFAULT_FILTERS.sourceFilter)
     }
@@ -86,7 +94,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
   }, [statusFilter, sourceFilter])
 
   const handleApply = () => {
-    onApply({ year, month, dateFrom, dateTo, author, statusFilter, sourceFilter })
+    onApply({ year, month, dateFrom, dateTo, author, search, duplicatesOnly, statusFilter, sourceFilter })
     onClose()
   }
 
@@ -96,6 +104,8 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
     setDateFrom(DEFAULT_FILTERS.dateFrom)
     setDateTo(DEFAULT_FILTERS.dateTo)
     setAuthor(DEFAULT_FILTERS.author)
+    setSearch(DEFAULT_FILTERS.search)
+    setDuplicatesOnly(DEFAULT_FILTERS.duplicatesOnly)
     setStatusFilter(DEFAULT_FILTERS.statusFilter)
     setSourceFilter(DEFAULT_FILTERS.sourceFilter)
     onApply(DEFAULT_FILTERS)
@@ -107,79 +117,68 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
       <div className="flex flex-col h-full">
         {/* Content */}
         <div className="p-4 space-y-6 overflow-y-auto overscroll-contain">
-        {/* Year */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Year
-          </label>
-          <select
-            value={year}
-            onChange={(e) => {
-              setYear(e.target.value)
-              // Clear month if no year selected
-              if (!e.target.value) {
-                setMonth('')
-              }
-            }}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All years</option>
-            {[...Array(10)].map((_, i) => {
-              const y = getCurrentYear() - i
-              return (
-                <option key={y} value={y}>
-                  {y}
+        {/* Search */}
+        <Input
+          type="text"
+          label="Search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search in loaded articles..."
+        />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Year */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Year
+            </label>
+            <select
+              value={year}
+              onChange={(e) => {
+                setYear(e.target.value)
+                // Clear month if no year selected
+                if (!e.target.value) {
+                  setMonth('')
+                }
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All years</option>
+              {[...Array(10)].map((_, i) => {
+                const y = getCurrentYear() - i
+                return (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+
+          {/* Month - only enabled when a year is selected */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Month
+            </label>
+            <select
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              disabled={!year}
+              className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                !year ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''
+              }`}
+            >
+              <option value="">All months</option>
+              {MONTHS_EN.map((m, i) => (
+                <option key={i} value={(i + 1).toString().padStart(2, '0')}>
+                  {m}
                 </option>
-              )
-            })}
-          </select>
-        </div>
-
-        {/* Month - only enabled when a year is selected */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Month
-          </label>
-          <select
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            disabled={!year}
-            className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              !year ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''
-            }`}
-          >
-            <option value="">All months</option>
-            {MONTHS_EN.map((m, i) => (
-              <option key={i} value={(i + 1).toString().padStart(2, '0')}>
-                {m}
-              </option>
-            ))}
-          </select>
-          {!year && (
-            <p className="text-xs text-gray-500 mt-1">Select a year first</p>
-          )}
-        </div>
-
-        {/* Author */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Author
-          </label>
-          <select
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All authors</option>
-            {authors.map((a) => (
-              <option key={a.email} value={a.email}>
-                {a.pseudo || a.email.split('@')[0]}
-              </option>
-            ))}
-          </select>
-          {loadingAuthors && (
-            <p className="text-xs text-gray-500 mt-1">Loading authors...</p>
-          )}
+              ))}
+            </select>
+            {!year && (
+              <p className="text-xs text-gray-500 mt-1">Select a year first</p>
+            )}
+          </div>
         </div>
 
         {/* Date Range */}
@@ -213,6 +212,38 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
             className="min-w-0"
           />
         </div>
+
+        {/* Author */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Author
+          </label>
+          <select
+            value={author}
+            onChange={(e) => setAuthor(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All authors</option>
+            {authors.map((a) => (
+              <option key={a.email} value={a.email}>
+                {a.pseudo || a.email.split('@')[0]}
+              </option>
+            ))}
+          </select>
+          {loadingAuthors && (
+            <p className="text-xs text-gray-500 mt-1">Loading authors...</p>
+          )}
+        </div>
+
+        <label className="flex items-center gap-3 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={duplicatesOnly}
+            onChange={(e) => setDuplicatesOnly(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          Show duplicates (Famileo)
+        </label>
 
         {/* Status Filter */}
         <div>

@@ -61,6 +61,18 @@ cd ..
 echo "✅ Push vers GitHub Pages effectué"
 echo ""
 
+# Push changes to Rememly repo
+echo "📤 Push des changements Rememly..."
+git add -A
+if git diff --cached --quiet; then
+    echo "  ✓ Aucun changement à pousser"
+else
+    git commit -m "chore: update frontend for deploy"
+    git push
+    echo "  ✓ Changements poussés"
+fi
+echo ""
+
 # Wait for workflow and poll status
 echo "⏳ Attente du déploiement GitHub Pages..."
 sleep 3

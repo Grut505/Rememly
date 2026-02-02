@@ -56,16 +56,18 @@ In the Apps Script editor:
 2. Scroll to "Script Properties"
 3. Add the following properties:
 
-   - `AUTHORIZED_EMAILS`: JSON array of authorized email addresses
-     ```json
-     ["your-email@gmail.com", "family-member@gmail.com"]
-     ```
-
    - `SPREADSHEET_ID`: (Optional - will be created automatically on first run)
 
 ### 7. Set up Google Sheets
 
 The spreadsheet and folder structure will be created automatically on first API call.
+
+### 8. Configure authorized users
+
+In the spreadsheet:
+1. Open the `users` sheet
+2. Add authorized emails in the `email` column
+3. Set `status` to `ACTIVE` (only `ACTIVE` is allowed; new users auto-added as `PENDING` on first access)
 
 ## API Endpoints
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState, Fragment } from 'react'
+import { useEffect, useRef, useCallback, useState, Fragment, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useArticlesStore } from '../../state/articlesStore'
 import { articlesApi } from '../../api/articles'
@@ -30,13 +30,13 @@ export function Timeline() {
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
   const [showPermanentDeleteConfirm, setShowPermanentDeleteConfirm] = useState(false)
   const [deleteProgress, setDeleteProgress] = useState<{ current: number; total: number } | null>(null)
-  const [viewMode, setViewMode] = useState<'cards' | 'list' | 'mosaic'>(() => {
+  const [viewMode, setViewMode] = useState<'cards' | 'list' | 'mosaic-2' | 'mosaic-3' | 'mosaic-4'>(() => {
     const saved = localStorage.getItem('articles_view_mode')
-    if (saved === 'list' || saved === 'mosaic') return saved
+    if (saved === 'list' || saved === 'mosaic-2' || saved === 'mosaic-3' || saved === 'mosaic-4') return saved
+    if (saved === 'mosaic') return 'mosaic-2'
     return 'cards'
   })
-  const [mosaicZoom, setMosaicZoom] = useState(2)
-  const [isMobile, setIsMobile] = useState(false)
+  const isMosaicView = viewMode === 'mosaic-2' || viewMode === 'mosaic-3' || viewMode === 'mosaic-4'
   const {
     articles,
     isLoading,
@@ -73,18 +73,6 @@ export function Timeline() {
     localStorage.setItem('articles_view_mode', viewMode)
   }, [viewMode])
 
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 640px)')
-    const update = () => setIsMobile(media.matches)
-    update()
-    if (media.addEventListener) {
-      media.addEventListener('change', update)
-      return () => media.removeEventListener('change', update)
-    }
-    media.addListener(update)
-    return () => media.removeListener(update)
-  }, [])
-
   const loadArticles = async () => {
     setLoading(true)
     setError(null)
@@ -97,6 +85,7 @@ export function Timeline() {
         from: filters.from,
         to: filters.to,
         author: filters.author,
+        duplicates_only: filters.duplicatesOnly ? 'true' : undefined,
         limit: String(CONSTANTS.ARTICLES_PER_PAGE),
         status_filter: filters.statusFilter || 'active',
         source_filter: filters.sourceFilter || 'all',
@@ -133,6 +122,7 @@ export function Timeline() {
         to: filters.to,
         author: filters.author,
         cursor: currentCursor,
+        duplicates_only: filters.duplicatesOnly ? 'true' : undefined,
         limit: String(CONSTANTS.ARTICLES_PER_PAGE),
         status_filter: filters.statusFilter || 'active',
         source_filter: filters.sourceFilter || 'all',
@@ -179,6 +169,8 @@ export function Timeline() {
         from: filterValues.dateFrom,
         to: filterValues.dateTo,
         author: filterValues.author,
+        search: filterValues.search,
+        duplicatesOnly: filterValues.duplicatesOnly,
         statusFilter: filterValues.statusFilter,
         sourceFilter: filterValues.sourceFilter,
       })
@@ -210,6 +202,23 @@ export function Timeline() {
     }
   }
 
+  const searchQuery = (filters.search || '').trim().toLowerCase()
+  const displayedArticles = useMemo(() => {
+    let result = articles
+    if (searchQuery) {
+      result = result.filter((article) => {
+        const text = (article.texte || '').toLowerCase()
+        const author = (article.author_pseudo || '').toLowerCase()
+        const email = (article.auteur || '').toLowerCase()
+        return text.includes(searchQuery) || author.includes(searchQuery) || email.includes(searchQuery)
+      })
+    }
+    if (filters.duplicatesOnly) {
+      result = result.filter((article) => !!article.is_duplicate)
+    }
+    return result
+  }, [articles, searchQuery, filters.duplicatesOnly])
+
   // Selection mode handlers
   const handleSelectionChange = (id: string, selected: boolean) => {
     setSelectedIds(prev => {
@@ -224,10 +233,10 @@ export function Timeline() {
   }
 
   const handleSelectAll = () => {
-    if (selectedIds.size === articles.length) {
+    if (selectedIds.size === displayedArticles.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(articles.map(a => a.id)))
+      setSelectedIds(new Set(displayedArticles.map(a => a.id)))
     }
   }
 
@@ -330,13 +339,13 @@ export function Timeline() {
   // Check if we're viewing deleted articles
   const isViewingDeleted = filters.statusFilter === 'deleted'
 
-  const monthCounts = articles.reduce<Record<string, number>>((acc, article) => {
+  const monthCounts = displayedArticles.reduce<Record<string, number>>((acc, article) => {
     const key = getMonthYearKey(article.date)
     acc[key] = (acc[key] || 0) + 1
     return acc
   }, {})
 
-  const monthGroups = articles.reduce<Array<{ key: string; label: string; items: typeof articles }>>((acc, article) => {
+  const monthGroups = displayedArticles.reduce<Array<{ key: string; label: string; items: typeof displayedArticles }>>((acc, article) => {
     const key = getMonthYearKey(article.date)
     const label = getMonthYear(article.date)
     const lastGroup = acc[acc.length - 1]
@@ -348,8 +357,7 @@ export function Timeline() {
     return acc
   }, [])
 
-  const mosaicSizes = isMobile ? [96, 120, 150, 180] : [120, 160, 200, 240]
-  const mosaicTileSize = mosaicSizes[Math.min(Math.max(mosaicZoom, 1), 4) - 1]
+  const mosaicColumns = viewMode === 'mosaic-2' ? 2 : viewMode === 'mosaic-3' ? 3 : 4
   const getMonthAccent = (key: string) => {
     let hash = 0
     for (let i = 0; i < key.length; i++) {
@@ -363,9 +371,9 @@ export function Timeline() {
     }
   }
 
-  const totalLoadedCount = articles.length
+  const totalLoadedCount = displayedArticles.length
   const totalCountLabel = hasMore ? `${totalLoadedCount}+` : `${totalLoadedCount}`
-  const lastLoadedMonthKey = articles.length > 0 ? getMonthYearKey(articles[articles.length - 1].date) : null
+  const lastLoadedMonthKey = displayedArticles.length > 0 ? getMonthYearKey(displayedArticles[displayedArticles.length - 1].date) : null
 
   // Check if filters are active (different from default)
   const hasActiveFilters =
@@ -374,6 +382,8 @@ export function Timeline() {
     filters.from ||
     filters.to ||
     filters.author ||
+    filters.search ||
+    filters.duplicatesOnly ||
     (filters.statusFilter && filters.statusFilter !== 'active') ||
     (filters.sourceFilter && filters.sourceFilter !== 'all')
 
@@ -384,6 +394,8 @@ export function Timeline() {
     dateFrom: filters.from || '',
     dateTo: filters.to || '',
     author: filters.author || '',
+    search: filters.search || '',
+    duplicatesOnly: filters.duplicatesOnly || false,
     statusFilter: filters.statusFilter || 'active',
     sourceFilter: filters.sourceFilter || 'all',
   }
@@ -391,7 +403,17 @@ export function Timeline() {
   useEffect(() => {
     console.log('Filters changed, reloading articles:', filters)
     loadArticles()
-  }, [filters.year, filters.month, filters.from, filters.to, filters.author, filters.statusFilter, filters.sourceFilter])
+  }, [
+    filters.year,
+    filters.month,
+    filters.from,
+    filters.to,
+    filters.author,
+    filters.search,
+    filters.duplicatesOnly,
+    filters.statusFilter,
+    filters.sourceFilter,
+  ])
 
   const headerDisabled = isLoading
 
@@ -425,91 +447,24 @@ export function Timeline() {
               }`}
               disabled={headerDisabled}
             >
-              {selectedIds.size === articles.length ? 'Deselect all' : 'Select all'}
+              {selectedIds.size === displayedArticles.length ? 'Deselect all' : 'Select all'}
             </button>
           ) : (
             <>
-              <div className="hidden sm:flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setViewMode('cards')}
-                  className={`px-2 py-1.5 text-xs font-medium transition-colors ${
-                    viewMode === 'cards' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  title="Card view"
+              <div className="flex items-center">
+                <select
+                  value={viewMode}
+                  onChange={(e) => setViewMode(e.target.value as 'cards' | 'list' | 'mosaic-2' | 'mosaic-3' | 'mosaic-4')}
+                  className="px-2 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg"
+                  aria-label="View mode"
                 >
-                  Cards
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`px-2 py-1.5 text-xs font-medium transition-colors border-l border-gray-200 ${
-                    viewMode === 'list' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  title="List view"
-                >
-                  List
-                </button>
-                <button
-                  onClick={() => setViewMode('mosaic')}
-                  className={`px-2 py-1.5 text-xs font-medium transition-colors border-l border-gray-200 ${
-                    viewMode === 'mosaic' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  title="Mosaic view"
-                >
-                  Mosaic
-                </button>
+                  <option value="cards">Cards</option>
+                  <option value="list">List</option>
+                  <option value="mosaic-2">Mosaic 2 items</option>
+                  <option value="mosaic-3">Mosaic 3 items</option>
+                  <option value="mosaic-4">Mosaic 4 items</option>
+                </select>
               </div>
-              <div className="flex sm:hidden items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setViewMode('cards')}
-                  className={`px-2 py-1.5 text-xs font-medium transition-colors ${
-                    viewMode === 'cards' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  title="Card view"
-                >
-                  1
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`px-2 py-1.5 text-xs font-medium transition-colors border-l border-gray-200 ${
-                    viewMode === 'list' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  title="List view"
-                >
-                  L
-                </button>
-                <button
-                  onClick={() => setViewMode('mosaic')}
-                  className={`px-2 py-1.5 text-xs font-medium transition-colors border-l border-gray-200 ${
-                    viewMode === 'mosaic' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  title="Mosaic view"
-                >
-                  M
-                </button>
-              </div>
-              {viewMode === 'mosaic' && (
-                <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => setMosaicZoom((z) => Math.max(1, z - 1))}
-                    disabled={mosaicZoom <= 1}
-                    className="px-2 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 disabled:opacity-40"
-                    title="Zoom out"
-                  >
-                    −
-                  </button>
-                  <div className="px-2 py-1.5 text-xs text-gray-600 border-x border-gray-200">
-                    {mosaicZoom}
-                  </div>
-                  <button
-                    onClick={() => setMosaicZoom((z) => Math.min(4, z + 1))}
-                    disabled={mosaicZoom >= 4}
-                    className="px-2 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 disabled:opacity-40"
-                    title="Zoom in"
-                  >
-                    +
-                  </button>
-                </div>
-              )}
               <button
                 onClick={refreshArticles}
                 className={`touch-manipulation text-sm font-medium flex items-center gap-2 hidden sm:flex ${
@@ -532,11 +487,11 @@ export function Timeline() {
                       : 'text-primary-600 hover:text-primary-700'
                 }`}
                 disabled={headerDisabled}
+                aria-label="Filter"
               >
                 <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                   <path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
                 </svg>
-                Filter
                 {hasActiveFilters && (
                   <span className="ml-1 bg-white text-primary-600 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                     !
@@ -545,11 +500,10 @@ export function Timeline() {
               </button>
             </>
           )}
-          {articles.length > 0 && (
+          {displayedArticles.length > 0 && (
             <Switch
               checked={selectionMode}
               onChange={handleSelectionModeToggle}
-              label="Select"
               disabled={headerDisabled}
             />
           )}
@@ -613,27 +567,27 @@ export function Timeline() {
             </div>
           </div>
         )}
-        {isLoading && articles.length === 0 ? (
+        {isLoading && displayedArticles.length === 0 ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center">
               <Spinner size="lg" />
               <p className="mt-4 text-gray-600">Loading articles...</p>
             </div>
           </div>
-        ) : error && articles.length === 0 ? (
+        ) : error && displayedArticles.length === 0 ? (
           <div className="flex items-center justify-center p-6">
             <ErrorMessage message={error} onRetry={loadArticles} />
           </div>
-        ) : articles.length === 0 ? (
+        ) : displayedArticles.length === 0 ? (
           <EmptyState />
         ) : (
           <>
-            {viewMode !== 'mosaic' && (
+            {!isMosaicView && (
               <>
-                {articles.map((article, index) => {
+                {displayedArticles.map((article, index) => {
                   const currentMonthKey = getMonthYearKey(article.date)
                   const previousMonthKey =
-                    index > 0 ? getMonthYearKey(articles[index - 1].date) : null
+                    index > 0 ? getMonthYearKey(displayedArticles[index - 1].date) : null
                   const showMonthSeparator = currentMonthKey !== previousMonthKey
 
                   return (
@@ -649,6 +603,7 @@ export function Timeline() {
                         {viewMode === 'cards' ? (
                           <ArticleCard
                             article={article}
+                            isDuplicate={!!article.is_duplicate}
                             onDeleted={handleArticleDeleted}
                             onRestored={handleArticleRestored}
                             selectionMode={selectionMode}
@@ -658,6 +613,7 @@ export function Timeline() {
                         ) : (
                           <ArticleRow
                             article={article}
+                            isDuplicate={!!article.is_duplicate}
                             onDeleted={handleArticleDeleted}
                             onRestored={handleArticleRestored}
                             selectionMode={selectionMode}
@@ -671,7 +627,7 @@ export function Timeline() {
                 })}
               </>
             )}
-            {viewMode === 'mosaic' && (
+            {isMosaicView && (
               <>
                 {monthGroups.map((group, index) => {
                   const accent = getMonthAccent(group.key)
@@ -698,12 +654,13 @@ export function Timeline() {
                     </div>
                     <div
                       className="grid gap-4"
-                      style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${mosaicTileSize}px, 1fr))` }}
+                      style={{ gridTemplateColumns: `repeat(${mosaicColumns}, minmax(0, 1fr))` }}
                     >
                       {group.items.map((article) => (
                         <ArticleTile
                           key={article.id}
                           article={article}
+                          isDuplicate={!!article.is_duplicate}
                           onDeleted={handleArticleDeleted}
                           onRestored={handleArticleRestored}
                           selectionMode={selectionMode}
@@ -772,6 +729,7 @@ export function Timeline() {
             <FloatingActionButton
               onClick={() => navigate('/editor')}
               className="bg-primary-600 hover:bg-primary-700 active:bg-primary-800 transition-all hover:scale-105 active:scale-95"
+              pwaOffsetClassName="-translate-y-3"
               icon={
                 <svg className="w-8 h-8" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                   <path d="M12 4v16m8-8H4"></path>

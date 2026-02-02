@@ -69,6 +69,7 @@ function getAvatarOrInitials(author: string, avatarUrl?: string): JSX.Element {
 
 interface ArticleCardProps {
   article: Article
+  isDuplicate?: boolean
   onDeleted?: (id: string) => void
   onRestored?: (id: string) => void
   selectionMode?: boolean
@@ -76,7 +77,7 @@ interface ArticleCardProps {
   onSelectionChange?: (id: string, selected: boolean) => void
 }
 
-export function ArticleCard({ article, onDeleted, onRestored, selectionMode, selected, onSelectionChange }: ArticleCardProps) {
+export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selectionMode, selected, onSelectionChange }: ArticleCardProps) {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { profile, avatarBlobUrl } = useProfile()
@@ -167,6 +168,11 @@ export function ArticleCard({ article, onDeleted, onRestored, selectionMode, sel
           {article.famileo_post_id && (
             <div className="flex-1 bg-purple-500 text-white text-xs font-semibold px-2 py-1 text-center">
               Famileo
+            </div>
+          )}
+          {isDuplicate && (
+            <div className="flex-1 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 text-center">
+              Duplicate
             </div>
           )}
           {isDeleted && (

@@ -35,6 +35,7 @@ export interface ListArticlesFilters {
   from?: string
   to?: string
   author?: string
+  duplicates_only?: string
   limit?: string
   cursor?: string
   status_filter?: 'active' | 'all' | 'deleted'

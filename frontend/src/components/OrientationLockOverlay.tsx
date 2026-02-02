@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function isPwaStandalone() {
   if (typeof window === 'undefined') return false
@@ -21,17 +21,10 @@ function isLandscape() {
 
 export function OrientationLockOverlay() {
   const [show, setShow] = useState(false)
-  const hasReloadedRef = useRef(false)
 
   useEffect(() => {
     const update = () => {
-      const landscape = isPwaStandalone() && isLandscape()
-      if (landscape && isIOS() && !hasReloadedRef.current) {
-        hasReloadedRef.current = true
-        window.location.reload()
-        return
-      }
-      setShow(landscape)
+      setShow(isPwaStandalone() && isLandscape())
     }
 
     update()

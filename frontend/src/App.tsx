@@ -49,10 +49,21 @@ function App() {
     }
     const updateSafeArea = () => {
       const height = Math.round(measure.getBoundingClientRect().height)
-      if (height > 0) {
-        lastValue = height
+      let nextValue = height
+
+      const isPortrait = window.matchMedia?.('(orientation: portrait)').matches || window.innerHeight >= window.innerWidth
+      if ((!nextValue || nextValue <= 0) && isPortrait) {
+        const screenDiff = Math.round(window.screen.height - window.innerHeight)
+        if (screenDiff > 0 && screenDiff < 200) {
+          nextValue = screenDiff
+        }
+      }
+
+      if (nextValue > 0) {
+        lastValue = nextValue
         localStorage.setItem(storageKey, String(lastValue))
       }
+
       if (lastValue > 0) {
         document.documentElement.style.setProperty('--safe-area-top', `${lastValue}px`)
       }

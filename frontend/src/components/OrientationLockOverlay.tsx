@@ -21,16 +21,16 @@ function isLandscape() {
 
 export function OrientationLockOverlay() {
   const [show, setShow] = useState(false)
-  const wasLandscapeRef = useRef(false)
+  const hasReloadedRef = useRef(false)
 
   useEffect(() => {
     const update = () => {
       const landscape = isPwaStandalone() && isLandscape()
-      if (!landscape && wasLandscapeRef.current && isIOS()) {
+      if (landscape && isIOS() && !hasReloadedRef.current) {
+        hasReloadedRef.current = true
         window.location.reload()
         return
       }
-      wasLandscapeRef.current = landscape
       setShow(landscape)
     }
 

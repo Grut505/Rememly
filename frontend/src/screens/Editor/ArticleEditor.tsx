@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { articlesService } from '../../services/articles.service'
@@ -7,7 +7,7 @@ import { articlesApi } from '../../api/articles'
 import { useArticlesStore } from '../../state/articlesStore'
 import { useUiStore } from '../../state/uiStore'
 import { Button } from '../../ui/Button'
-import { LoadingScreen } from '../../ui/Spinner'
+import { LoadingScreen, Spinner } from '../../ui/Spinner'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { AppHeader } from '../../ui/AppHeader'
 import { PhotoPicker } from './PhotoPicker'
@@ -41,10 +41,12 @@ export function ArticleEditor() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [articleStatus, setArticleStatus] = useState<ArticleStatus>('ACTIVE')
+  const [articleStatus, setArticleStatus] = useState<ArticleStatus>('DRAFT')
+  const contentRef = useRef<HTMLDivElement>(null)
 
   const isEditMode = !!id
   const isDeleted = articleStatus === 'DELETED'
+  const isDraft = articleStatus === 'DRAFT'
   const { src: loadedImageSrc } = useImageLoader(articleImageUrl, articleImageFileId)
 
   // Check for Famileo import data
@@ -92,6 +94,27 @@ export function ArticleEditor() {
       setPreviewUrl(loadedImageSrc)
     }
   }, [isEditMode, photoFile, loadedImageSrc])
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    const previousHeight = document.body.style.height
+    document.body.style.overflow = 'hidden'
+    document.body.style.height = '100%'
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.body.style.height = previousHeight
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isLoading) return
+    requestAnimationFrame(() => {
+      contentRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      requestAnimationFrame(() => {
+        contentRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      })
+    })
+  }, [id, isLoading, location.key])
 
   const loadArticle = async () => {
     if (!id) return
@@ -146,7 +169,7 @@ export function ArticleEditor() {
     try {
       if (isEditMode && id) {
         // If article is deleted, restore it by setting status to ACTIVE
-        const newStatus = isDeleted ? 'ACTIVE' : undefined
+        const newStatus = isDeleted ? 'ACTIVE' : articleStatus
         const updated = await articlesService.updateArticle(
           id,
           texte,
@@ -163,7 +186,11 @@ export function ArticleEditor() {
           user.email,
           texte,
           photoFile,
-          dateModification
+          dateModification,
+          undefined,
+          undefined,
+          undefined,
+          articleStatus
         )
         showToast('Article created', 'success')
       }
@@ -219,6 +246,14 @@ export function ArticleEditor() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <AppHeader />
+      {isSaving && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-lg px-6 py-5 flex items-center gap-3">
+            <Spinner />
+            <div className="text-sm font-medium text-gray-700">Saving...</div>
+          </div>
+        </div>
+      )}
       <div className="flex-1 flex flex-col max-w-content mx-auto w-full bg-white">
       {/* Sub-header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-center flex-shrink-0">
@@ -228,52 +263,81 @@ export function ArticleEditor() {
       </header>
 
       {/* Content - scrollable */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-6 pb-4">
+      <div ref={contentRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-6 pb-28 overscroll-contain">
+        <DateTimeInput value={dateModification} onChange={setDateModification} />
+
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-medium text-gray-700">Status</div>
+          <div className="flex rounded-lg border border-gray-300 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setArticleStatus('ACTIVE')}
+              className={`px-3 py-2 text-sm font-medium transition-colors ${
+                articleStatus === 'ACTIVE'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Published
+            </button>
+            <button
+              type="button"
+              onClick={() => setArticleStatus('DRAFT')}
+              className={`px-3 py-2 text-sm font-medium border-l border-gray-300 transition-colors ${
+                articleStatus === 'DRAFT'
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Draft
+            </button>
+          </div>
+        </div>
+
         <PhotoPicker
           onPhotoSelected={handlePhotoSelected}
           currentImage={previewUrl}
+          onPhotoAssembly={() => navigate('/photo-assembly', { state: { editMode: isEditMode, articleId: id, texte, dateModification } })}
         />
 
         <TextInput value={texte} onChange={setTexte} />
-
-        <DateTimeInput value={dateModification} onChange={setDateModification} />
       </div>
 
       {/* Actions - fixed at bottom */}
-      <div className="bg-white border-t border-gray-200 p-4 space-y-2 flex-shrink-0">
-        <Button
-          onClick={handleSave}
-          disabled={isSaving || (!photoFile && !isEditMode)}
-          fullWidth
-        >
-          {isSaving ? 'Saving...' : isDeleted ? 'Save and restore' : isEditMode ? 'Update' : 'Create'}
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => navigate('/photo-assembly', { state: { editMode: isEditMode, articleId: id, texte, dateModification } })}
-          disabled={isSaving}
-          fullWidth
-        >
-          Use Photo Assembly
-        </Button>
-        {isEditMode && !isDeleted && (
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 p-3">
+        <div className="max-w-content mx-auto w-full flex gap-2">
+          {isEditMode && !isDeleted && (
+            <Button
+              variant="danger"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={isSaving}
+              className="flex-1 px-3 py-2 text-sm"
+            >
+              Delete Article
+            </Button>
+          )}
           <Button
-            variant="danger"
-            onClick={() => setShowDeleteConfirm(true)}
-            disabled={isSaving}
-            fullWidth
+            onClick={handleSave}
+            disabled={isSaving || (!photoFile && !isEditMode)}
+            className="flex-1 px-3 py-2 text-sm"
           >
-            Delete Article
+            {isSaving
+              ? 'Saving...'
+              : isDeleted
+              ? 'Save & restore'
+              : isEditMode
+              ? (isDraft ? 'Save Draft' : 'Update')
+              : (isDraft ? 'Save Draft' : 'Publish')}
           </Button>
-        )}
-        <Button
-          variant="secondary"
-          onClick={handleCancel}
-          disabled={isSaving}
-          fullWidth
-        >
-          Cancel
-        </Button>
+          <Button
+            variant="secondary"
+            onClick={handleCancel}
+            disabled={isSaving}
+            className="flex-1 px-3 py-2 text-sm"
+          >
+            Cancel
+          </Button>
+        </div>
       </div>
 
       {/* Delete Confirmation Dialog */}

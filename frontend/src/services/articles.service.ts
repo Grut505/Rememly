@@ -10,7 +10,8 @@ class ArticlesService {
     dateModification?: string,
     famileoPostId?: string,
     assemblyState?: object,
-    fullPage?: boolean
+    fullPage?: boolean,
+    status?: 'ACTIVE' | 'DRAFT' | 'DELETED'
   ): Promise<Article> {
     const imageData = await imageService.processImage(imageFile)
 
@@ -22,6 +23,7 @@ class ArticlesService {
       famileo_post_id: famileoPostId,
       assembly_state: assemblyState || null,
       full_page: fullPage || false,
+      status,
     }
 
     return articlesApi.create(payload)
@@ -34,7 +36,7 @@ class ArticlesService {
     dateModification?: string,
     assemblyState?: object,
     fullPage?: boolean,
-    status?: 'ACTIVE' | 'DELETED'
+    status?: 'ACTIVE' | 'DRAFT' | 'DELETED'
   ): Promise<Article> {
     const payload: UpdateArticlePayload = {
       id,

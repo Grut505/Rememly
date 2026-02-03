@@ -359,7 +359,7 @@ export function FamileoBrowser() {
       <AppHeader />
 
       {/* Back button and title - sticky under main header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-14 z-20">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky app-safe-top-14 z-20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button

@@ -69,7 +69,7 @@ export function PhotoAssemblyScreen() {
   return (
     <div className="min-h-screen bg-gray-50">
       <AppHeader />
-      <div className="fixed inset-0 top-14 z-20 bg-black/30 flex items-start justify-center p-3 sm:p-6">
+      <div className="fixed inset-0 app-safe-top-14 z-20 bg-black/30 flex items-start justify-center p-3 sm:p-6">
         <div className="bg-white w-full h-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-center">
             <h1 className="text-lg font-semibold text-gray-900">Photo Assembly</h1>

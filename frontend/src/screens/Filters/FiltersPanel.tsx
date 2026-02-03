@@ -23,7 +23,7 @@ interface FiltersPanelProps {
   onClose: () => void
 }
 
-export type StatusFilter = 'active' | 'all' | 'deleted'
+export type StatusFilter = 'active' | 'draft' | 'all' | 'deleted'
 export type SourceFilter = 'all' | 'famileo' | 'local'
 
 export interface FilterValues {
@@ -117,7 +117,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
     <>
       <div className="flex flex-col h-full">
         {/* Content */}
-        <div className="p-4 space-y-6 overflow-y-auto overscroll-contain">
+        <div className="p-4 space-y-4 overflow-y-auto overscroll-contain">
         {/* Search */}
         <Input
           type="text"
@@ -127,10 +127,10 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
           placeholder="Search in loaded articles..."
         />
 
-        <div className={`grid gap-3 ${isStandalone ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
+        <div className={`grid gap-2 ${isStandalone ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
           {/* Year */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Year
             </label>
             <select
@@ -158,7 +158,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
 
           {/* Month - only enabled when a year is selected */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Month
             </label>
             <select
@@ -183,57 +183,67 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
         </div>
 
         {/* Date Range */}
-        <div className={`grid gap-3 w-full ${isStandalone ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
-          <Input
-            type="date"
-            label="From"
-            value={dateFrom}
-            onChange={(e) => {
-              const next = e.target.value
-              setDateFrom(next)
-              if (dateTo && next && dateTo < next) {
-                setDateTo(next)
-              }
-            }}
-            max={dateTo || undefined}
-            className="min-w-0"
-          />
-          <Input
-            type="date"
-            label="To"
-            value={dateTo}
-            onChange={(e) => {
-              const next = e.target.value
-              setDateTo(next)
-              if (dateFrom && next && next < dateFrom) {
+        <div className="flex gap-2 w-full">
+          <div className="min-w-0 flex-1">
+            <Input
+              type="date"
+              label="From"
+              value={dateFrom}
+              onChange={(e) => {
+                const next = e.target.value
                 setDateFrom(next)
-              }
-            }}
-            min={dateFrom || undefined}
-            className="min-w-0"
-          />
+                if (dateTo && next && dateTo < next) {
+                  setDateTo(next)
+                }
+              }}
+              max={dateTo || undefined}
+              className="min-w-0"
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <Input
+              type="date"
+              label="To"
+              value={dateTo}
+              onChange={(e) => {
+                const next = e.target.value
+                setDateTo(next)
+                if (dateFrom && next && next < dateFrom) {
+                  setDateFrom(next)
+                }
+              }}
+              min={dateFrom || undefined}
+              className="min-w-0"
+            />
+          </div>
         </div>
 
         {/* Author */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Author
           </label>
           <select
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={loadingAuthors}
+            className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              loadingAuthors ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''
+            }`}
           >
-            <option value="">All authors</option>
-            {authors.map((a) => (
-              <option key={a.email} value={a.email}>
-                {a.pseudo || a.email.split('@')[0]}
-              </option>
-            ))}
+            {loadingAuthors ? (
+              <option value="">Loading authors...</option>
+            ) : (
+              <>
+                <option value="">All authors</option>
+                {authors.map((a) => (
+                  <option key={a.email} value={a.email}>
+                    {a.pseudo || a.email.split('@')[0]}
+                  </option>
+                ))}
+              </>
+            )}
           </select>
-          {loadingAuthors && (
-            <p className="text-xs text-gray-500 mt-1">Loading authors...</p>
-          )}
         </div>
 
         <label className="flex items-center gap-3 text-sm text-gray-700">
@@ -248,7 +258,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
 
         {/* Status Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Status
           </label>
           <div className="flex rounded-lg border border-gray-300 overflow-hidden">
@@ -262,6 +272,17 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
               }`}
             >
               Active
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('draft')}
+              className={`flex-1 px-3 py-2 text-sm font-medium border-l border-gray-300 transition-colors ${
+                statusFilter === 'draft'
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Draft
             </button>
             <button
               type="button"
@@ -290,7 +311,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
 
         {/* Source Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Source
           </label>
           <div className="flex rounded-lg border border-gray-300 overflow-hidden">

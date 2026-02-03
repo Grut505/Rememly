@@ -13,7 +13,7 @@ function handleArticlesList(params) {
   const author = params.author ? params.author : null;
   const limit = params.limit ? parseInt(params.limit) : 40;
   const cursor = params.cursor ? parseInt(params.cursor) : 0; // Offset-based cursor
-  const statusFilter = params.status_filter || 'active'; // 'active', 'all', or 'deleted'
+  const statusFilter = params.status_filter || 'active'; // 'active', 'draft', 'all', or 'deleted'
   const sourceFilter = params.source_filter || 'all'; // 'all', 'famileo', or 'local'
   const duplicatesOnly = params.duplicates_only === 'true' || params.duplicates_only === true;
 
@@ -34,7 +34,10 @@ function handleArticlesList(params) {
     article.author_pseudo = userPseudoCache[article.auteur] || 'Unknown';
 
     // Filter by status
-    if (statusFilter === 'active' && article.status === 'DELETED') {
+    if (statusFilter === 'active' && article.status !== 'ACTIVE') {
+      continue;
+    }
+    if (statusFilter === 'draft' && article.status !== 'DRAFT') {
       continue;
     }
     if (statusFilter === 'deleted' && article.status !== 'DELETED') {
@@ -137,7 +140,10 @@ function handleArticlesAuthors(params) {
 
     if (!email) continue;
 
-    if (statusFilter === 'active' && status === 'DELETED') {
+    if (statusFilter === 'active' && status !== 'ACTIVE') {
+      continue;
+    }
+    if (statusFilter === 'draft' && status !== 'DRAFT') {
       continue;
     }
     if (statusFilter === 'deleted' && status !== 'DELETED') {
@@ -224,7 +230,7 @@ function handleArticleCreate(body) {
     imageData.fileId,                                            // 5: image_file_id
     body.assembly_state ? JSON.stringify(body.assembly_state) : '', // 6: assembly_state
     body.full_page || false,                                     // 7: full_page
-    'ACTIVE',                                                    // 8: status
+    body.status || 'ACTIVE',                                     // 8: status
     body.famileo_post_id || '',                                  // 9: famileo_post_id
   ];
 
@@ -239,7 +245,7 @@ function handleArticleCreate(body) {
     image_file_id: imageData.fileId,
     assembly_state: body.assembly_state ? JSON.stringify(body.assembly_state) : undefined,
     full_page: body.full_page || false,
-    status: 'ACTIVE',
+    status: body.status || 'ACTIVE',
     famileo_post_id: body.famileo_post_id || '',
   };
 

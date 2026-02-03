@@ -383,7 +383,7 @@ export function PdfExport() {
       <AppHeader />
 
       {/* Header bar */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-14 z-20">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky app-safe-top-14 z-20">
         {/* Row 1: Title and actions */}
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold text-gray-900">

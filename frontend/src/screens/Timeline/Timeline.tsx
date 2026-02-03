@@ -178,7 +178,7 @@ export function Timeline() {
 
   const handleArticleDeleted = (id: string) => {
     // If showing only active articles, remove from the list
-    if (filters.statusFilter === 'active' || !filters.statusFilter) {
+    if (filters.statusFilter === 'active' || filters.statusFilter === 'draft' || !filters.statusFilter) {
       useArticlesStore.getState().deleteArticle(id)
     } else {
       // Otherwise (all or deleted), update the article status locally
@@ -191,7 +191,7 @@ export function Timeline() {
 
   const handleArticleRestored = (id: string) => {
     // If showing only deleted articles, remove from the list
-    if (filters.statusFilter === 'deleted') {
+    if (filters.statusFilter === 'deleted' || filters.statusFilter === 'draft') {
       useArticlesStore.getState().deleteArticle(id)
     } else {
       // Otherwise (all or active), update the article status locally
@@ -294,7 +294,7 @@ export function Timeline() {
         setDeleteProgress({ current: i + 1, total: ids.length })
       }
       // Remove from list or update status based on current filter
-      if (filters.statusFilter === 'active' || !filters.statusFilter) {
+      if (filters.statusFilter === 'active' || filters.statusFilter === 'draft' || !filters.statusFilter) {
         selectedIds.forEach(id => useArticlesStore.getState().deleteArticle(id))
       } else {
         selectedIds.forEach(id => {
@@ -427,7 +427,7 @@ export function Timeline() {
       <AppHeader />
 
       {/* Year Header with Filter - Fixed */}
-      <div className="bg-white border-b border-gray-300 px-4 py-3 flex items-center justify-between fixed top-[56px] left-0 right-0 z-[25] max-w-content mx-auto">
+      <div className="bg-white border-b border-gray-300 px-4 py-3 flex items-center justify-between fixed app-safe-top-14 left-0 right-0 z-[25] max-w-content mx-auto">
         <div className="min-w-0 flex items-center gap-2">
           <h2 className="text-lg font-semibold text-gray-900 truncate">
             {selectionMode ? `${selectedIds.size} selected` : (filters.year || 'All years')}
@@ -511,7 +511,7 @@ export function Timeline() {
       </div>
 
       {/* Spacer for fixed year header */}
-      <div className="h-[36px]" />
+      <div className="h-14" />
 
       {/* Timeline */}
       <div className="flex-1 pb-20">
@@ -584,94 +584,98 @@ export function Timeline() {
           <>
             {!isMosaicView && (
               <>
-                {displayedArticles.map((article, index) => {
-                  const currentMonthKey = getMonthYearKey(article.date)
-                  const previousMonthKey =
-                    index > 0 ? getMonthYearKey(displayedArticles[index - 1].date) : null
-                  const showMonthSeparator = currentMonthKey !== previousMonthKey
+                <div className="-mt-[15px]">
+                  {displayedArticles.map((article, index) => {
+                    const currentMonthKey = getMonthYearKey(article.date)
+                    const previousMonthKey =
+                      index > 0 ? getMonthYearKey(displayedArticles[index - 1].date) : null
+                    const showMonthSeparator = currentMonthKey !== previousMonthKey
 
-                  return (
-                    <Fragment key={article.id}>
-                      {showMonthSeparator && (
-                        <MonthSeparator
-                          monthYear={getMonthYear(article.date)}
-                          count={monthCounts[currentMonthKey] || 0}
-                          showPlus={hasMore && lastLoadedMonthKey === currentMonthKey}
-                        />
-                      )}
-                      <div className={`relative z-0 ${showMonthSeparator ? 'pt-8' : ''}`}>
-                        {viewMode === 'cards' ? (
-                          <ArticleCard
-                            article={article}
-                            isDuplicate={!!article.is_duplicate}
-                            onDeleted={handleArticleDeleted}
-                            onRestored={handleArticleRestored}
-                            selectionMode={selectionMode}
-                            selected={selectedIds.has(article.id)}
-                            onSelectionChange={handleSelectionChange}
-                          />
-                        ) : (
-                          <ArticleRow
-                            article={article}
-                            isDuplicate={!!article.is_duplicate}
-                            onDeleted={handleArticleDeleted}
-                            onRestored={handleArticleRestored}
-                            selectionMode={selectionMode}
-                            selected={selectedIds.has(article.id)}
-                            onSelectionChange={handleSelectionChange}
+                    return (
+                      <Fragment key={article.id}>
+                        {showMonthSeparator && (
+                          <MonthSeparator
+                            monthYear={getMonthYear(article.date)}
+                            count={monthCounts[currentMonthKey] || 0}
+                            showPlus={hasMore && lastLoadedMonthKey === currentMonthKey}
                           />
                         )}
-                      </div>
-                    </Fragment>
-                  )
-                })}
+                        <div className={`relative z-0 ${showMonthSeparator ? 'pt-8' : ''}`}>
+                          {viewMode === 'cards' ? (
+                            <ArticleCard
+                              article={article}
+                              isDuplicate={!!article.is_duplicate}
+                              onDeleted={handleArticleDeleted}
+                              onRestored={handleArticleRestored}
+                              selectionMode={selectionMode}
+                              selected={selectedIds.has(article.id)}
+                              onSelectionChange={handleSelectionChange}
+                            />
+                          ) : (
+                            <ArticleRow
+                              article={article}
+                              isDuplicate={!!article.is_duplicate}
+                              onDeleted={handleArticleDeleted}
+                              onRestored={handleArticleRestored}
+                              selectionMode={selectionMode}
+                              selected={selectedIds.has(article.id)}
+                              onSelectionChange={handleSelectionChange}
+                            />
+                          )}
+                        </div>
+                      </Fragment>
+                    )
+                  })}
+                </div>
               </>
             )}
             {isMosaicView && (
               <>
-                {monthGroups.map((group, index) => {
-                  const accent = getMonthAccent(group.key)
-                  return (
-                  <div key={group.key} className={`px-4 mb-8 ${index === 0 ? 'mt-8' : ''}`}>
-                    <div className="mb-4">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="h-2 rounded-full flex-1"
-                          style={{ backgroundColor: accent.border }}
-                        />
-                        <div
-                          className="text-xs font-semibold px-2 py-1 rounded-full"
-                          style={{ backgroundColor: accent.bg, color: accent.text }}
-                        >
-                          {group.label}
+                <div className="-mt-[25px]">
+                  {monthGroups.map((group, index) => {
+                    const accent = getMonthAccent(group.key)
+                    return (
+                    <div key={group.key} className={`px-4 mb-8 ${index === 0 ? 'mt-8' : ''}`}>
+                      <div className="mb-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="h-2 rounded-full flex-1"
+                            style={{ backgroundColor: accent.border }}
+                          />
+                          <div
+                            className="text-xs font-semibold px-2 py-1 rounded-full"
+                            style={{ backgroundColor: accent.bg, color: accent.text }}
+                          >
+                            {group.label}
+                          </div>
+                          <div className="text-xs text-gray-500">{monthCounts[group.key] || group.items.length}</div>
+                          <div
+                            className="h-2 rounded-full flex-1"
+                            style={{ backgroundColor: accent.border }}
+                          />
                         </div>
-                        <div className="text-xs text-gray-500">{monthCounts[group.key] || group.items.length}</div>
-                        <div
-                          className="h-2 rounded-full flex-1"
-                          style={{ backgroundColor: accent.border }}
-                        />
                       </div>
+                      <div
+                        className="grid gap-4"
+                        style={{ gridTemplateColumns: `repeat(${mosaicColumns}, minmax(0, 1fr))` }}
+                      >
+                        {group.items.map((article) => (
+                          <ArticleTile
+                            key={article.id}
+                            article={article}
+                            isDuplicate={!!article.is_duplicate}
+                            onDeleted={handleArticleDeleted}
+                            onRestored={handleArticleRestored}
+                            selectionMode={selectionMode}
+                            selected={selectedIds.has(article.id)}
+                            onSelectionChange={handleSelectionChange}
+                          />
+                        ))}
+                      </div>
+                      <div className="border-b border-gray-200 mt-6" />
                     </div>
-                    <div
-                      className="grid gap-4"
-                      style={{ gridTemplateColumns: `repeat(${mosaicColumns}, minmax(0, 1fr))` }}
-                    >
-                      {group.items.map((article) => (
-                        <ArticleTile
-                          key={article.id}
-                          article={article}
-                          isDuplicate={!!article.is_duplicate}
-                          onDeleted={handleArticleDeleted}
-                          onRestored={handleArticleRestored}
-                          selectionMode={selectionMode}
-                          selected={selectedIds.has(article.id)}
-                          onSelectionChange={handleSelectionChange}
-                        />
-                      ))}
-                    </div>
-                    <div className="border-b border-gray-200 mt-6" />
-                  </div>
-                )})}
+                  )})}
+                </div>
               </>
             )}
 

@@ -88,6 +88,7 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
   const [isRestoring, setIsRestoring] = useState(false)
 
   const isDeleted = article.status === 'DELETED'
+  const isDraft = article.status === 'DRAFT'
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -175,6 +176,11 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
           {isDuplicate && (
             <div className="flex-1 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 text-center">
               Duplicate
+            </div>
+          )}
+          {isDraft && (
+            <div className="flex-1 bg-amber-500 text-white text-xs font-semibold px-2 py-1 text-center">
+              Draft
             </div>
           )}
           {isDeleted && (

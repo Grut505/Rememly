@@ -25,6 +25,7 @@ export function ArticleRow({ article, isDuplicate, onDeleted, onRestored, select
   const [isRestoring, setIsRestoring] = useState(false)
 
   const isDeleted = article.status === 'DELETED'
+  const isDraft = article.status === 'DRAFT'
   const displayName = article.author_pseudo || 'Unknown'
 
   const handleRowClick = () => {
@@ -124,6 +125,11 @@ export function ArticleRow({ article, isDuplicate, onDeleted, onRestored, select
             {isDuplicate && (
               <span className="text-[10px] uppercase tracking-wide bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
                 Duplicate
+              </span>
+            )}
+            {isDraft && (
+              <span className="text-[10px] uppercase tracking-wide bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                Draft
               </span>
             )}
             {isDeleted && (

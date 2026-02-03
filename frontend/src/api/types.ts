@@ -1,4 +1,4 @@
-export type ArticleStatus = 'ACTIVE' | 'DELETED'
+export type ArticleStatus = 'ACTIVE' | 'DRAFT' | 'DELETED'
 
 export interface Article {
   id: string

@@ -20,7 +20,7 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
 
   return (
     <>
-      <header className="bg-primary-600 text-white fixed left-0 right-0 z-30 shadow-md app-safe-top-offset">
+      <header className="bg-primary-600 text-white fixed left-0 right-0 z-30 shadow-md app-safe-top app-safe-top-height">
         <div className="max-w-content mx-auto w-full h-14 flex items-center px-4 relative">
           {/* True centered title across full app width */}
           <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold leading-none text-center pointer-events-none">

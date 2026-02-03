@@ -25,6 +25,7 @@ export function ArticleTile({ article, isDuplicate, onDeleted, onRestored, selec
   const [isRestoring, setIsRestoring] = useState(false)
 
   const isDeleted = article.status === 'DELETED'
+  const isDraft = article.status === 'DRAFT'
   const displayName = article.author_pseudo || 'Unknown'
 
   const handleTileClick = () => {
@@ -100,6 +101,11 @@ export function ArticleTile({ article, isDuplicate, onDeleted, onRestored, selec
         {isDuplicate && (
           <div className="flex-1 bg-yellow-500 text-white text-[10px] font-semibold px-2 py-0.5 text-center">
             Duplicate
+          </div>
+        )}
+        {isDraft && (
+          <div className="flex-1 bg-amber-500 text-white text-[10px] font-semibold px-2 py-0.5 text-center">
+            Draft
           </div>
         )}
         {isDeleted && (

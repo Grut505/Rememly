@@ -14,6 +14,8 @@ interface MonthStats {
   monthName: string
   total: number
   active: number
+  activeFamileo: number
+  draft: number
   deleted: number
 }
 
@@ -21,6 +23,8 @@ interface YearStats {
   year: number
   total: number
   active: number
+  activeFamileo: number
+  draft: number
   deleted: number
   months: MonthStats[]
 }
@@ -50,20 +54,25 @@ export function Statistics() {
       const yearMap = new Map<number, {
         total: number
         active: number
+        activeFamileo: number
+        draft: number
         deleted: number
-        monthMap: Map<number, { total: number; active: number; deleted: number }>
+        monthMap: Map<number, { total: number; active: number; activeFamileo: number; draft: number; deleted: number }>
       }>()
 
       response.items.forEach((article: Article) => {
         const date = new Date(article.date)
         const y = date.getFullYear()
         const m = date.getMonth()
-        const status = article.status === 'DELETED' ? 'deleted' : 'active'
+        const status = article.status === 'DELETED' ? 'deleted' : article.status === 'DRAFT' ? 'draft' : 'active'
+        const isFamileo = !!article.famileo_post_id
 
         if (!yearMap.has(y)) {
           yearMap.set(y, {
             total: 0,
             active: 0,
+            activeFamileo: 0,
+            draft: 0,
             deleted: 0,
             monthMap: new Map(),
           })
@@ -71,13 +80,19 @@ export function Statistics() {
         const yearStats = yearMap.get(y)!
         yearStats.total += 1
         yearStats[status] += 1
+        if (status === 'active' && isFamileo) {
+          yearStats.activeFamileo += 1
+        }
 
         if (!yearStats.monthMap.has(m)) {
-          yearStats.monthMap.set(m, { total: 0, active: 0, deleted: 0 })
+          yearStats.monthMap.set(m, { total: 0, active: 0, activeFamileo: 0, draft: 0, deleted: 0 })
         }
         const monthStats = yearStats.monthMap.get(m)!
         monthStats.total += 1
         monthStats[status] += 1
+        if (status === 'active' && isFamileo) {
+          monthStats.activeFamileo += 1
+        }
       })
 
       const yearStatsList: YearStats[] = Array.from(yearMap.entries())
@@ -85,6 +100,8 @@ export function Statistics() {
           year: y,
           total: stats.total,
           active: stats.active,
+          activeFamileo: stats.activeFamileo,
+          draft: stats.draft,
           deleted: stats.deleted,
           months: Array.from(stats.monthMap.entries())
             .map(([m, mStats]) => ({
@@ -92,6 +109,8 @@ export function Statistics() {
               monthName: MONTHS_EN[m],
               total: mStats.total,
               active: mStats.active,
+              activeFamileo: mStats.activeFamileo,
+              draft: mStats.draft,
               deleted: mStats.deleted,
             }))
             .sort((a, b) => a.monthIndex - b.monthIndex),
@@ -111,7 +130,7 @@ export function Statistics() {
     }
   }
 
-  const openYear = (year: number, statusFilter: 'active' | 'deleted' | 'all' = 'active') => {
+  const openYear = (year: number, statusFilter: 'active' | 'draft' | 'deleted' | 'all' = 'active') => {
     setFilters({
       year: String(year),
       month: '',
@@ -123,7 +142,7 @@ export function Statistics() {
     navigate('/')
   }
 
-  const openMonth = (year: number, monthIndex: number, statusFilter: 'active' | 'deleted' | 'all' = 'active') => {
+  const openMonth = (year: number, monthIndex: number, statusFilter: 'active' | 'draft' | 'deleted' | 'all' = 'active') => {
     setFilters({
       year: String(year),
       month: String(monthIndex + 1).padStart(2, '0'),
@@ -183,7 +202,7 @@ export function Statistics() {
                           {year.year}
                         </div>
                         <div className="text-xs text-gray-500 mt-0.5">
-                          {year.total} total • {year.active} active • {year.deleted} deleted
+                          {year.total} total • {year.active} active ({year.activeFamileo} famileo) • {year.draft} draft • {year.deleted} deleted
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
@@ -192,6 +211,12 @@ export function Statistics() {
                           className="text-xs font-medium text-primary-600 hover:text-primary-700"
                         >
                           View active
+                        </button>
+                        <button
+                          onClick={() => openYear(year.year, 'draft')}
+                          className="text-xs font-medium text-amber-600 hover:text-amber-700"
+                        >
+                          View draft
                         </button>
                         <button
                           onClick={() => openYear(year.year, 'deleted')}
@@ -221,7 +246,7 @@ export function Statistics() {
                                   {month.monthName}
                                 </div>
                                 <div className="text-xs text-gray-500 mt-0.5">
-                                  {month.total} total • {month.active} active • {month.deleted} deleted
+                                  {month.total} total • {month.active} active ({month.activeFamileo} famileo) • {month.draft} draft • {month.deleted} deleted
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
@@ -230,6 +255,12 @@ export function Statistics() {
                                   className="text-xs font-medium text-primary-600 hover:text-primary-700"
                                 >
                                   View active
+                                </button>
+                                <button
+                                  onClick={() => openMonth(year.year, month.monthIndex, 'draft')}
+                                  className="text-xs font-medium text-amber-600 hover:text-amber-700"
+                                >
+                                  View draft
                                 </button>
                                 <button
                                   onClick={() => openMonth(year.year, month.monthIndex, 'deleted')}

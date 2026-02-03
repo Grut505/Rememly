@@ -20,7 +20,6 @@ import { Settings } from './screens/Settings/Settings'
 import { UpdatePrompt } from './components/UpdatePrompt'
 import { PdfGenerationNotification } from './components/PdfGenerationNotification'
 import { UnsavedChangesGuard } from './components/UnsavedChangesGuard'
-import { OrientationLockOverlay } from './components/OrientationLockOverlay'
 import { BottomNav } from './ui/BottomNav'
 
 function App() {
@@ -42,31 +41,19 @@ function App() {
     measure.style.visibility = 'hidden'
     document.body.appendChild(measure)
 
-    const storageKey = 'safe_area_top'
-    let lastValue = Number(localStorage.getItem(storageKey) || 0)
-    if (lastValue > 0) {
-      document.documentElement.style.setProperty('--safe-area-top', `${lastValue}px`)
-    }
+    const maxSafeArea = 70
+    const clampSafeArea = (value: number) => Math.min(Math.max(value, 0), maxSafeArea)
     const updateSafeArea = () => {
-      const height = Math.round(measure.getBoundingClientRect().height)
+      const height = clampSafeArea(Math.round(measure.getBoundingClientRect().height))
       let nextValue = height
 
-      const isPortrait = window.matchMedia?.('(orientation: portrait)').matches || window.innerHeight >= window.innerWidth
-      if ((!nextValue || nextValue <= 0) && isPortrait) {
-        const screenDiff = Math.round(window.screen.height - window.innerHeight)
-        if (screenDiff > 0 && screenDiff < 200) {
-          nextValue = screenDiff
-        }
+      if (!nextValue) {
+        const vvOffset = clampSafeArea(Math.round(window.visualViewport?.offsetTop || 0))
+        if (vvOffset > 0) nextValue = vvOffset
       }
 
-      if (nextValue > 0) {
-        lastValue = nextValue
-        localStorage.setItem(storageKey, String(lastValue))
-      }
-
-      if (lastValue > 0) {
-        document.documentElement.style.setProperty('--safe-area-top', `${lastValue}px`)
-      }
+      const appliedValue = nextValue
+      document.documentElement.style.setProperty('--safe-area-top', `${appliedValue}px`)
     }
 
     const scheduleUpdate = () => {
@@ -78,10 +65,14 @@ function App() {
     scheduleUpdate()
     window.addEventListener('orientationchange', scheduleUpdate)
     window.addEventListener('resize', scheduleUpdate)
+    window.visualViewport?.addEventListener('resize', scheduleUpdate)
+    window.visualViewport?.addEventListener('scroll', scheduleUpdate)
 
     return () => {
       window.removeEventListener('orientationchange', scheduleUpdate)
       window.removeEventListener('resize', scheduleUpdate)
+      window.visualViewport?.removeEventListener('resize', scheduleUpdate)
+      window.visualViewport?.removeEventListener('scroll', scheduleUpdate)
       measure.remove()
     }
   }, [])
@@ -92,7 +83,6 @@ function App() {
         <UpdatePrompt />
         <PdfGenerationNotification />
         <UnsavedChangesGuard />
-        <OrientationLockOverlay />
         <div className="min-h-screen max-w-content mx-auto bg-white">
           <Routes>
           <Route path="/auth" element={<GoogleAuth />} />

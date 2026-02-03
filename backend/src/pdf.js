@@ -1872,8 +1872,8 @@ function getArticlesInRange(from, to) {
       article[header] = row[index];
     });
 
-    // Skip deleted articles
-    if (article.status === 'DELETED') {
+    // Skip non-active articles (drafts and deleted)
+    if (article.status !== 'ACTIVE') {
       continue;
     }
 

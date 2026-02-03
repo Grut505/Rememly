@@ -12,11 +12,11 @@
   }
 
   body {
-    @apply min-h-screen m-0 p-0 bg-gray-50 text-gray-900 font-sans antialiased;
+    @apply min-h-screen m-0 p-0 bg-primary-600 text-gray-900 font-sans antialiased;
   }
 
   #root {
-    @apply min-h-screen;
+    @apply min-h-screen bg-white;
   }
 }
 
@@ -30,7 +30,12 @@
   }
 
   .app-safe-top-height {
+    box-sizing: border-box;
     height: calc(3.5rem + max(env(safe-area-inset-top), var(--safe-area-top)));
+  }
+
+  .app-safe-top-14 {
+    top: calc(3.5rem + max(env(safe-area-inset-top), var(--safe-area-top)));
   }
 
   .scrollbar-hide {

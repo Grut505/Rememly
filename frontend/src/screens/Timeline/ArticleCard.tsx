@@ -6,6 +6,7 @@ import { useProfile } from '../../contexts/ProfileContext'
 import { useAuth } from '../../auth/AuthContext'
 import { useImageLoader } from '../../hooks/useImageLoader'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
+import { FamileoPosterModal } from '../../ui/FamileoPosterModal'
 import { articlesService } from '../../services/articles.service'
 
 // Convert Drive URLs to thumbnail format
@@ -86,6 +87,7 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
   const [isDeleting, setIsDeleting] = useState(false)
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
+  const [showFamileoPoster, setShowFamileoPoster] = useState(false)
 
   const isDeleted = article.status === 'DELETED'
   const isDraft = article.status === 'DRAFT'
@@ -122,6 +124,11 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
   const handleRestoreClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     setShowRestoreConfirm(true)
+  }
+
+  const handleFamileoPosterClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowFamileoPoster(true)
   }
 
   const handleConfirmRestore = async () => {
@@ -209,6 +216,18 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
             </div>
           </div>
           <div className="flex items-center gap-1">
+            {!article.famileo_post_id && (
+              <button
+                onClick={handleFamileoPosterClick}
+                className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors flex-shrink-0 touch-manipulation"
+                aria-label="Poster vers Famileo"
+              >
+                <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M22 2L11 13"></path>
+                  <path d="M22 2l-7 20-4-9-9-4 20-7z"></path>
+                </svg>
+              </button>
+            )}
             <button
               onClick={handleEdit}
               className="p-2 text-gray-600 hover:text-primary-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 touch-manipulation"
@@ -300,6 +319,19 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
         onConfirm={handleConfirmRestore}
         onCancel={() => setShowRestoreConfirm(false)}
         isLoading={isRestoring}
+      />
+
+      <FamileoPosterModal
+        isOpen={showFamileoPoster}
+        onClose={() => setShowFamileoPoster(false)}
+        authorLabel={displayName}
+        authorEmail={article.auteur}
+        dateLabel={formatDateTimeFull(article.date)}
+        excerpt={article.texte}
+        text={article.texte}
+        publishedAt={article.date}
+        imageUrl={article.image_url}
+        imageFileId={article.image_file_id}
       />
     </div>
   )

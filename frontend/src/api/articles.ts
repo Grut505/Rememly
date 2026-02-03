@@ -67,4 +67,7 @@ export const articlesApi = {
 
   permanentDelete: (id: string) =>
     apiClient.get<{ id: string; deleted: boolean }>('articles/permanent-delete', { id }),
+
+  backfillFamileoFingerprints: () =>
+    apiClient.get<{ updated: number; total: number }>('articles/backfill-famileo-fingerprints'),
 }

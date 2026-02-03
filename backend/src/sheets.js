@@ -22,21 +22,45 @@ function getArticlesSheet() {
   if (!sheet) {
     sheet = ss.insertSheet('articles');
     // Structure: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status, famileo_post_id
-    sheet.appendRow([
-      'id',
-      'date',
-      'auteur',
-      'texte',
-      'image_url',
-      'image_file_id',
-      'assembly_state',
-      'full_page',
-      'status',
-      'famileo_post_id',
-    ]);
+    sheet.appendRow(getArticlesHeaders());
   }
 
+  ensureArticlesSheetColumns(sheet);
   return sheet;
+}
+
+function getArticlesHeaders() {
+  return [
+    'id',
+    'date',
+    'auteur',
+    'texte',
+    'image_url',
+    'image_file_id',
+    'assembly_state',
+    'full_page',
+    'status',
+    'famileo_post_id',
+    'famileo_fingerprint',
+  ];
+}
+
+function ensureArticlesSheetColumns(sheet) {
+  const expected = getArticlesHeaders();
+  const lastCol = sheet.getLastColumn() || expected.length;
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  let updated = false;
+
+  expected.forEach((header) => {
+    if (!headers.includes(header)) {
+      headers.push(header);
+      updated = true;
+    }
+  });
+
+  if (updated) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
 }
 
 function getFamiliesSheet() {
@@ -86,6 +110,31 @@ function getImportedFamileoPostIds() {
   return ids;
 }
 
+function getImportedFamileoFingerprints() {
+  const sheet = getArticlesSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0] || [];
+  const fingerprintIndex = headers.indexOf('famileo_fingerprint');
+  const statusIndex = headers.indexOf('status');
+  const authorIndex = headers.indexOf('auteur');
+  const dateIndex = headers.indexOf('date');
+  const textIndex = headers.indexOf('texte');
+  if (fingerprintIndex === -1) return [];
+
+  const fingerprints = [];
+  for (let i = 1; i < data.length; i++) {
+    const status = statusIndex === -1 ? '' : data[i][statusIndex];
+    if (status === 'DELETED') continue;
+    let fp = data[i][fingerprintIndex];
+    const needsRehash = fp && (String(fp).includes('|') || String(fp).length !== 64);
+    if ((!fp || needsRehash) && authorIndex !== -1 && dateIndex !== -1 && textIndex !== -1) {
+      fp = buildFamileoFingerprint(data[i][authorIndex], data[i][dateIndex], data[i][textIndex]);
+    }
+    if (fp) fingerprints.push(String(fp));
+  }
+  return fingerprints;
+}
+
 function getJobsSheet() {
   const ss = getSpreadsheet();
   let sheet = ss.getSheetByName('jobs_pdf');
@@ -110,6 +159,29 @@ function getPdfLogsSheet() {
   }
 
   return sheet;
+}
+
+function getFamileoLogsSheet() {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName('logs_famileo');
+
+  if (!sheet) {
+    sheet = ss.insertSheet('logs_famileo');
+    sheet.appendRow(['timestamp', 'level', 'message', 'user', 'meta']);
+  }
+
+  return sheet;
+}
+
+function logFamileoEvent(level, message, user, meta) {
+  try {
+    const sheet = getFamileoLogsSheet();
+    const ts = new Date().toISOString();
+    const metaStr = meta ? JSON.stringify(meta) : '';
+    sheet.appendRow([ts, level || 'info', message || '', user || '', metaStr]);
+  } catch (e) {
+    Logger.log('Could not log famileo event: ' + e);
+  }
 }
 
 function logPdfEvent(jobId, level, message, meta) {
@@ -238,6 +310,7 @@ function getUsersHeaders() {
   return [
     'email',
     'pseudo',
+    'famileo_name',
     'avatar_url',
     'avatar_file_id',
     'status',
@@ -327,12 +400,49 @@ function getUserRowData(row, headerMap) {
   return {
     email: row[headerMap.email],
     pseudo: headerMap.pseudo === undefined ? null : row[headerMap.pseudo],
+    famileo_name: headerMap.famileo_name === undefined ? null : row[headerMap.famileo_name],
     avatar_url: headerMap.avatar_url === undefined ? null : row[headerMap.avatar_url],
     avatar_file_id: headerMap.avatar_file_id === undefined ? null : row[headerMap.avatar_file_id],
     status: headerMap.status === undefined ? null : row[headerMap.status],
     date_created: headerMap.date_created === undefined ? null : row[headerMap.date_created],
     date_updated: headerMap.date_updated === undefined ? null : row[headerMap.date_updated],
   };
+}
+
+function normalizeFamileoName(name) {
+  if (!name) return '';
+  return String(name).trim().toLowerCase();
+}
+
+function buildFamileoAuthorMap() {
+  const sheet = getUsersSheet();
+  const headerMap = getUsersHeaderMap(sheet);
+  const data = sheet.getDataRange().getValues();
+  const famileoIndex = headerMap.famileo_name;
+  const emailIndex = headerMap.email;
+  if (famileoIndex === undefined || emailIndex === undefined) return {};
+
+  const pseudoIndex = headerMap.pseudo;
+  const statusIndex = headerMap.status;
+  const map = {};
+
+  for (let i = 1; i < data.length; i++) {
+    const famileoName = data[i][famileoIndex];
+    const email = data[i][emailIndex];
+    if (!famileoName || !email) continue;
+    const status = statusIndex === undefined ? '' : data[i][statusIndex];
+    if (status && String(status).toUpperCase() !== 'ACTIVE') continue;
+    const key = normalizeFamileoName(famileoName);
+    if (!key) continue;
+    if (!map[key]) {
+      map[key] = {
+        email,
+        pseudo: pseudoIndex === undefined ? null : data[i][pseudoIndex],
+        famileo_name: famileoName,
+      };
+    }
+  }
+  return map;
 }
 
 function findUserRowsByEmail(email) {

@@ -19,6 +19,11 @@ export interface FamileoPostsResponse {
   unread: number
   next_timestamp: string | null
   has_more: boolean
+  counts?: {
+    declared: number
+    others: number
+    total: number
+  }
 }
 
 export interface FamileoImageResponse {
@@ -50,12 +55,31 @@ export interface FamileoImportedIdsResponse {
   ids: string[]
 }
 
+export interface FamileoImportedFingerprintsResponse {
+  fingerprints: string[]
+}
+
+export interface FamileoCreatePostResponse {
+  status: number
+  body: string
+}
+
+export interface FamileoPresignResponse {
+  raw: string
+}
+
+export interface FamileoUploadImageResponse {
+  status: number
+  body: string
+  key?: string
+}
+
 export const famileoApi = {
   status: (params?: { validate?: string; family_id?: string }) =>
     apiClient.get<FamileoStatusResponse>('famileo/status', params),
 
   posts: (
-    params?: { limit?: string; timestamp?: string; family_id?: string },
+    params?: { limit?: string; timestamp?: string; family_id?: string; author_filter?: string },
     options?: RequestInit
   ) =>
     apiClient.get<FamileoPostsResponse>('famileo/posts', params, options),
@@ -71,4 +95,16 @@ export const famileoApi = {
 
   importedIds: () =>
     apiClient.get<FamileoImportedIdsResponse>('famileo/imported-ids'),
+
+  importedFingerprints: () =>
+    apiClient.get<FamileoImportedFingerprintsResponse>('famileo/imported-fingerprints'),
+
+  createPost: (body: { text: string; published_at: string; family_id?: string; image_key?: string; is_full_page?: boolean; author_email?: string }) =>
+    apiClient.post<FamileoCreatePostResponse>('famileo/create-post', body),
+
+  presignImage: () =>
+    apiClient.post<FamileoPresignResponse>('famileo/presigned-image'),
+
+  uploadImage: (body: { presign: string | Record<string, unknown>; image_base64: string; mime_type?: string; filename?: string }) =>
+    apiClient.post<FamileoUploadImageResponse>('famileo/upload-image', body),
 }

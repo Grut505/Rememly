@@ -214,6 +214,7 @@ function handleArticleCreate(body) {
   const dateNow = now();
   const articleDate = body.date || dateNow;
   const year = getYear(articleDate);
+  const famileoFingerprint = buildFamileoFingerprint(body.auteur, articleDate, body.texte || '');
 
   // Upload image to Drive
   const fileName = `${formatTimestamp()}_${id}_assembled.jpg`;
@@ -232,6 +233,7 @@ function handleArticleCreate(body) {
     body.full_page || false,                                     // 7: full_page
     body.status || 'ACTIVE',                                     // 8: status
     body.famileo_post_id || '',                                  // 9: famileo_post_id
+    body.famileo_post_id ? famileoFingerprint : '',              // 10: famileo_fingerprint
   ];
 
   sheet.appendRow(row);
@@ -247,6 +249,7 @@ function handleArticleCreate(body) {
     full_page: body.full_page || false,
     status: body.status || 'ACTIVE',
     famileo_post_id: body.famileo_post_id || '',
+    famileo_fingerprint: body.famileo_post_id ? famileoFingerprint : '',
   };
 
   return createResponse({
@@ -266,8 +269,8 @@ function handleArticleUpdate(body) {
     });
   }
 
-  // 10 columns: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status, famileo_post_id
-  const row = sheet.getRange(rowIndex, 1, 1, 10).getValues()[0];
+  // 11 columns: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status, famileo_post_id, famileo_fingerprint
+  const row = sheet.getRange(rowIndex, 1, 1, 11).getValues()[0];
   const dateNow = now();
 
   const articleDate = body.date || row[1] || dateNow;
@@ -303,7 +306,12 @@ function handleArticleUpdate(body) {
     row[8] = body.status;
   }
 
-  sheet.getRange(rowIndex, 1, 1, 10).setValues([row]);
+  // Update famileo fingerprint when relevant fields change
+  if (row[9]) {
+    row[10] = buildFamileoFingerprint(row[2], row[1], row[3]);
+  }
+
+  sheet.getRange(rowIndex, 1, 1, 11).setValues([row]);
 
   const article = {
     id: row[0],
@@ -316,6 +324,7 @@ function handleArticleUpdate(body) {
     full_page: row[7],
     status: row[8],
     famileo_post_id: row[9],
+    famileo_fingerprint: row[10],
   };
 
   return createResponse({
@@ -336,15 +345,36 @@ function handleArticleDelete(id) {
   }
 
   // Soft delete: mark as DELETED
-  // 10 columns: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status, famileo_post_id
-  const row = sheet.getRange(rowIndex, 1, 1, 10).getValues()[0];
+  // 11 columns: id, date, auteur, texte, image_url, image_file_id, assembly_state, full_page, status, famileo_post_id, famileo_fingerprint
+  const row = sheet.getRange(rowIndex, 1, 1, 11).getValues()[0];
   row[8] = 'DELETED'; // status column (index 8)
-  sheet.getRange(rowIndex, 1, 1, 10).setValues([row]);
+  sheet.getRange(rowIndex, 1, 1, 11).setValues([row]);
 
   return createResponse({
     ok: true,
     data: { id, deleted: true },
   });
+}
+
+function normalizeFamileoText(value) {
+  if (!value) return '';
+  return String(value)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildFamileoFingerprint(authorEmail, dateValue, textValue) {
+  const author = normalizeFamileoText(authorEmail || '');
+  const date = new Date(dateValue);
+  const dateKey = isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+  const text = normalizeFamileoText(textValue || '');
+  const payload = `${author}|${dateKey}|${text}`;
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, payload);
+  return bytes.map(function (b) {
+    const v = (b + 256) % 256;
+    return ('0' + v.toString(16)).slice(-2);
+  }).join('');
 }
 
 function handleArticlePermanentDelete(id) {
@@ -378,4 +408,37 @@ function handleArticlePermanentDelete(id) {
     ok: true,
     data: { id, deleted: true, permanent: true },
   });
+}
+
+function backfillFamileoFingerprints() {
+  const sheet = getArticlesSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0] || [];
+  const fingerprintIndex = headers.indexOf('famileo_fingerprint');
+  const authorIndex = headers.indexOf('auteur');
+  const dateIndex = headers.indexOf('date');
+  const textIndex = headers.indexOf('texte');
+  if (fingerprintIndex === -1 || authorIndex === -1 || dateIndex === -1 || textIndex === -1) {
+    return { updated: 0, total: Math.max(data.length - 1, 0) };
+  }
+
+  let updated = 0;
+  const values = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const existing = row[fingerprintIndex];
+    if (existing) {
+      values.push([existing]);
+      continue;
+    }
+    const fp = buildFamileoFingerprint(row[authorIndex], row[dateIndex], row[textIndex]);
+    values.push([fp]);
+    updated += 1;
+  }
+
+  if (values.length > 0) {
+    sheet.getRange(2, fingerprintIndex + 1, values.length, 1).setValues(values);
+  }
+
+  return { updated, total: Math.max(data.length - 1, 0) };
 }

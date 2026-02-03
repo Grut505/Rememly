@@ -6,6 +6,9 @@ import { useUiStore } from '../../state/uiStore'
 import { AppHeader } from '../../ui/AppHeader'
 import { configApi } from '../../api/config'
 import { logsApi } from '../../api/logs'
+import { usersApi, DeclaredUser } from '../../api/users'
+import { articlesApi } from '../../api/articles'
+import { useImageLoader } from '../../hooks/useImageLoader'
 
 export function Settings() {
   const { showToast, setUnsavedChanges } = useUiStore()
@@ -22,11 +25,15 @@ export function Settings() {
   const [isClearingLogs, setIsClearingLogs] = useState(false)
   const [clearProgress, setClearProgress] = useState(0)
   const [isCleaningProps, setIsCleaningProps] = useState(false)
+  const [isBackfilling, setIsBackfilling] = useState(false)
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [users, setUsers] = useState<DeclaredUser[]>([])
   const isDirty = familyName.trim() !== initialFamilyName.trim()
 
   useEffect(() => {
     loadConfig()
     loadLogsRange()
+    loadUsers()
   }, [])
 
   const loadConfig = async () => {
@@ -116,6 +123,30 @@ export function Settings() {
     }
   }
 
+  const handleBackfillFingerprints = async () => {
+    setIsBackfilling(true)
+    try {
+      const result = await articlesApi.backfillFamileoFingerprints()
+      showToast(`Backfill done: ${result.updated}/${result.total}`, 'success')
+    } catch (error) {
+      showToast('Failed to backfill fingerprints', 'error')
+    } finally {
+      setIsBackfilling(false)
+    }
+  }
+
+  const loadUsers = async () => {
+    setUsersLoading(true)
+    try {
+      const response = await usersApi.list()
+      setUsers(response.users || [])
+    } catch (error) {
+      showToast('Failed to load users', 'error')
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
   const formatDateFr = (ms: number | null) => {
     if (ms === null) return '--'
     return new Date(ms).toLocaleDateString('fr-FR', {
@@ -129,12 +160,64 @@ export function Settings() {
     setUnsavedChanges(isDirty)
   }, [isDirty, setUnsavedChanges])
 
+  const formatUserDate = (value: string) => {
+    if (!value) return '--'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '--'
+    return date.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })
+  }
+
+  const normalizeAvatarUrl = (url: string) => {
+    if (!url) return ''
+    if (url.includes('drive.google.com/thumbnail')) return url
+    const patterns = [
+      /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/,
+      /drive\.google\.com\/uc\?.*id=([A-Za-z0-9_-]+)/,
+      /drive\.google\.com\/open\?.*id=([A-Za-z0-9_-]+)/,
+      /lh3\.googleusercontent\.com\/d\/([A-Za-z0-9_-]+)/,
+    ]
+    for (const pattern of patterns) {
+      const match = url.match(pattern)
+      if (match && match[1]) {
+        return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200`
+      }
+    }
+    return url
+  }
+
+  const UserAvatar = ({ user }: { user: DeclaredUser }) => {
+    const { src, isLoading, error } = useImageLoader(user.avatar_url, user.avatar_file_id)
+    if (isLoading) {
+      return (
+        <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 animate-pulse" />
+      )
+    }
+    if (error || !src) {
+      return (
+        <div className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-[10px] text-gray-500">
+          --
+        </div>
+      )
+    }
+    return (
+      <img
+        src={src || normalizeAvatarUrl(user.avatar_url)}
+        alt={user.pseudo || user.email}
+        className="w-7 h-7 rounded-full object-cover border border-gray-200"
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <AppHeader />
 
       {/* Content */}
-      <div className="flex-1 p-4 space-y-6 pb-32 max-w-md mx-auto w-full">
+      <div className="flex-1 p-4 space-y-6 pb-32 max-w-content mx-auto w-full">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center">
@@ -144,6 +227,56 @@ export function Settings() {
           </div>
         ) : (
           <>
+            {/* Declared users */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700">Declared users</h3>
+                <button
+                  onClick={loadUsers}
+                  disabled={usersLoading}
+                  className="text-xs text-primary-600 hover:text-primary-700"
+                >
+                  Refresh
+                </button>
+              </div>
+              {usersLoading ? (
+                <div className="flex items-center justify-center py-6">
+                  <Spinner size="md" />
+                </div>
+              ) : users.length === 0 ? (
+                <p className="text-sm text-gray-500">No users found.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs">
+                    <thead className="text-gray-500">
+                      <tr className="text-left">
+                        <th className="py-2 pr-3">Avatar</th>
+                        <th className="py-2 pr-3">Email</th>
+                        <th className="py-2 pr-3">Pseudo</th>
+                        <th className="py-2 pr-3">Famileo</th>
+                        <th className="py-2 pr-3">Created</th>
+                        <th className="py-2 pr-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-gray-700">
+                      {users.map((u) => (
+                        <tr key={u.email} className="border-t border-gray-100">
+                          <td className="py-2 pr-3">
+                            <UserAvatar user={u} />
+                          </td>
+                          <td className="py-2 pr-3">{u.email}</td>
+                          <td className="py-2 pr-3">{u.pseudo || '--'}</td>
+                          <td className="py-2 pr-3">{u.famileo_name || '--'}</td>
+                          <td className="py-2 pr-3">{formatUserDate(u.date_created)}</td>
+                          <td className="py-2 pr-3">{u.status || '--'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             {/* Family Name */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">PDF cover page</h3>
@@ -224,7 +357,7 @@ export function Settings() {
               <p className="text-xs text-gray-500 mb-3">
                 Remove orphan PDF properties when jobs were deleted manually.
               </p>
-              <div className="flex justify-center">
+              <div className="flex flex-col items-start gap-4">
                 <Button
                   variant="secondary"
                   onClick={handleCleanupProperties}
@@ -233,6 +366,19 @@ export function Settings() {
                 >
                   Clean PDF properties
                 </Button>
+                <div className="flex flex-col items-start gap-2 w-full">
+                  <p className="text-xs text-gray-500">
+                    Rebuilds Famileo fingerprints for existing articles to improve duplicate detection.
+                  </p>
+                  <Button
+                    variant="secondary"
+                    onClick={handleBackfillFingerprints}
+                    disabled={isBackfilling}
+                    className="w-full sm:w-auto"
+                  >
+                    Backfill Famileo fingerprints
+                  </Button>
+                </div>
               </div>
             </div>
           </>

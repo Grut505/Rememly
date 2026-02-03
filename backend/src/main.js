@@ -123,6 +123,9 @@ function doPost(e) {
       case 'articles/permanent-delete':
         return handleArticlePermanentDelete(params.id);
 
+      case 'articles/backfill-famileo-fingerprints':
+        return createResponse({ ok: true, data: backfillFamileoFingerprints() });
+
       case 'pdf/create':
         return handlePdfCreate(body, authResult.user);
 
@@ -153,6 +156,9 @@ function doPost(e) {
       case 'profile/save':
         return handleProfileSave(authResult.user.email, body);
 
+      case 'users/list':
+        return handleUsersList();
+
       case 'image/fetch':
         return handleImageFetch(params.fileId);
 
@@ -173,6 +179,18 @@ function doPost(e) {
 
       case 'famileo/imported-ids':
         return handleFamileoImportedIds();
+
+      case 'famileo/imported-fingerprints':
+        return handleFamileoImportedFingerprints();
+
+      case 'famileo/create-post':
+        return handleFamileoCreatePost(body, authResult.user.email);
+
+      case 'famileo/presigned-image':
+        return handleFamileoPresignedImage(authResult.user.email);
+
+      case 'famileo/upload-image':
+        return handleFamileoUploadImage(body, authResult.user.email);
 
       case 'config/get':
         return handleConfigGet(params.key);

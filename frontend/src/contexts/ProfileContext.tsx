@@ -18,13 +18,14 @@ function fileToBase64(file: File): Promise<string> {
 
 export interface UserProfile {
   pseudo: string
+  famileo_name?: string
   avatar_url: string
 }
 
 interface ProfileContextType {
   profile: UserProfile | null
   isLoading: boolean
-  saveProfile: (pseudo: string, avatarFile?: File) => Promise<void>
+  saveProfile: (pseudo: string, famileoName: string, avatarFile?: File) => Promise<void>
   reloadProfile: () => void
   avatarBlobUrl: string | null
 }
@@ -49,6 +50,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const data = await profileApi.get()
       setProfile({
         pseudo: data.pseudo,
+        famileo_name: data.famileo_name,
         avatar_url: data.avatar_url
       })
 
@@ -91,9 +93,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, authLoading])
 
-  const saveProfile = async (pseudo: string, avatarFile?: File) => {
+  const saveProfile = async (pseudo: string, famileoName: string, avatarFile?: File) => {
     try {
-      const payload: SaveProfilePayload = { pseudo }
+      const payload: SaveProfilePayload = { pseudo, famileo_name: famileoName }
 
       if (avatarFile) {
         // Convert image to base64

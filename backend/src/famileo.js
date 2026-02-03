@@ -1,13 +1,6 @@
 // Famileo API integration
 // Credentials are stored in Script Properties (never in code)
 
-// Allowed authors for filtering posts
-// Key = Famileo author name, Value = user email (persistent identifier)
-const FAMILEO_AUTHOR_MAPPING = {
-  'Yann Graufogel': 'grutspam@gmail.com',
-  'Marie Cabedoce': 'mariealex@gmail.com'
-};
-
 /**
  * Update Famileo session cookies in Script Properties
  * Run this manually from the Apps Script editor when cookies expire
@@ -196,30 +189,42 @@ function handleFamileoPosts(params) {
     const limit = parseInt(params.limit) || 20;
     const timestamp = params.timestamp || null;
     const familyId = params.family_id || null;
+    const authorFilterRaw = params.author_filter || params.authorFilter || 'declared';
+    const authorFilter = String(authorFilterRaw).toLowerCase();
+    const isSpecificAuthor = authorFilter && authorFilter !== 'all' && authorFilter !== 'others' && authorFilter !== 'declared';
 
     const response = famileoFetchPosts(limit, timestamp, familyId);
 
-    // Extract only the fields we need and filter by allowed authors
-    const allowedAuthors = Object.keys(FAMILEO_AUTHOR_MAPPING);
+    // Build allowed authors from users sheet (famileo_name)
+    const famileoAuthorMap = buildFamileoAuthorMap();
 
-    // Cache for user profiles to avoid multiple lookups
-    const userProfileCache = {};
+    const rawPosts = response.familyWall || [];
+    const counts = { declared: 0, others: 0, total: rawPosts.length };
 
-    const posts = (response.familyWall || [])
-      .filter(post => allowedAuthors.includes(post.author_name))
-      .map(post => {
-        const authorEmail = FAMILEO_AUTHOR_MAPPING[post.author_name];
-
-        // Get pseudo from Users sheet (cached)
-        let authorPseudo;
-        if (userProfileCache[authorEmail]) {
-          authorPseudo = userProfileCache[authorEmail];
+    const posts = rawPosts
+      .filter(post => {
+        const authorKey = normalizeFamileoName(post.author_name);
+        const author = famileoAuthorMap[authorKey];
+        const isDeclared = !!author;
+        if (isDeclared) {
+          counts.declared += 1;
         } else {
-          const user = findUserByEmail(authorEmail);
-          // Use user's pseudo if exists, otherwise use first name from Famileo
-          authorPseudo = user ? user.pseudo : post.author_name.split(' ')[0];
-          userProfileCache[authorEmail] = authorPseudo;
+          counts.others += 1;
         }
+        if (authorFilter === 'all') return true;
+        if (authorFilter === 'others') return !isDeclared;
+        if (authorFilter === 'declared') return isDeclared;
+        if (isSpecificAuthor) {
+          const authorEmail = author ? String(author.email || '').toLowerCase() : '';
+          const authorPseudo = author ? String(author.pseudo || '').toLowerCase() : '';
+          return authorFilter === authorEmail || authorFilter === authorPseudo || authorFilter === authorKey;
+        }
+        return isDeclared;
+      })
+      .map(post => {
+        const author = famileoAuthorMap[normalizeFamileoName(post.author_name)];
+        const authorEmail = author ? author.email : '';
+        const authorPseudo = author && author.pseudo ? author.pseudo : post.author_name.split(' ')[0];
 
         return {
           id: post.wall_post_id,
@@ -238,7 +243,7 @@ function handleFamileoPosts(params) {
 
     // Calculate next_timestamp for pagination (use last post from raw response, not filtered)
     let nextTimestamp = null;
-    const rawPosts = response.familyWall || [];
+    // rawPosts declared above
     if (rawPosts.length > 0) {
       const lastRawPost = rawPosts[rawPosts.length - 1];
       // Use date_tz if available, otherwise convert date to ISO
@@ -251,7 +256,8 @@ function handleFamileoPosts(params) {
         posts: posts,
         unread: response.unreadPost || 0,
         next_timestamp: nextTimestamp,
-        has_more: rawPosts.length === limit
+        has_more: rawPosts.length === limit,
+        counts: counts
       }
     });
   } catch (error) {
@@ -296,6 +302,135 @@ function famileoFetchImage(imageUrl) {
     base64: base64,
     mimeType: mimeType
   };
+}
+
+/**
+ * Create a Famileo post
+ */
+function famileoCreatePost(text, publishedAt, familyId, imageKey, isFullPage, userEmail) {
+  const session = getFamileoSession();
+  const targetFamilyId = familyId || '321238';
+  const url = `https://www.famileo.com/api/families/${targetFamilyId}/posts?return_validation_errors=1`;
+
+  const payload = {
+    text: text || '',
+    is_private: '0',
+    is_full_page: isFullPage ? '1' : '0',
+    published_at: publishedAt || new Date().toISOString(),
+    duplicate_options: '[]',
+  };
+  if (imageKey) {
+    payload.image = imageKey;
+  }
+
+  logFamileoEvent('info', 'Famileo create post payload', userEmail, {
+    family_id: targetFamilyId,
+    text_preview: String(payload.text).substring(0, 120),
+    published_at: payload.published_at,
+    image: imageKey || '',
+    is_full_page: isFullPage ? '1' : '0',
+  });
+
+  const response = UrlFetchApp.fetch(url, {
+    method: 'POST',
+    muteHttpExceptions: true,
+    headers: {
+      'Cookie': formatCookies(session),
+      'Referer': 'https://www.famileo.com/'
+    },
+    payload: payload,
+  });
+
+  const status = response.getResponseCode();
+  const body = response.getContentText();
+
+  logFamileoEvent('info', 'Famileo create post response', userEmail, {
+    status: status,
+    body: body,
+  });
+
+  return { status: status, body: body };
+}
+
+/**
+ * Request a presigned upload URL for Famileo post image
+ */
+function famileoGetPresignedImageUrl(userEmail) {
+  const session = getFamileoSession();
+  const url = 'https://www.famileo.com/api/v1/presigned_urls';
+  const payload = JSON.stringify({ type: 'post.image' });
+
+  logFamileoEvent('info', 'Famileo presign request', userEmail, { type: 'post.image' });
+
+  const response = UrlFetchApp.fetch(url, {
+    method: 'POST',
+    muteHttpExceptions: true,
+    headers: {
+      'Cookie': formatCookies(session),
+      'Referer': 'https://www.famileo.com/',
+      'Content-Type': 'application/json',
+    },
+    payload: payload,
+  });
+
+  const status = response.getResponseCode();
+  const body = response.getContentText();
+
+  logFamileoEvent('info', 'Famileo presign response', userEmail, { status: status, body: body });
+
+  return { status: status, body: body };
+}
+
+/**
+ * Upload an image to the presigned S3 form
+ */
+function famileoUploadImage(presign, base64, mimeType, filename, userEmail) {
+  if (!presign || !presign.form || !presign.form.inputs || !presign.form.attributes || !presign.form.attributes.action) {
+    throw new Error('Invalid presign payload');
+  }
+  if (!base64) {
+    throw new Error('Missing base64 image');
+  }
+
+  const actionUrl = presign.form.attributes.action;
+  const inputs = presign.form.inputs;
+  const contentType = mimeType || 'image/jpeg';
+  const fileName = filename || inputs['X-Amz-Meta-Filename'] || 'Untitled.jpg';
+
+  const bytes = Utilities.base64Decode(base64);
+  const blob = Utilities.newBlob(bytes, contentType, fileName);
+
+  const payload = {
+    key: inputs.key,
+    'Content-Type': contentType,
+    'X-Amz-Meta-Filename': fileName,
+    'X-Amz-Credential': inputs['X-Amz-Credential'],
+    'X-Amz-Algorithm': inputs['X-Amz-Algorithm'],
+    'X-Amz-Date': inputs['X-Amz-Date'],
+    Policy: inputs.Policy,
+    'X-Amz-Signature': inputs['X-Amz-Signature'],
+    file: blob,
+  };
+
+  logFamileoEvent('info', 'Famileo upload image request', userEmail, {
+    action: actionUrl,
+    key: inputs.key,
+    filename: fileName,
+    content_type: contentType,
+  });
+
+  const response = UrlFetchApp.fetch(actionUrl, {
+    method: 'POST',
+    muteHttpExceptions: true,
+    payload: payload,
+  });
+
+  const status = response.getResponseCode();
+  const body = response.getContentText();
+
+  logFamileoEvent('info', 'Famileo upload image response', userEmail, { status: status, body: body });
+
+  return { status: status, body: body, key: inputs.key };
 }
 
 /**
@@ -464,6 +599,158 @@ function handleFamileoImportedIds() {
     });
   } catch (error) {
     Logger.log('Famileo imported-ids error: ' + error);
+    return createResponse({
+      ok: false,
+      error: { code: 'FAMILEO_ERROR', message: String(error) }
+    });
+  }
+}
+
+/**
+ * Handler for famileo/presigned-image endpoint
+ */
+function handleFamileoPresignedImage(userEmail) {
+  try {
+    const result = famileoGetPresignedImageUrl(userEmail);
+    const lowerBody = String(result.body || '').toLowerCase();
+    const sessionExpired = result.status === 401 ||
+      lowerBody.includes('session expired') ||
+      lowerBody.includes('invalid session') ||
+      lowerBody.includes('not configured');
+
+    if (sessionExpired) {
+      try {
+        handleFamileoTriggerRefresh();
+      } catch (refreshError) {
+        logFamileoEvent('error', 'Famileo presign refresh error', userEmail, { error: String(refreshError) });
+      }
+      return createResponse({
+        ok: false,
+        error: { code: 'FAMILEO_SESSION', message: 'Session Famileo expirée. Rafraîchissement déclenché.' }
+      });
+    }
+
+    if (result.status < 200 || result.status >= 300) {
+      return createResponse({
+        ok: false,
+        error: { code: 'FAMILEO_ERROR', message: 'Famileo presign failed (HTTP ' + result.status + ')' }
+      });
+    }
+
+    return createResponse({
+      ok: true,
+      data: { raw: result.body }
+    });
+  } catch (error) {
+    logFamileoEvent('error', 'Famileo presign error', userEmail, { error: String(error) });
+    return createResponse({
+      ok: false,
+      error: { code: 'FAMILEO_ERROR', message: String(error) }
+    });
+  }
+}
+
+/**
+ * Handler for famileo/upload-image endpoint
+ */
+function handleFamileoUploadImage(body, userEmail) {
+  try {
+    const presignRaw = body && body.presign ? body.presign : null;
+    const presign = typeof presignRaw === 'string' ? JSON.parse(presignRaw) : presignRaw;
+    const imageBase64 = body && body.image_base64 ? String(body.image_base64) : '';
+    const mimeType = body && body.mime_type ? String(body.mime_type) : '';
+    const filename = body && body.filename ? String(body.filename) : '';
+
+    const result = famileoUploadImage(presign, imageBase64, mimeType, filename, userEmail);
+    if (result.status < 200 || result.status >= 300) {
+      return createResponse({
+        ok: false,
+        error: { code: 'FAMILEO_ERROR', message: 'Famileo upload failed (HTTP ' + result.status + ')' }
+      });
+    }
+
+    return createResponse({
+      ok: true,
+      data: result
+    });
+  } catch (error) {
+    logFamileoEvent('error', 'Famileo upload image error', userEmail, { error: String(error) });
+    return createResponse({
+      ok: false,
+      error: { code: 'FAMILEO_ERROR', message: String(error) }
+    });
+  }
+}
+
+/**
+ * Handler for famileo/create-post endpoint
+ */
+function handleFamileoCreatePost(body, userEmail) {
+  try {
+    const text = body && body.text ? String(body.text) : '';
+    const publishedAt = body && body.published_at ? String(body.published_at) : '';
+    const familyId = body && body.family_id ? String(body.family_id) : null;
+    const imageKey = body && body.image_key ? String(body.image_key) : '';
+    const isFullPage = body && (body.is_full_page === true || body.is_full_page === '1' || body.is_full_page === 1);
+    const authorEmail = body && body.author_email ? String(body.author_email) : '';
+
+    if (authorEmail) {
+      logFamileoEvent('info', 'Famileo create post author override', userEmail, { author_email: authorEmail });
+    }
+
+    const result = famileoCreatePost(text, publishedAt, familyId, imageKey, isFullPage, userEmail);
+    const lowerBody = String(result.body || '').toLowerCase();
+    const sessionExpired = result.status === 401 ||
+      lowerBody.includes('session expired') ||
+      lowerBody.includes('invalid session') ||
+      lowerBody.includes('not configured');
+
+    if (sessionExpired) {
+      try {
+        handleFamileoTriggerRefresh();
+      } catch (refreshError) {
+        logFamileoEvent('error', 'Famileo create post refresh error', userEmail, { error: String(refreshError) });
+      }
+      return createResponse({
+        ok: false,
+        error: { code: 'FAMILEO_SESSION', message: 'Session Famileo expirée. Rafraîchissement déclenché.' }
+      });
+    }
+
+    if (result.status < 200 || result.status >= 300) {
+      return createResponse({
+        ok: false,
+        error: { code: 'FAMILEO_ERROR', message: 'Famileo post failed (HTTP ' + result.status + ')' }
+      });
+    }
+
+    return createResponse({
+      ok: true,
+      data: result
+    });
+  } catch (error) {
+    logFamileoEvent('error', 'Famileo create post error', userEmail, { error: String(error) });
+    return createResponse({
+      ok: false,
+      error: { code: 'FAMILEO_ERROR', message: String(error) }
+    });
+  }
+}
+
+/**
+ * Handler for famileo/imported-fingerprints endpoint
+ * Returns list of Famileo fingerprints that have already been imported
+ */
+function handleFamileoImportedFingerprints() {
+  try {
+    const fingerprints = getImportedFamileoFingerprints();
+
+    return createResponse({
+      ok: true,
+      data: { fingerprints: fingerprints }
+    });
+  } catch (error) {
+    Logger.log('Famileo imported-fingerprints error: ' + error);
     return createResponse({
       ok: false,
       error: { code: 'FAMILEO_ERROR', message: String(error) }

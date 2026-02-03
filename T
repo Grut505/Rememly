@@ -1,5 +1,26 @@
 
-Module d'assemblage des photos à revoir
+Bouton delete articles par dessus la barre
 
-P3
--- Le post vers famileo
+Swipe sur les articles
+- delete
+- Post Famileo
+
+Timeline
+- Pull tout refresh moche
+
+Merge des pdfs qui merde
+
+New photo
+- Revue de l’orthographe auto
+- Interface assembly sur pwa
+- Notion de « candidat pour Famileo »
+
+PDF
+- page de garde comme  famileo en option
+-- Réglage du titre / année ou free texte
+- Date rangé dans le new pdf Moche en pwa
+- Pull to refresh
+- Item avec date mieux dans la liste en pwa
+- Mo sélect, duplication d’article
+
+

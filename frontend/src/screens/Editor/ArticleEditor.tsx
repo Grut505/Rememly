@@ -15,6 +15,8 @@ import { TextInput } from './TextInput'
 import { DateTimeInput } from './DateTimeInput'
 import { ArticleStatus } from '../../api/types'
 import { useImageLoader } from '../../hooks/useImageLoader'
+import { FamileoPosterModal } from '../../ui/FamileoPosterModal'
+import { formatDateTimeFull } from '../../utils/date'
 
 interface FamileoImportData {
   text: string
@@ -41,6 +43,7 @@ export function ArticleEditor() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showFamileoPoster, setShowFamileoPoster] = useState(false)
   const [articleStatus, setArticleStatus] = useState<ArticleStatus>('DRAFT')
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -256,10 +259,22 @@ export function ArticleEditor() {
       )}
       <div className="flex-1 flex flex-col max-w-content mx-auto w-full bg-white">
       {/* Sub-header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-center flex-shrink-0">
+      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-center flex-shrink-0 relative">
         <h1 className="text-lg font-semibold">
           {isEditMode ? 'Edit Article' : 'New Article'}
         </h1>
+        <button
+          type="button"
+          onClick={() => setShowFamileoPoster(true)}
+          className="absolute right-4 top-1/2 -translate-y-1/2 inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
+          aria-label="Poster vers Famileo"
+        >
+          <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+            <path d="M22 2L11 13"></path>
+            <path d="M22 2l-7 20-4-9-9-4 20-7z"></path>
+          </svg>
+          Famileo
+        </button>
       </header>
 
       {/* Content - scrollable */}
@@ -351,6 +366,18 @@ export function ArticleEditor() {
         isLoading={isSaving}
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteConfirm(false)}
+      />
+      <FamileoPosterModal
+        isOpen={showFamileoPoster}
+        onClose={() => setShowFamileoPoster(false)}
+        authorLabel={user?.email || 'Unknown'}
+        authorEmail={user?.email || ''}
+        dateLabel={formatDateTimeFull(dateModification)}
+        excerpt={texte}
+        text={texte}
+        publishedAt={dateModification}
+        imageUrl={articleImageUrl}
+        imageFileId={articleImageFileId}
       />
       </div>
     </div>

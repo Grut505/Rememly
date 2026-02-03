@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../../ui/AppHeader'
 import { famileoApi, FamileoPost, FamileoFamily } from '../../api/famileo'
+import { usersApi, DeclaredUser } from '../../api/users'
 import { FamileoPostCard } from './FamileoPostCard'
 import { articlesService } from '../../services/articles.service'
 import { useAuth } from '../../auth/AuthContext'
@@ -17,10 +19,17 @@ interface BulkProgress {
 }
 
 export function FamileoBrowser() {
+  const location = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
   const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const [endDate, setEndDate] = useState(() => {
+    const today = new Date()
+    const yyyy = today.getFullYear()
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const dd = String(today.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
+  })
   const [posts, setPosts] = useState<FamileoPost[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -43,26 +52,46 @@ export function FamileoBrowser() {
 
   // Families state
   const [families, setFamilies] = useState<FamileoFamily[]>([])
+  const [authorFilter, setAuthorFilter] = useState<string>('declared')
+  const [declaredUsers, setDeclaredUsers] = useState<DeclaredUser[]>([])
+  const [viewMode, setViewMode] = useState<'card' | 'list' | 'mosaic'>(() => {
+    const saved = localStorage.getItem('famileo_view_mode')
+    return saved === 'list' || saved === 'mosaic' ? saved : 'card'
+  })
+  const [mosaicColumns, setMosaicColumns] = useState<number>(() => {
+    const saved = Number(localStorage.getItem('famileo_mosaic_columns') || 2)
+    return saved >= 2 && saved <= 4 ? saved : 2
+  })
   const [selectedFamilyId, setSelectedFamilyId] = useState<string>('')
   const [loadingFamilies, setLoadingFamilies] = useState(true)
+  const [authorCounts, setAuthorCounts] = useState<{ declared: number; others: number; total: number } | null>(null)
 
   // Imported posts filter state
   const [importedPostIds, setImportedPostIds] = useState<Set<string>>(new Set())
+  const [importedFingerprints, setImportedFingerprints] = useState<Set<string>>(new Set())
+  const [postFingerprints, setPostFingerprints] = useState<Record<number, string>>({})
+  const [hashingPosts, setHashingPosts] = useState(false)
+
+  const pageRef = useRef<HTMLDivElement>(null)
   const [hideImported, setHideImported] = useState(false)
 
   // Load families and imported IDs on mount
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        const [familiesResponse, importedResponse] = await Promise.all([
+        const [familiesResponse, importedResponse, fingerprintsResponse, usersResponse] = await Promise.all([
           famileoApi.families(),
-          famileoApi.importedIds()
+          famileoApi.importedIds(),
+          famileoApi.importedFingerprints(),
+          usersApi.list()
         ])
         setFamilies(familiesResponse.families)
+        setDeclaredUsers(usersResponse.users || [])
         if (familiesResponse.families.length > 0) {
           setSelectedFamilyId(familiesResponse.families[0].famileo_id)
         }
         setImportedPostIds(new Set(importedResponse.ids))
+        setImportedFingerprints(new Set(fingerprintsResponse.fingerprints || []))
       } catch (err) {
         console.error('Failed to load initial data:', err)
       } finally {
@@ -71,6 +100,31 @@ export function FamileoBrowser() {
     }
     loadInitialData()
   }, [])
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      pageRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      requestAnimationFrame(() => {
+        pageRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      })
+    })
+  }, [location.key])
+
+  useEffect(() => {
+    localStorage.setItem('famileo_view_mode', viewMode)
+  }, [viewMode])
+
+  useEffect(() => {
+    localStorage.setItem('famileo_mosaic_columns', String(mosaicColumns))
+  }, [mosaicColumns])
 
   const isSessionError = (message: string) => {
     const lower = message.toLowerCase()
@@ -113,6 +167,7 @@ export function FamileoBrowser() {
 
   const fetchPosts = async (signal?: AbortSignal) => {
     const allPosts: FamileoPost[] = []
+    let counts: { declared: number; others: number; total: number } | null = null
     let shouldContinue = true
 
     const startTs = new Date(startDate + 'T00:00:00').getTime()
@@ -125,9 +180,18 @@ export function FamileoBrowser() {
           limit: '50',
           timestamp: timestamp,
           family_id: selectedFamilyId || undefined,
+          author_filter: authorFilter,
         },
         { signal }
       )
+      if (response.counts) {
+        if (!counts) {
+          counts = { declared: 0, others: 0, total: 0 }
+        }
+        counts.declared += response.counts.declared || 0
+        counts.others += response.counts.others || 0
+        counts.total += response.counts.total || 0
+      }
 
       for (const post of response.posts) {
         const postTs = new Date(post.date).getTime()
@@ -135,6 +199,23 @@ export function FamileoBrowser() {
           allPosts.push(post)
         }
       }
+
+      setHashingPosts(true)
+      const hashes = await Promise.all(
+        response.posts.map(async (post) => {
+          const payload = buildFingerprintPayload(post)
+          const hash = await hashFingerprint(payload)
+          return [post.id, hash] as const
+        })
+      )
+      setPostFingerprints((prev) => {
+        const next = { ...prev }
+        hashes.forEach(([id, hash]) => {
+          if (hash) next[id] = hash
+        })
+        return next
+      })
+      setHashingPosts(false)
 
       if (response.next_timestamp) {
         const nextTs = new Date(response.next_timestamp).getTime()
@@ -148,6 +229,9 @@ export function FamileoBrowser() {
       }
     }
 
+    if (counts) {
+      setAuthorCounts(counts)
+    }
     return allPosts
   }
 
@@ -166,6 +250,9 @@ export function FamileoBrowser() {
     setPosts([])
     setSelectedIds(new Set())
     setImageCache({})
+    setAuthorCounts(null)
+    setPostFingerprints({})
+    setHashingPosts(false)
 
     try {
       const allPosts = await fetchPosts(controller.signal)
@@ -222,10 +309,6 @@ export function FamileoBrowser() {
     setRefreshMessage(null)
   }
 
-  const handleBack = () => {
-    navigate('/')
-  }
-
   const handleSelectionChange = (postId: number, selected: boolean) => {
     setSelectedIds(prev => {
       const newSet = new Set(prev)
@@ -246,12 +329,22 @@ export function FamileoBrowser() {
   }
 
   const handleSelectAll = () => {
-    if (selectedIds.size === posts.length) {
-      // Deselect all
-      setSelectedIds(new Set())
+    const visiblePosts = posts.filter(post => !hideImported || !importedPostIds.has(String(post.id)))
+    const visibleSelectedCount = visiblePosts.filter(post => selectedIds.has(post.id)).length
+    if (visibleSelectedCount === visiblePosts.length) {
+      // Deselect visible
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        visiblePosts.forEach(post => next.delete(post.id))
+        return next
+      })
     } else {
-      // Select all
-      setSelectedIds(new Set(posts.map(p => p.id)))
+      // Select visible
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        visiblePosts.forEach(post => next.add(post.id))
+        return next
+      })
     }
   }
 
@@ -300,7 +393,7 @@ export function FamileoBrowser() {
 
         // Create the article using author_email as persistent identifier
         await articlesService.createArticle(
-          post.author_email,
+          post.author_email || user.email,
           post.text,
           file,
           dateModification,
@@ -309,6 +402,13 @@ export function FamileoBrowser() {
 
         // Add to imported set so it shows as imported immediately
         setImportedPostIds(prev => new Set([...prev, String(post.id)]))
+        let hash = postFingerprints[post.id]
+        if (!hash) {
+          hash = await hashFingerprint(buildFingerprintPayload(post))
+        }
+        if (hash) {
+          setImportedFingerprints(prev => new Set([...prev, hash]))
+        }
 
         // Small delay between creations to avoid overwhelming the API
         if (i < selectedPosts.length - 1) {
@@ -353,26 +453,47 @@ export function FamileoBrowser() {
   }
 
   const selectedCount = selectedIds.size
+  const normalizeFingerprintText = (value: string) => {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+  const buildFingerprintPayload = (post: FamileoPost) => {
+    const authorKey = normalizeFingerprintText(post.author_email || user?.email || '')
+    const rawDate = post.date ? String(post.date) : ''
+    const parsedDate = rawDate ? new Date(rawDate.replace(' ', 'T')) : new Date('')
+    const dateKey = isNaN(parsedDate.getTime()) ? '' : parsedDate.toISOString().slice(0, 10)
+    const textKey = normalizeFingerprintText(post.text || '')
+    return `${authorKey}|${dateKey}|${textKey}`
+  }
+  const hashFingerprint = async (payload: string) => {
+    if (!payload) return ''
+    if (!window.crypto?.subtle) return ''
+    const data = new TextEncoder().encode(payload)
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+  }
+  const isAlreadyImported = (post: FamileoPost) => {
+    const hash = postFingerprints[post.id]
+    return importedPostIds.has(String(post.id)) || (!!hash && importedFingerprints.has(hash))
+  }
+  const visiblePosts = posts.filter(post => !hideImported || !isAlreadyImported(post))
+  const visibleSelectedCount = visiblePosts.filter(post => selectedIds.has(post.id)).length
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <AppHeader />
+      <div
+        ref={pageRef}
+        className={`flex-1 overflow-y-auto overflow-x-hidden ${!loading && posts.length === 0 ? 'overflow-hidden' : ''}`}
+      >
 
-      {/* Back button and title - sticky under main header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky app-safe-top-14 z-20">
+      {/* Title - sticky under main header */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-20">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleBack}
-              className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation"
-              disabled={bulkCreating}
-            >
-              <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                <path d="M15 19l-7-7 7-7"></path>
-              </svg>
-            </button>
-            <h2 className="text-lg font-semibold text-gray-900">Famileo Extractor</h2>
-          </div>
+          <h2 className="text-lg font-semibold text-gray-900">Famileo Extractor</h2>
           <button
             onClick={handleRefreshSession}
             disabled={refreshing || bulkCreating}
@@ -391,28 +512,29 @@ export function FamileoBrowser() {
       <div className="bg-white border-b border-gray-200 px-4 py-4">
         <div className="flex flex-col gap-4">
           {/* Family selector */}
-          {families.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Family
-              </label>
-              <select
-                value={selectedFamilyId}
-                onChange={(e) => setSelectedFamilyId(e.target.value)}
-                disabled={loading || bulkCreating || loadingFamilies}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 text-gray-900 bg-white"
-              >
-                {families.map((family) => (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Family
+            </label>
+            <select
+              value={selectedFamilyId}
+              onChange={(e) => setSelectedFamilyId(e.target.value)}
+              disabled={loading || bulkCreating || loadingFamilies}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 text-gray-900 bg-white"
+            >
+              {loadingFamilies ? (
+                <option value="">Loading families...</option>
+              ) : families.length === 0 ? (
+                <option value="">No family configured</option>
+              ) : (
+                families.map((family) => (
                   <option key={family.id} value={family.famileo_id}>
                     {family.name}
                   </option>
-                ))}
-              </select>
-            </div>
-          )}
-          {loadingFamilies && (
-            <div className="text-sm text-gray-500">Loading families...</div>
-          )}
+                ))
+              )}
+            </select>
+          </div>
           {!loadingFamilies && families.length === 0 && (
             <div className="text-sm text-amber-600">
               No family configured. Add families in the "families" sheet.
@@ -420,7 +542,7 @@ export function FamileoBrowser() {
           )}
 
           {/* Date filters */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+          <div className="flex gap-2">
             <div className="flex-1 min-w-0">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Start Date
@@ -430,7 +552,7 @@ export function FamileoBrowser() {
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 disabled={loading || bulkCreating}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 text-gray-900 bg-white appearance-none"
+                className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 text-gray-900 bg-white appearance-none"
               />
             </div>
             <div className="flex-1 min-w-0">
@@ -442,9 +564,34 @@ export function FamileoBrowser() {
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 disabled={loading || bulkCreating}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 text-gray-900 bg-white appearance-none"
+                className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 text-gray-900 bg-white appearance-none"
               />
             </div>
+          </div>
+          {/* Author filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Posts
+            </label>
+            <select
+              value={authorFilter}
+              onChange={(e) => setAuthorFilter(e.target.value)}
+              disabled={loading || bulkCreating}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 text-gray-900 bg-white"
+            >
+              <option value="all">Everyone</option>
+              <option value="others">Other users</option>
+              <option value="declared">Declared users</option>
+              {declaredUsers.length > 0 && (
+                <optgroup label="Declared users (specific)">
+                  {declaredUsers.map((user) => (
+                    <option key={user.email} value={user.email}>
+                      {user.pseudo || user.email}{user.famileo_name ? ` — ${user.famileo_name}` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
           </div>
           <button
             onClick={handleGetPosts}
@@ -528,46 +675,122 @@ export function FamileoBrowser() {
                     ({selectedCount} selected)
                   </span>
                 )}
+                {hashingPosts && (
+                  <span className="ml-2 text-gray-400">
+                    • hashing…
+                  </span>
+                )}
+                {authorCounts && (
+                  <span className="ml-2 text-gray-400">
+                    • {authorCounts.declared} declared / {authorCounts.others} others
+                  </span>
+                )}
               </div>
-              <button
-                onClick={handleSelectAll}
-                disabled={bulkCreating}
-                className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-              >
-                {selectedIds.size === posts.length ? 'Deselect All' : 'Select All'}
-              </button>
+              <div className="flex items-center gap-3">
+                <select
+                  value={viewMode}
+                  onChange={(e) => setViewMode(e.target.value as 'card' | 'list' | 'mosaic')}
+                  className="px-2 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg"
+                  aria-label="View mode"
+                >
+                  <option value="card">Card view</option>
+                  <option value="list">List view</option>
+                  <option value="mosaic">Mosaic view</option>
+                </select>
+                {viewMode === 'mosaic' && (
+                  <select
+                    value={mosaicColumns}
+                    onChange={(e) => setMosaicColumns(Number(e.target.value))}
+                    className="px-2 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg"
+                    aria-label="Mosaic columns"
+                  >
+                    <option value={2}>2 cols</option>
+                    <option value={3}>3 cols</option>
+                    <option value={4}>4 cols</option>
+                  </select>
+                )}
+                <button
+                  onClick={handleSelectAll}
+                  disabled={bulkCreating}
+                  className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                >
+                  {visibleSelectedCount === visiblePosts.length ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
             </div>
-            {/* Hide imported toggle */}
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="hideImported"
-                checked={hideImported}
-                onChange={(e) => setHideImported(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              />
-              <label htmlFor="hideImported" className="text-sm text-gray-600">
-                Hide already imported posts ({posts.filter(p => importedPostIds.has(String(p.id))).length})
-              </label>
+          {/* Hide imported toggle */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="hideImported"
+              checked={hideImported}
+              onChange={(e) => setHideImported(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <label htmlFor="hideImported" className="text-sm text-gray-600">
+                Hide already imported posts ({posts.filter(p => isAlreadyImported(p)).length})
+            </label>
+          </div>
+          </div>
+          {viewMode === 'mosaic' ? (
+            <div
+              className="px-4 grid gap-3"
+              style={{ gridTemplateColumns: `repeat(${mosaicColumns}, minmax(0, 1fr))` }}
+            >
+              {posts
+                .filter(post => !hideImported || !isAlreadyImported(post))
+                .map((post) => (
+                <FamileoPostCard
+                  key={post.id}
+                  post={post}
+                  selected={selectedIds.has(post.id)}
+                  onSelectionChange={(selected) => handleSelectionChange(post.id, selected)}
+                  onImageLoaded={handleImageLoaded}
+                  cachedImage={imageCache[post.id]}
+                  alreadyImported={isAlreadyImported(post)}
+                  variant="mosaic"
+                />
+              ))}
             </div>
-          </div>
-          <div className="space-y-4">
-            {posts
-              .filter(post => !hideImported || !importedPostIds.has(String(post.id)))
-              .map((post) => (
-              <FamileoPostCard
-                key={post.id}
-                post={post}
-                selected={selectedIds.has(post.id)}
-                onSelectionChange={(selected) => handleSelectionChange(post.id, selected)}
-                onImageLoaded={handleImageLoaded}
-                cachedImage={imageCache[post.id]}
-                alreadyImported={importedPostIds.has(String(post.id))}
-              />
-            ))}
-          </div>
+          ) : viewMode === 'list' ? (
+            <div className="space-y-3">
+              {posts
+                .filter(post => !hideImported || !isAlreadyImported(post))
+                .map((post) => (
+                <FamileoPostCard
+                  key={post.id}
+                  post={post}
+                  selected={selectedIds.has(post.id)}
+                  onSelectionChange={(selected) => handleSelectionChange(post.id, selected)}
+                  onImageLoaded={handleImageLoaded}
+                  cachedImage={imageCache[post.id]}
+                  alreadyImported={isAlreadyImported(post)}
+                  variant="row"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {posts
+                .filter(post => !hideImported || !isAlreadyImported(post))
+                .map((post) => (
+                <FamileoPostCard
+                  key={post.id}
+                  post={post}
+                  selected={selectedIds.has(post.id)}
+                  onSelectionChange={(selected) => handleSelectionChange(post.id, selected)}
+                  onImageLoaded={handleImageLoaded}
+                  cachedImage={imageCache[post.id]}
+                  alreadyImported={isAlreadyImported(post)}
+                  variant="card"
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
+
+      </div>
 
       {/* Bulk create button - fixed at bottom */}
       {!loading && posts.length > 0 && (

@@ -41,20 +41,29 @@ export function Profile() {
 
   const [pseudo, setPseudo] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [famileoName, setFamileoName] = useState('')
+  const [initialFamileoName, setInitialFamileoName] = useState('')
   const [previewUrl, setPreviewUrl] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [initialPseudo, setInitialPseudo] = useState('')
-  const isDirty = pseudo.trim() !== initialPseudo.trim() || avatarFile !== null
+  const isDirty =
+    pseudo.trim() !== initialPseudo.trim() ||
+    famileoName.trim() !== initialFamileoName.trim() ||
+    avatarFile !== null
 
   useEffect(() => {
     if (profile) {
       setPseudo(profile.pseudo)
       setInitialPseudo(profile.pseudo || '')
+      setFamileoName(profile.famileo_name || '')
+      setInitialFamileoName(profile.famileo_name || '')
       // Use blob URL from context if available, otherwise use Drive URL
       setPreviewUrl(avatarBlobUrl || profile.avatar_url)
     } else if (user) {
       setPseudo(user.name)
       setInitialPseudo(user.name || '')
+      setFamileoName('')
+      setInitialFamileoName('')
     }
     setAvatarFile(null)
   }, [profile, user, avatarBlobUrl])
@@ -77,7 +86,7 @@ export function Profile() {
     setIsSaving(true)
     try {
       const nextPseudo = pseudo.trim()
-      await saveProfile(nextPseudo, avatarFile || undefined)
+      await saveProfile(nextPseudo, famileoName.trim(), avatarFile || undefined)
       setPseudo(nextPseudo)
       setInitialPseudo(nextPseudo)
       setAvatarFile(null)
@@ -150,6 +159,16 @@ export function Profile() {
             value={pseudo}
             onChange={(e) => setPseudo(e.target.value)}
             placeholder="Enter your pseudo"
+          />
+        </div>
+
+        {/* Famileo name */}
+        <div>
+          <Input
+            label="Famileo name"
+            value={famileoName}
+            onChange={(e) => setFamileoName(e.target.value)}
+            placeholder="Exact name used in Famileo"
           />
         </div>
 

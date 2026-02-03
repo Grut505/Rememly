@@ -10,6 +10,30 @@ function handleProfileSave(email, body) {
   return createResponse({ ok: true, data: profile });
 }
 
+function handleUsersList() {
+  const sheet = getUsersSheet();
+  const data = sheet.getDataRange().getValues();
+  const headerMap = getUsersHeaderMap(sheet);
+  const rows = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row || !row[headerMap.email]) continue;
+    rows.push({
+      email: row[headerMap.email],
+      pseudo: headerMap.pseudo === undefined ? '' : row[headerMap.pseudo],
+      famileo_name: headerMap.famileo_name === undefined ? '' : row[headerMap.famileo_name],
+      avatar_url: headerMap.avatar_url === undefined ? '' : row[headerMap.avatar_url],
+      avatar_file_id: headerMap.avatar_file_id === undefined ? '' : row[headerMap.avatar_file_id],
+      status: headerMap.status === undefined ? '' : row[headerMap.status],
+      date_created: headerMap.date_created === undefined ? '' : row[headerMap.date_created],
+      date_updated: headerMap.date_updated === undefined ? '' : row[headerMap.date_updated],
+    });
+  }
+
+  return createResponse({ ok: true, data: { users: rows } });
+}
+
 function getProfileByEmail(email) {
   const user = findUserByEmail(email);
 
@@ -18,6 +42,7 @@ function getProfileByEmail(email) {
     return {
       email: email,
       pseudo: email.split('@')[0],
+      famileo_name: '',
       avatar_url: '',
       avatar_file_id: '',
       avatar_base64: ''
@@ -40,6 +65,7 @@ function getProfileByEmail(email) {
   return {
     email: user.email,
     pseudo: user.pseudo,
+    famileo_name: user.famileo_name || '',
     avatar_url: user.avatar_url,
     avatar_file_id: user.avatar_file_id,
     avatar_base64: avatarBase64
@@ -50,6 +76,7 @@ function saveProfile(email, body) {
   const sheet = getUsersSheet();
   const existingUser = findUserByEmail(email);
   const dateNow = new Date().toISOString();
+  const famileoName = body.famileo_name || '';
 
   // Upload avatar if provided
   let avatarUrl = existingUser ? existingUser.avatar_url : '';
@@ -76,27 +103,33 @@ function saveProfile(email, body) {
     avatarFileId = avatarData.fileId;
   }
 
+  const headerMap = getUsersHeaderMap(sheet);
+
   if (existingUser) {
     // Update existing user
-    sheet.getRange(existingUser.rowIndex, 2).setValue(body.pseudo); // pseudo
-    sheet.getRange(existingUser.rowIndex, 3).setValue(avatarUrl); // avatar_url
-    sheet.getRange(existingUser.rowIndex, 4).setValue(avatarFileId); // avatar_file_id
-    sheet.getRange(existingUser.rowIndex, 6).setValue(dateNow); // date_updated
+    if (headerMap.pseudo !== undefined) sheet.getRange(existingUser.rowIndex, headerMap.pseudo + 1).setValue(body.pseudo);
+    if (headerMap.famileo_name !== undefined) sheet.getRange(existingUser.rowIndex, headerMap.famileo_name + 1).setValue(famileoName);
+    if (headerMap.avatar_url !== undefined) sheet.getRange(existingUser.rowIndex, headerMap.avatar_url + 1).setValue(avatarUrl);
+    if (headerMap.avatar_file_id !== undefined) sheet.getRange(existingUser.rowIndex, headerMap.avatar_file_id + 1).setValue(avatarFileId);
+    if (headerMap.date_updated !== undefined) sheet.getRange(existingUser.rowIndex, headerMap.date_updated + 1).setValue(dateNow);
   } else {
     // Create new user
-    sheet.appendRow([
+    appendUserRow(sheet, {
       email,
-      body.pseudo,
-      avatarUrl,
-      avatarFileId,
-      dateNow,
-      dateNow
-    ]);
+      pseudo: body.pseudo,
+      famileo_name: famileoName,
+      avatar_url: avatarUrl,
+      avatar_file_id: avatarFileId,
+      status: 'ACTIVE',
+      date_created: dateNow,
+      date_updated: dateNow,
+    });
   }
 
   return {
     email: email,
     pseudo: body.pseudo,
+    famileo_name: famileoName,
     avatar_url: avatarUrl,
     avatar_file_id: avatarFileId
   };

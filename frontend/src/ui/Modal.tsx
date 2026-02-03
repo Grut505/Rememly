@@ -26,7 +26,7 @@ export function Modal({ isOpen, onClose, title, children, align = 'bottom' }: Mo
   const modalRadius = align === 'center' ? 'rounded-2xl' : 'rounded-t-2xl sm:rounded-2xl'
 
   return (
-    <div className={`fixed inset-0 z-50 flex ${alignmentClass} justify-center`}>
+    <div className={`fixed inset-0 z-[60] flex ${alignmentClass} justify-center`}>
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black bg-opacity-50"

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthContext'
 import { ProfileProvider } from './contexts/ProfileContext'
@@ -23,6 +23,33 @@ import { UnsavedChangesGuard } from './components/UnsavedChangesGuard'
 import { BottomNav } from './ui/BottomNav'
 
 function App() {
+  const [landscapeBlocked, setLandscapeBlocked] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const media = window.matchMedia('(orientation: landscape)')
+    const update = () => {
+      const isLandscape = media.matches
+      const isSmallScreen = window.innerWidth <= 1024
+      setLandscapeBlocked(isLandscape && isSmallScreen)
+    }
+    update()
+    if (media.addEventListener) {
+      media.addEventListener('change', update)
+    } else {
+      media.addListener(update)
+    }
+    window.addEventListener('resize', update)
+    return () => {
+      if (media.removeEventListener) {
+        media.removeEventListener('change', update)
+      } else {
+        media.removeListener(update)
+      }
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     const nav = window.navigator as Navigator & { standalone?: boolean }
@@ -83,87 +110,100 @@ function App() {
         <UpdatePrompt />
         <PdfGenerationNotification />
         <UnsavedChangesGuard />
-        <div className="min-h-screen max-w-content mx-auto bg-white">
-          <Routes>
-          <Route path="/auth" element={<GoogleAuth />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Timeline />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/editor"
-            element={
-              <ProtectedRoute>
-                <ArticleEditor />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/editor/:id"
-            element={
-              <ProtectedRoute>
-                <ArticleEditor />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/stats"
-            element={
-              <ProtectedRoute>
-                <Statistics />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/photo-assembly"
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<LoadingScreen message="Loading photo assembly..." />}>
-                  <PhotoAssemblyScreen />
-                </Suspense>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/famileo"
-            element={
-              <ProtectedRoute>
-                <FamileoBrowser />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/pdf-export"
-            element={
-              <ProtectedRoute>
-                <PdfExport />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <Settings />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </div>
-      <BottomNav />
+        {landscapeBlocked ? (
+          <div className="min-h-screen bg-white flex items-center justify-center text-center px-6">
+            <div className="max-w-md">
+              <div className="text-lg font-semibold text-gray-900">Not compatible with landscape mode</div>
+              <div className="text-sm text-gray-500 mt-2">Please rotate your device to portrait.</div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="min-h-screen bg-white">
+              <div className="max-w-content mx-auto w-full">
+                <Routes>
+                  <Route path="/auth" element={<GoogleAuth />} />
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute>
+                        <Timeline />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/editor"
+                    element={
+                      <ProtectedRoute>
+                        <ArticleEditor />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/editor/:id"
+                    element={
+                      <ProtectedRoute>
+                        <ArticleEditor />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/stats"
+                    element={
+                      <ProtectedRoute>
+                        <Statistics />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/photo-assembly"
+                    element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<LoadingScreen message="Loading photo assembly..." />}>
+                          <PhotoAssemblyScreen />
+                        </Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile"
+                    element={
+                      <ProtectedRoute>
+                        <Profile />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/famileo"
+                    element={
+                      <ProtectedRoute>
+                        <FamileoBrowser />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/pdf-export"
+                    element={
+                      <ProtectedRoute>
+                        <PdfExport />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ProtectedRoute>
+                        <Settings />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </div>
+            </div>
+            <BottomNav />
+          </>
+        )}
       </ProfileProvider>
     </AuthProvider>
   )

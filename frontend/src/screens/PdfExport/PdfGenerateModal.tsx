@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '../../ui/Button'
 import { articlesApi } from '../../api/articles'
 import { Article } from '../../api/types'
 import { getMonthYear } from '../../utils/date'
 import { usePdfGenerationStore } from '../../stores/pdfGenerationStore'
 import type { PdfListItem } from '../../api/pdf'
+import { pdfApi } from '../../api/pdf'
+import { configApi } from '../../api/config'
 
 interface PdfGenerateModalProps {
   isOpen: boolean
@@ -15,7 +17,9 @@ interface PdfGenerateModalProps {
 interface MonthCount {
   key: string
   label: string
-  count: number
+  activeCount: number
+  draftCount: number
+  duplicateCount: number
 }
 
 type Step = 'dates' | 'preview' | 'options'
@@ -40,8 +44,16 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const [mosaicLayout, setMosaicLayout] = useState<'full' | 'centered'>('full')
   const [showSeasonalFruits, setShowSeasonalFruits] = useState(true)
   const [maxMosaicPhotos, setMaxMosaicPhotos] = useState<number>(0) // 0 = all photos
+  const [coverStyle, setCoverStyle] = useState<'mosaic' | 'masked-title'>('mosaic')
   const [autoMerge, setAutoMerge] = useState(false)
   const [cleanChunksAfterMerge, setCleanChunksAfterMerge] = useState(false)
+  const [familyName, setFamilyName] = useState('')
+  const [coverTitle, setCoverTitle] = useState('')
+  const [coverSubtitle, setCoverSubtitle] = useState('')
+  const [configLoading, setConfigLoading] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewFileId, setPreviewFileId] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   const reset = () => {
     setStep('dates')
@@ -53,11 +65,18 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     setMosaicLayout('full')
     setShowSeasonalFruits(true)
     setMaxMosaicPhotos(0)
+    setCoverStyle('mosaic')
     setAutoMerge(false)
     setCleanChunksAfterMerge(false)
+    setFamilyName('')
+    setCoverTitle('')
+    setCoverSubtitle('')
   }
 
   const handleClose = () => {
+    if (previewUrl || previewFileId) {
+      void handleClosePreview()
+    }
     reset()
     onClose()
   }
@@ -86,23 +105,40 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
           to: endDate,
           limit: '100',
           cursor: cursor || undefined,
-          status_filter: 'active',
+          status_filter: 'all',
         })
         allArticles.push(...response.items)
         cursor = response.next_cursor
       } while (cursor)
 
       // Group by month
-      const monthMap = new Map<string, { label: string; count: number }>()
+      const monthMap = new Map<string, { label: string; activeCount: number; draftCount: number; duplicateCount: number }>()
+      let activeTotal = 0
+      let nonDeletedTotal = 0
 
       for (const article of allArticles) {
+        if (article.status === 'DELETED') continue
+        nonDeletedTotal++
         const key = article.date.substring(0, 7) // YYYY-MM
         const label = getMonthYear(article.date)
+        const isActive = article.status === 'ACTIVE'
+        const isDraft = article.status === 'DRAFT'
+        const isDuplicate = article.is_duplicate === true
 
-        if (monthMap.has(key)) {
-          monthMap.get(key)!.count++
-        } else {
-          monthMap.set(key, { label, count: 1 })
+        if (!monthMap.has(key)) {
+          monthMap.set(key, { label, activeCount: 0, draftCount: 0, duplicateCount: 0 })
+        }
+
+        const bucket = monthMap.get(key)!
+        if (isActive) {
+          bucket.activeCount++
+          activeTotal++
+        }
+        if (isDraft) {
+          bucket.draftCount++
+        }
+        if (isDuplicate) {
+          bucket.duplicateCount++
         }
       }
 
@@ -112,18 +148,23 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         .map(([key, value]) => ({
           key,
           label: value.label,
-          count: value.count,
+          activeCount: value.activeCount,
+          draftCount: value.draftCount,
+          duplicateCount: value.duplicateCount,
         }))
 
       setMonthCounts(sorted)
-      setTotalArticles(allArticles.length)
-      setMaxMosaicPhotos(allArticles.length) // Default to all photos
+      setTotalArticles(activeTotal)
+      setMaxMosaicPhotos(activeTotal) // Default to all active photos
 
-      if (allArticles.length === 0) {
+      if (nonDeletedTotal === 0) {
         setError('No articles found for this period')
-      } else {
-        setStep('preview')
+        return
       }
+      if (activeTotal === 0) {
+        setError('No active articles found for this period')
+      }
+      setStep('preview')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error while loading')
     } finally {
@@ -137,6 +178,10 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       mosaic_layout: mosaicLayout,
       show_seasonal_fruits: showSeasonalFruits,
       max_mosaic_photos: maxMosaicPhotos > 0 ? maxMosaicPhotos : undefined,
+      cover_style: coverStyle,
+      family_name: familyName.trim() || undefined,
+      cover_title: coverTitle.trim() || undefined,
+      cover_subtitle: coverSubtitle.trim() || undefined,
       auto_merge: autoMerge,
       clean_chunks: autoMerge ? cleanChunksAfterMerge : undefined,
     })
@@ -146,6 +191,114 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     onClose()
     onComplete(job)
   }
+
+  const handleOpenPreview = async () => {
+    if (!startDate || !endDate) {
+      setError('Please select a start and end date')
+      return
+    }
+    setPreviewLoading(true)
+    setError(null)
+    try {
+      const response = await pdfApi.previewCover({
+        from: startDate,
+        to: endDate,
+        options: {
+          max_mosaic_photos: maxMosaicPhotos > 0 ? maxMosaicPhotos : undefined,
+          cover_style: coverStyle,
+          family_name: familyName.trim() || undefined,
+          cover_title: coverTitle.trim() || undefined,
+          cover_subtitle: coverSubtitle.trim() || undefined,
+        },
+      })
+      setPreviewFileId(response.file_id)
+      const content = await pdfApi.previewCoverContent(response.file_id)
+      const byteCharacters = atob(content.base64)
+      const byteArrays: Uint8Array[] = []
+      const sliceSize = 1024
+      for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+        const slice = byteCharacters.slice(offset, offset + sliceSize)
+        const byteNumbers = new Array(slice.length)
+        for (let i = 0; i < slice.length; i++) {
+          byteNumbers[i] = slice.charCodeAt(i)
+        }
+        byteArrays.push(new Uint8Array(byteNumbers))
+      }
+      const blob = new Blob(byteArrays, { type: content.mime_type || 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      setPreviewUrl(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate cover preview')
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  const handleClosePreview = async () => {
+    const fileId = previewFileId
+    const url = previewUrl
+    setPreviewUrl(null)
+    setPreviewFileId(null)
+    if (url && url.startsWith('blob:')) {
+      URL.revokeObjectURL(url)
+    }
+    if (fileId) {
+      try {
+        await pdfApi.deleteCoverPreview(fileId)
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0
+    const previous = {
+      overflow: document.body.style.overflow,
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+    }
+    document.body.style.overflow = 'hidden'
+    document.body.style.position = 'fixed'
+    document.body.style.top = `-${scrollY}px`
+    document.body.style.width = '100%'
+    const loadConfig = async () => {
+      setConfigLoading(true)
+      try {
+        const [familyResult, titleResult, subtitleResult] = await Promise.all([
+          configApi.get('family_name'),
+          configApi.get('pdf_cover_title'),
+          configApi.get('pdf_cover_subtitle'),
+        ])
+        if (cancelled) return
+        setFamilyName(familyResult.value || '')
+        setCoverTitle(titleResult.value || '')
+        setCoverSubtitle(subtitleResult.value || '')
+      } catch {
+        if (!cancelled) {
+          setFamilyName('')
+          setCoverTitle('')
+          setCoverSubtitle('')
+        }
+      } finally {
+        if (!cancelled) {
+          setConfigLoading(false)
+        }
+      }
+    }
+    loadConfig()
+    return () => {
+      cancelled = true
+      document.body.style.overflow = previous.overflow
+      document.body.style.position = previous.position
+      document.body.style.top = previous.top
+      document.body.style.width = previous.width
+      window.scrollTo(0, scrollY)
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -157,8 +310,34 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         onClick={handleClose}
       />
 
+      {previewUrl && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={handleClosePreview} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-4xl h-[85vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Cover preview</h3>
+              <button
+                onClick={handleClosePreview}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 bg-gray-50">
+              <iframe
+                title="Cover preview"
+                src={previewUrl}
+                className="w-full h-full"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal */}
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col mx-2">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">
@@ -179,7 +358,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4">
           {/* Error message */}
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -190,7 +369,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
           {/* Step: Dates */}
           {step === 'dates' && (
             <div className="space-y-4">
-              <div>
+              <div className="min-w-0">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Start date
                 </label>
@@ -207,10 +386,10 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                   }}
                   disabled={loading}
                   max={endDate || undefined}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                  className="block w-full min-w-0 max-w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   End date
                 </label>
@@ -227,7 +406,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                   }}
                   disabled={loading}
                   min={startDate || undefined}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                  className="block w-full min-w-0 max-w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
                 />
               </div>
             </div>
@@ -239,8 +418,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
               {/* Summary */}
               <div className="bg-primary-50 rounded-lg p-4">
                 <p className="text-primary-800">
-                  <span className="font-semibold text-primary-900">{totalArticles}</span> article{totalArticles > 1 ? 's' : ''}
-                  {' '}sur{' '}
+                  <span className="font-semibold text-primary-900">{totalArticles}</span> active article{totalArticles > 1 ? 's' : ''}
+                  {' '}across{' '}
                   <span className="font-semibold text-primary-900">{monthCounts.length}</span> mois
                 </p>
               </div>
@@ -250,12 +429,17 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                 <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
                   <h4 className="text-sm font-medium text-gray-700">Monthly breakdown</h4>
                 </div>
-                <ul className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                <ul className="divide-y divide-gray-100 max-h-[40vh] overflow-y-auto overscroll-contain">
                   {monthCounts.map((month) => (
-                    <li key={month.key} className="px-3 py-2 flex justify-between items-center">
-                      <span className="text-sm text-gray-700">{month.label}</span>
-                      <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-medium">
-                        {month.count}
+                    <li key={month.key} className="px-3 py-2 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm text-gray-700">{month.label}</div>
+                        <div className="text-xs text-gray-500">
+                          Draft {month.draftCount} · Duplicate {month.duplicateCount}
+                        </div>
+                      </div>
+                      <span className="bg-primary-100 text-primary-700 px-2.5 py-0.5 rounded text-xs font-medium whitespace-nowrap">
+                        Active {month.activeCount}
                       </span>
                     </li>
                   ))}
@@ -267,27 +451,166 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
           {/* Step: Options */}
           {step === 'options' && (
             <div className="space-y-5">
-              {/* Mosaic photo limit */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cover photos
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={1}
-                    max={totalArticles}
-                    value={maxMosaicPhotos || totalArticles}
-                    onChange={(e) => setMaxMosaicPhotos(parseInt(e.target.value))}
-                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
-                  />
-                  <span className="text-sm font-medium text-gray-700 min-w-12 text-right">
-                    {maxMosaicPhotos || totalArticles}
-                  </span>
+              {/* Summary reminder */}
+              <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
+                <strong>{totalArticles}</strong> articles from{' '}
+                <strong>{new Date(startDate).toLocaleDateString('fr-FR')}</strong> to{' '}
+                <strong>{new Date(endDate).toLocaleDateString('fr-FR')}</strong>
+              </div>
+
+              <div className="border border-gray-200 rounded-lg bg-gray-50/60 p-4 space-y-4">
+                <div className="text-sm font-medium text-gray-700">Cover</div>
+
+                {/* Mosaic photo limit */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cover photos
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={1}
+                      max={totalArticles}
+                      value={maxMosaicPhotos || totalArticles}
+                      onChange={(e) => setMaxMosaicPhotos(parseInt(e.target.value))}
+                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                    />
+                    <span className="text-sm font-medium text-gray-700 min-w-12 text-right">
+                      {maxMosaicPhotos || totalArticles}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Number of photos in the cover mosaic
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Number of photos in the cover mosaic
-                </p>
+
+                {/* Cover style */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cover style
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setCoverStyle('mosaic')}
+                      className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                        coverStyle === 'mosaic'
+                          ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                          : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      Mosaic
+                    </button>
+                    <button
+                      onClick={() => setCoverStyle('masked-title')}
+                      className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                        coverStyle === 'masked-title'
+                          ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                          : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      Masked title
+                    </button>
+                  </div>
+                </div>
+
+                {/* Cover text overrides */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Cover text
+                    </label>
+                    {configLoading && (
+                      <span className="text-xs text-gray-400">Loading defaults...</span>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      Family name (vertical)
+                    </label>
+                    <input
+                      type="text"
+                      value={familyName}
+                      onChange={(e) => setFamilyName(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="Famille Dupont"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      Title
+                    </label>
+                    <input
+                      type="text"
+                      value={coverTitle}
+                      onChange={(e) => setCoverTitle(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="Memory Book"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      Subtitle
+                    </label>
+                    <input
+                      type="text"
+                      value={coverSubtitle}
+                      onChange={(e) => setCoverSubtitle(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="Du 01/01/2024 au 31/12/2024"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Defaults are pulled from Settings and can be overridden per PDF.
+                  </p>
+                </div>
+
+                <div>
+                  {!previewUrl ? (
+                    <Button
+                      variant="secondary"
+                      onClick={handleOpenPreview}
+                      disabled={previewLoading || totalArticles === 0}
+                      fullWidth
+                    >
+                      {previewLoading ? (
+                        <span className="inline-flex items-center gap-2">
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Generating cover preview...
+                        </span>
+                      ) : (
+                        'Preview cover'
+                      )}
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <a
+                        href={previewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-primary-200 bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 transition-colors"
+                      >
+                        Open cover PDF
+                        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                          <path d="M14 3h7v7m0-7L10 14m-4 7h7a2 2 0 002-2v-7"></path>
+                        </svg>
+                      </a>
+                      <button
+                        onClick={handleClosePreview}
+                        className="w-full text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Close preview
+                      </button>
+                    </div>
+                  )}
+                  {totalArticles === 0 && (
+                    <p className="text-xs text-amber-600 mt-2">
+                      No active articles in this range.
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Month divider layout */}
@@ -362,12 +685,6 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                 </label>
               )}
 
-              {/* Summary reminder */}
-              <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
-                <strong>{totalArticles}</strong> articles from{' '}
-                <strong>{new Date(startDate).toLocaleDateString('fr-FR')}</strong> to{' '}
-                <strong>{new Date(endDate).toLocaleDateString('fr-FR')}</strong>
-              </div>
             </div>
           )}
         </div>
@@ -401,7 +718,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
               <Button variant="secondary" onClick={() => setStep('dates')} fullWidth>
                 Back
               </Button>
-              <Button onClick={() => setStep('options')} fullWidth>
+              <Button onClick={() => setStep('options')} disabled={totalArticles === 0} fullWidth>
                 Next
               </Button>
             </>

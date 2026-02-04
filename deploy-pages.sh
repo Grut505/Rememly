@@ -97,3 +97,71 @@ git push -f origin main
 cd "$SCRIPT_DIR"
 
 echo "✅ Déploiement déclenché via GitHub Pages"
+
+echo "⏳ Suivi du déploiement GitHub Pages..."
+
+GITHUB_API="https://api.github.com/repos/${GITHUB_PAGES_REPO}/actions/runs"
+
+if ! command -v curl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+  echo "⚠️  curl/jq non disponibles, suivi automatique impossible."
+  echo "   Vérifiez: https://github.com/${GITHUB_PAGES_REPO}/actions"
+  exit 0
+fi
+
+get_latest_run() {
+  curl -s "${GITHUB_API}?per_page=1" | jq -r '.workflow_runs[0].id // empty'
+}
+
+get_run_status() {
+  local run_id=$1
+  curl -s "${GITHUB_API}/${run_id}" | jq -r '.status // empty'
+}
+
+get_run_conclusion() {
+  local run_id=$1
+  curl -s "${GITHUB_API}/${run_id}" | jq -r '.conclusion // empty'
+}
+
+sleep 3
+RUN_ID=$(get_latest_run)
+
+if [ -z "$RUN_ID" ]; then
+  echo "⚠️  Impossible de récupérer le run ID"
+  echo "   Vérifiez manuellement: https://github.com/${GITHUB_PAGES_REPO}/actions"
+  exit 0
+fi
+
+echo "   Run ID: $RUN_ID"
+echo "   URL: https://github.com/${GITHUB_PAGES_REPO}/actions/runs/${RUN_ID}"
+echo "🔄 Suivi du workflow en cours..."
+
+SPINNER=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+SPIN_IDX=0
+ELAPSED=0
+MAX_WAIT=300
+
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+  STATUS=$(get_run_status "$RUN_ID")
+
+  if [ "$STATUS" = "completed" ]; then
+    CONCLUSION=$(get_run_conclusion "$RUN_ID")
+    echo ""
+    if [ "$CONCLUSION" = "success" ]; then
+      echo "✅ Déploiement GitHub Pages terminé avec succès !"
+      exit 0
+    else
+      echo "❌ Déploiement échoué: $CONCLUSION"
+      echo "   Vérifiez: https://github.com/${GITHUB_PAGES_REPO}/actions/runs/${RUN_ID}"
+      exit 1
+    fi
+  fi
+
+  printf "\r   ${SPINNER[$SPIN_IDX]} En cours... (%ds)" $ELAPSED
+  SPIN_IDX=$(( (SPIN_IDX + 1) % 10 ))
+  sleep 2
+  ELAPSED=$((ELAPSED + 2))
+done
+
+echo ""
+echo "⚠️  Déploiement toujours en cours après ${MAX_WAIT}s"
+echo "   Vérifiez: https://github.com/${GITHUB_PAGES_REPO}/actions/runs/${RUN_ID}"

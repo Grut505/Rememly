@@ -87,43 +87,41 @@ export function BottomNav() {
   return (
     <>
       <div className={isStandalone ? 'h-20' : 'h-16'} aria-hidden="true" />
-      <div className="fixed bottom-0 left-0 right-0 z-40">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-primary-600 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
         <div className="max-w-content mx-auto w-full">
-          <div className="bg-primary-600 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
-            <div className={`flex items-center justify-between px-2 ${isStandalone ? 'pt-0.5 pb-6' : 'py-1'}`}>
-            {NAV_ITEMS.map((item) => {
-              const isActive = location.pathname === item.path
-              const handleClick = () => {
-                if (location.pathname === item.path) return
-                if (hasUnsavedChanges) {
-                  setPendingNavigationPath(item.path)
-                  return
-                }
-                navigate(item.path)
+          <div className={`flex items-center justify-between px-2 ${isStandalone ? 'pt-0.5 pb-6' : 'py-1'}`}>
+          {NAV_ITEMS.map((item) => {
+            const isActive = location.pathname === item.path
+            const handleClick = () => {
+              if (location.pathname === item.path) return
+              if (hasUnsavedChanges) {
+                setPendingNavigationPath(item.path)
+                return
               }
+              navigate(item.path)
+            }
 
-              return (
-                <button
-                  key={item.path}
-                  onClick={handleClick}
-                className={`flex flex-col items-center justify-center px-3 py-1 rounded-xl transition-all ${
-                  isActive
-                    ? 'text-white'
-                    : 'text-primary-100 hover:text-white'
-                }`}
-                aria-label={item.label}
-              >
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                  isActive ? 'bg-white shadow-sm' : 'bg-transparent'
-                }`}>
-                  <span className={`${isActive ? 'text-primary-700' : 'text-primary-100'}`}>
-                    {item.icon}
-                  </span>
-                </div>
-              </button>
-            )
-          })}
-            </div>
+            return (
+              <button
+                key={item.path}
+                onClick={handleClick}
+              className={`flex flex-col items-center justify-center px-3 py-1 rounded-xl transition-all ${
+                isActive
+                  ? 'text-white'
+                  : 'text-primary-100 hover:text-white'
+              }`}
+              aria-label={item.label}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                isActive ? 'bg-white shadow-sm' : 'bg-transparent'
+              }`}>
+                <span className={`${isActive ? 'text-primary-700' : 'text-primary-100'}`}>
+                  {item.icon}
+                </span>
+              </div>
+            </button>
+          )
+        })}
           </div>
         </div>
       </div>

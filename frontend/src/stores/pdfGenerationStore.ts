@@ -24,6 +24,10 @@ interface PdfGenerationState {
     mosaic_layout?: 'full' | 'centered'
     show_seasonal_fruits?: boolean
     max_mosaic_photos?: number
+    cover_style?: 'mosaic' | 'masked-title'
+    family_name?: string
+    cover_title?: string
+    cover_subtitle?: string
     auto_merge?: boolean
     clean_chunks?: boolean
   }, onComplete?: () => void) => Promise<PdfListItem | null>

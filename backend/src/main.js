@@ -40,6 +40,17 @@ function doGet(e) {
       };
       return handlePdfMergeCancel(body);
     }
+    if (path === 'pdf/cover-preview-content') {
+      const token = getAuthToken(e);
+      const authResult = checkAuth(token);
+      if (!authResult.ok) {
+        return createResponse({ ok: false, error: authResult.error });
+      }
+      const body = {
+        file_id: params.file_id,
+      };
+      return handlePdfCoverPreviewContent(body);
+    }
 
     return ContentService.createTextOutput(
       JSON.stringify({ error: 'Use POST requests' })
@@ -128,6 +139,15 @@ function doPost(e) {
 
       case 'pdf/create':
         return handlePdfCreate(body, authResult.user);
+
+      case 'pdf/cover-preview':
+        return handlePdfCoverPreview(body, authResult.user);
+
+      case 'pdf/cover-preview-delete':
+        return handlePdfCoverPreviewDelete(body);
+
+      case 'pdf/cover-preview-content':
+        return handlePdfCoverPreviewContent(body);
 
       case 'pdf/process':
         return handlePdfProcess(params);

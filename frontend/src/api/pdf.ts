@@ -5,6 +5,10 @@ export interface PdfOptions {
   mosaic_layout?: 'full' | 'centered'
   show_seasonal_fruits?: boolean
   max_mosaic_photos?: number
+  cover_style?: 'mosaic' | 'masked-title'
+  family_name?: string
+  cover_title?: string
+  cover_subtitle?: string
   auto_merge?: boolean
   clean_chunks?: boolean
 }
@@ -46,9 +50,28 @@ export interface PdfListResponse {
   authors: string[]
 }
 
+export interface CoverPreviewResponse {
+  file_id: string
+  url: string
+}
+
+export interface CoverPreviewContentResponse {
+  mime_type: string
+  base64: string
+}
+
 export const pdfApi = {
   create: (payload: CreatePdfPayload) =>
     apiClient.post<CreatePdfResponse>('pdf/create', payload),
+
+  previewCover: (payload: CreatePdfPayload) =>
+    apiClient.post<CoverPreviewResponse>('pdf/cover-preview', payload),
+
+  previewCoverContent: (fileId: string) =>
+    apiClient.post<CoverPreviewContentResponse>('pdf/cover-preview-content', { file_id: fileId }),
+
+  deleteCoverPreview: (fileId: string) =>
+    apiClient.post<{ deleted: boolean }>('pdf/cover-preview-delete', { file_id: fileId }),
 
   // Fire and forget - triggers the actual PDF generation
   process: (jobId: string) =>

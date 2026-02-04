@@ -57,8 +57,11 @@ export function Timeline() {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [pullDistance, setPullDistance] = useState(0)
+  const [isPulling, setIsPulling] = useState(false)
   const touchStartYRef = useRef<number | null>(null)
-  const pullThreshold = 60
+  const pullThreshold = 70
+  const pullStartThreshold = 14
+  const pullMax = 120
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -256,23 +259,32 @@ export function Timeline() {
     const scrollTop = document.scrollingElement?.scrollTop ?? window.scrollY
     if (scrollTop <= 0 && !isRefreshing && !isLoading) {
       touchStartYRef.current = e.touches[0].clientY
+      setIsPulling(false)
     }
   }
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartYRef.current === null || isRefreshing || isLoading) return
+    if (isRefreshing || isLoading) return
     const scrollTop = document.scrollingElement?.scrollTop ?? window.scrollY
     if (scrollTop > 0) {
       setPullDistance(0)
+      setIsPulling(false)
       touchStartYRef.current = null
       return
     }
-    const delta = e.touches[0].clientY - touchStartYRef.current
-    if (delta > 0) {
-      setPullDistance(Math.min(delta, 80))
-    } else {
-      setPullDistance(0)
+    if (touchStartYRef.current === null) {
+      touchStartYRef.current = e.touches[0].clientY
     }
+    const delta = e.touches[0].clientY - touchStartYRef.current
+    if (delta <= pullStartThreshold) {
+      setPullDistance(0)
+      setIsPulling(false)
+      return
+    }
+    const adjusted = delta - pullStartThreshold
+    const rubberBand = (pullMax * adjusted) / (adjusted + pullMax)
+    setPullDistance(Math.min(pullStartThreshold + rubberBand, pullMax))
+    setIsPulling(true)
   }
 
   const handleTouchEnd = () => {
@@ -280,6 +292,7 @@ export function Timeline() {
       refreshArticles()
     }
     setPullDistance(0)
+    setIsPulling(false)
     touchStartYRef.current = null
   }
 
@@ -514,13 +527,19 @@ export function Timeline() {
       <div className="h-14" />
 
       {/* Timeline */}
-      <div className="flex-1 pb-20">
+      <div className="flex-1 pb-20 relative">
         {(pullDistance > 0 || isRefreshing) && (
           <div
-            className="flex items-center justify-center"
-            style={{ height: `${Math.max(pullDistance, 64)}px` }}
+            className="absolute left-0 right-0 flex items-center justify-center pointer-events-none"
+            style={{
+              top: 0,
+              transform: `translateY(${Math.min(pullDistance, 80)}px)`,
+              transition: isPulling ? 'none' : 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 200ms ease',
+              opacity: Math.min(1, pullDistance / 40),
+              zIndex: 5,
+            }}
           >
-            <div className="flex items-center gap-3 bg-white/80 backdrop-blur px-3 py-2 rounded-full shadow-sm border border-gray-200">
+            <div className="flex items-center gap-3 bg-white px-3 py-2 rounded-full shadow-sm border border-gray-200">
               <div className="relative w-6 h-6">
                 <svg className="absolute inset-0 w-6 h-6 text-gray-200" viewBox="0 0 36 36">
                   <path

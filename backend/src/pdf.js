@@ -103,6 +103,10 @@ function handlePdfCreate(body, user) {
     mosaicLayout: body.options?.mosaic_layout || 'full',
     showSeasonalFruits: body.options?.show_seasonal_fruits !== false,
     maxMosaicPhotos: body.options?.max_mosaic_photos || undefined,
+    coverStyle: body.options?.cover_style || 'mosaic',
+    familyName: body.options?.family_name || undefined,
+    coverTitle: body.options?.cover_title || undefined,
+    coverSubtitle: body.options?.cover_subtitle || undefined,
     autoMerge: body.options?.auto_merge === true,
     cleanChunks: body.options?.clean_chunks === true
   }));
@@ -118,6 +122,94 @@ function handlePdfCreate(body, user) {
       progress_message: 'Pending...',
     },
   });
+}
+
+function handlePdfCoverPreview(body, user) {
+  try {
+    if (!body?.from || !body?.to) {
+      return createResponse({
+        ok: false,
+        error: { code: 'INVALID_PARAMS', message: 'from and to are required' },
+      });
+    }
+
+    const from = body.from;
+    const to = body.to;
+    const options = body.options || {};
+    const articles = getArticlesInRange(from, to);
+
+    const coverHtml = generateCoverOnlyHtml(articles, from, to, {
+      maxMosaicPhotos: options.max_mosaic_photos,
+      coverStyle: options.cover_style || 'mosaic',
+      familyName: options.family_name,
+      coverTitle: options.cover_title,
+      coverSubtitle: options.cover_subtitle,
+    });
+
+    const coverPdf = convertHtmlToPdf(coverHtml);
+    const fileName = `CoverPreview_${from}-${to}_${formatTimestamp()}.pdf`;
+    const pdfData = savePdfToFolder(coverPdf, fileName);
+
+    return createResponse({
+      ok: true,
+      data: {
+        file_id: pdfData.fileId,
+        url: pdfData.url,
+      },
+    });
+  } catch (e) {
+    return createResponse({
+      ok: false,
+      error: { code: 'PREVIEW_FAILED', message: String(e) },
+    });
+  }
+}
+
+function handlePdfCoverPreviewDelete(body) {
+  try {
+    const fileId = body?.file_id;
+    if (!fileId) {
+      return createResponse({
+        ok: false,
+        error: { code: 'INVALID_PARAMS', message: 'file_id is required' },
+      });
+    }
+    const file = DriveApp.getFileById(fileId);
+    file.setTrashed(true);
+    return createResponse({ ok: true, data: { deleted: true } });
+  } catch (e) {
+    return createResponse({
+      ok: false,
+      error: { code: 'DELETE_FAILED', message: String(e) },
+    });
+  }
+}
+
+function handlePdfCoverPreviewContent(body) {
+  try {
+    const fileId = body?.file_id;
+    if (!fileId) {
+      return createResponse({
+        ok: false,
+        error: { code: 'INVALID_PARAMS', message: 'file_id is required' },
+      });
+    }
+    const file = DriveApp.getFileById(fileId);
+    const blob = file.getBlob();
+    const base64 = Utilities.base64Encode(blob.getBytes());
+    return createResponse({
+      ok: true,
+      data: {
+        mime_type: blob.getContentType() || 'application/pdf',
+        base64,
+      },
+    });
+  } catch (e) {
+    return createResponse({
+      ok: false,
+      error: { code: 'CONTENT_FAILED', message: String(e) },
+    });
+  }
 }
 
 // Called by frontend "fire and forget" to trigger the batch processing
@@ -305,7 +397,11 @@ async function processNextPdfChunk(jobId) {
     const optionsJson = props.getProperty('PDF_OPTIONS_' + jobId);
     const pdfOptions = optionsJson ? JSON.parse(optionsJson) : {
       mosaicLayout: 'full',
-      showSeasonalFruits: true
+      showSeasonalFruits: true,
+      coverStyle: 'mosaic',
+      familyName: undefined,
+      coverTitle: undefined,
+      coverSubtitle: undefined,
     };
 
     const monthsFr = [
@@ -338,7 +434,7 @@ async function processNextPdfChunk(jobId) {
         articles,
         job.date_from,
         job.date_to,
-        pdfOptions.maxMosaicPhotos
+        pdfOptions
       );
       const coverPdf = convertHtmlToPdf(coverHtml);
 
@@ -1286,7 +1382,18 @@ function groupArticlesByMonth(articles) {
 /**
  * Generate HTML for cover page only
  */
-function generateCoverOnlyHtml(articles, from, to, maxMosaicPhotos) {
+function generateCoverOnlyHtml(articles, from, to, options = {}) {
+  const {
+    maxMosaicPhotos,
+    coverStyle,
+    familyName,
+    coverTitle,
+    coverSubtitle,
+  } = options || {};
+  const style = coverStyle || 'mosaic';
+  const coverHtml = style === 'masked-title'
+    ? generateCoverMaskedMosaic(articles, from, to, maxMosaicPhotos, { familyName, coverTitle, coverSubtitle })
+    : generateCoverMosaic(articles, from, to, maxMosaicPhotos, { familyName });
   return `
 <!DOCTYPE html>
 <html>
@@ -1297,7 +1404,7 @@ ${getPdfStyles()}
   </style>
 </head>
 <body>
-  ${generateCoverMosaic(articles, from, to, maxMosaicPhotos)}
+  ${coverHtml}
 </body>
 </html>
 `;
@@ -1424,13 +1531,16 @@ function getPdfStyles() {
     }
 
     .cover h1 {
-      font-size: 36pt;
-      margin-bottom: 1cm;
+      font-size: 40pt;
+      margin-bottom: 0.9cm;
+      font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+      letter-spacing: 0.02em;
     }
 
     .cover .dates {
-      font-size: 18pt;
+      font-size: 20pt;
       color: #666;
+      font-family: "Optima", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     }
 
     /* Mosaic cover page */
@@ -1447,16 +1557,163 @@ function getPdfStyles() {
     }
 
     .cover-title h1 {
-      font-size: 26pt;
-      margin: 0 0 0.4cm 0;
-      color: #333;
-      font-weight: bold;
+      font-size: 30pt;
+      margin: 0 0 0.35cm 0;
+      color: #2b2b2b;
+      font-weight: 700;
+      font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+      letter-spacing: 0.03em;
     }
 
     .cover-title .dates {
-      font-size: 13pt;
+      font-size: 15pt;
       color: #555;
       margin: 0;
+      font-family: "Optima", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .cover-mask {
+      height: 27.7cm;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+    }
+
+    .cover-mask-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .cover-mask-layout {
+      height: 27.7cm;
+      display: flex;
+      gap: 0;
+    }
+
+    .cover-mask-left {
+      width: 9.2cm;
+      height: 100%;
+    }
+
+    .cover-mask-right {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 1.2cm;
+      text-align: center;
+    }
+
+    .cover-mask-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4cm;
+      align-items: flex-end;
+      width: 100%;
+    }
+
+    .cover-mask-title {
+      font-size: 38pt;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #1f2937;
+      font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+      white-space: nowrap;
+    }
+
+    .cover-mask-subtitle {
+      font-size: 18pt;
+      color: #6b7280;
+      font-family: "Optima", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      white-space: nowrap;
+    }
+
+    .cover-mask-title-box,
+    .cover-mask-subtitle-box {
+      width: 100%;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .cover-mask-title-placeholder,
+    .cover-mask-subtitle-placeholder {
+      width: 100%;
+      max-width: 100%;
+      border: 2px dashed rgba(31, 41, 55, 0.25);
+      border-radius: 0.2cm;
+      padding: 0.25cm 0.35cm;
+      box-sizing: border-box;
+    }
+
+    .cover-mask-title-placeholder {
+      border-color: rgba(59, 130, 246, 0.5);
+      text-align: right;
+    }
+
+    .cover-mask-subtitle-placeholder {
+      border-color: rgba(16, 185, 129, 0.5);
+      text-align: center;
+    }
+
+    .cover-mask-family-placeholder {
+      width: 100%;
+      height: 100%;
+      border: 2px dashed rgba(239, 68, 68, 0.55);
+      border-radius: 0.2cm;
+    }
+
+    .cover-mask {
+      height: 27.7cm;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+    }
+
+    .cover-mask-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .cover-mask-layout {
+      height: 27.7cm;
+      display: flex;
+      gap: 0;
+    }
+
+    .cover-mask-left {
+      width: 9.2cm;
+      height: 100%;
+    }
+
+    .cover-mask-right {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 1.2cm;
+      text-align: center;
+    }
+
+    .cover-mask-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4cm;
+    }
+
+    .cover-mask-title {
+      font-size: 34pt;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #1f2937;
+      font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    }
+
+    .cover-mask-subtitle {
+      font-size: 16pt;
+      color: #6b7280;
+      font-family: "Optima", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     }
 
     .mosaic-container {
@@ -1894,7 +2151,15 @@ function getArticlesInRange(from, to) {
 }
 
 function generatePdfHtml(articles, year, from, to, options = {}) {
-  const { mosaicLayout = 'full', showSeasonalFruits = true, maxMosaicPhotos } = options;
+  const {
+    mosaicLayout = 'full',
+    showSeasonalFruits = true,
+    maxMosaicPhotos,
+    coverStyle = 'mosaic',
+    familyName,
+    coverTitle,
+    coverSubtitle,
+  } = options;
 
   const monthsFr = [
     'Janvier',
@@ -1953,13 +2218,16 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
     }
 
     .cover h1 {
-      font-size: 36pt;
-      margin-bottom: 1cm;
+      font-size: 40pt;
+      margin-bottom: 0.9cm;
+      font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+      letter-spacing: 0.02em;
     }
 
     .cover .dates {
-      font-size: 18pt;
+      font-size: 20pt;
       color: #666;
+      font-family: "Optima", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     }
 
     /* Mosaic cover page */
@@ -1977,16 +2245,19 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
     }
 
     .cover-title h1 {
-      font-size: 26pt;
-      margin: 0 0 0.4cm 0;
-      color: #333;
-      font-weight: bold;
+      font-size: 30pt;
+      margin: 0 0 0.35cm 0;
+      color: #2b2b2b;
+      font-weight: 700;
+      font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+      letter-spacing: 0.03em;
     }
 
     .cover-title .dates {
-      font-size: 13pt;
+      font-size: 15pt;
       color: #555;
       margin: 0;
+      font-family: "Optima", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     }
 
     .mosaic-container {
@@ -2263,8 +2534,10 @@ function generatePdfHtml(articles, year, from, to, options = {}) {
   </style>
 </head>
 <body>
-  <!-- Cover Page with Mosaic -->
-  ${generateCoverMosaic(articles, from, to, maxMosaicPhotos)}
+  <!-- Cover Page -->
+  ${coverStyle === 'masked-title'
+    ? generateCoverMaskedMosaic(articles, from, to, maxMosaicPhotos, { familyName, coverTitle, coverSubtitle })
+    : generateCoverMosaic(articles, from, to, maxMosaicPhotos, { familyName })}
 `;
 
   // Calculate total pages: 1 cover + (month dividers + article pages)
@@ -2447,9 +2720,11 @@ function resizeImageBlob(blob, maxDim) {
  * - Uses 2px gap between images
  * - Creates harmonious rows with variable heights
  */
-function generateCoverMosaic(articles, from, to, maxPhotos) {
-  // Get family name from config
-  const familyName = getConfigValue('family_name');
+function generateCoverMosaic(articles, from, to, maxPhotos, coverOptions = {}) {
+  const familyNameConfig = getConfigValue('family_name');
+  const familyName = coverOptions.familyName !== undefined && coverOptions.familyName !== null
+    ? coverOptions.familyName
+    : familyNameConfig;
   const titleText = familyName
     ? `Livre de souvenir des ${escapeHtml(familyName)}`
     : 'Livre de Souvenirs';
@@ -2520,6 +2795,132 @@ function generateCoverMosaic(articles, from, to, maxPhotos) {
     </div>
     <div class="mosaic-container">
       ${mosaicHtml}
+    </div>
+  </div>
+`;
+}
+
+/**
+ * Generate a masked title cover page where the family name reveals a mosaic
+ */
+function generateCoverMaskedMosaic(articles, from, to, maxPhotos, coverOptions = {}) {
+  const familyNameConfig = getConfigValue('family_name');
+  const coverTitleConfig = getConfigValue('pdf_cover_title');
+  const coverSubtitleConfig = getConfigValue('pdf_cover_subtitle');
+  const familyNameValue = coverOptions.familyName !== undefined && coverOptions.familyName !== null
+    ? coverOptions.familyName
+    : familyNameConfig;
+  const titleText = escapeHtml((familyNameValue || 'Rememly').toUpperCase());
+  const datesText = `Du ${formatDateFr(from)} au ${formatDateFr(to)}`;
+  const coverTitleValue = coverOptions.coverTitle !== undefined && coverOptions.coverTitle !== null
+    ? coverOptions.coverTitle
+    : coverTitleConfig;
+  const coverSubtitleValue = coverOptions.coverSubtitle !== undefined && coverOptions.coverSubtitle !== null
+    ? coverOptions.coverSubtitle
+    : coverSubtitleConfig;
+  const coverTitle = escapeHtml(coverTitleValue || 'Memory Book');
+  const coverSubtitle = escapeHtml(coverSubtitleValue || datesText);
+
+  const images = [];
+  const photoLimit = maxPhotos || articles.length;
+  const coverMaxDim = parseInt(getConfigValue('pdf_cover_mask_max_dim') || '', 10) || 420;
+
+  for (const article of articles) {
+    if (article.image_file_id && images.length < photoLimit) {
+      try {
+        const file = DriveApp.getFileById(article.image_file_id);
+        const originalBlob = file.getBlob();
+        const resized = resizeImageBlob(originalBlob, coverMaxDim);
+        const base64 = Utilities.base64Encode(resized.blob.getBytes());
+        const mimeType = resized.blob.getContentType();
+        const dimensions = resized.dimensions;
+        const aspectRatio = dimensions ? dimensions.width / dimensions.height : 4 / 3;
+
+        images.push({
+          base64,
+          mimeType,
+          aspectRatio: aspectRatio
+        });
+      } catch (e) {
+        // Skip failed images
+      }
+    }
+  }
+
+  if (images.length === 0) {
+    return `
+  <div class="cover">
+    <h1>${titleText}</h1>
+  </div>
+`;
+  }
+
+  const pageWidthCm = 21;
+  const pageHeightCm = 29.7;
+  const leftWidthCm = 9.2;
+  const gap = 0.07;
+  const targetCellCount = Math.max(images.length, 90);
+  const tiledImages = images.length > 0 ? images.slice() : [];
+  while (tiledImages.length < targetCellCount) {
+    tiledImages.push(images[tiledImages.length % images.length]);
+  }
+  const cells = generateSmartMosaicLayout(tiledImages, leftWidthCm, pageHeightCm, gap);
+  const scale = 100;
+  const svgWidth = Math.round(leftWidthCm * scale);
+  const svgHeight = Math.round(pageHeightCm * scale);
+  const margin = 0.1 * scale;
+  const usableHeight = svgHeight - margin * 2;
+  const heightScale = 1.18;
+  const textLength = usableHeight;
+  const textX = margin + (4.8 * scale);
+  const textY = svgHeight - margin;
+  const displayTitleText = titleText;
+  const maxFont = Math.min(600, Math.round(svgHeight * 0.6));
+  const fontSize = maxFont;
+  const familyPlaceholderWidthCm = Math.min(
+    leftWidthCm,
+    Math.max(2.6, (fontSize / scale) + 0.6)
+  );
+
+  let mosaicSvg = '';
+  for (const cell of cells) {
+    mosaicSvg += `
+      <image x="${(cell.x * scale).toFixed(1)}" y="${(cell.y * scale).toFixed(1)}" width="${(cell.w * scale).toFixed(1)}" height="${(cell.h * scale).toFixed(1)}" href="data:${cell.img.mimeType};base64,${cell.img.base64}" preserveAspectRatio="xMidYMid slice" />`;
+  }
+
+  return `
+  <div class="cover-mask-layout">
+    <div class="cover-mask-left">
+      <div class="cover-mask-family-placeholder" style="width: ${familyPlaceholderWidthCm.toFixed(2)}cm;">
+        <svg class="cover-mask-svg" width="100%" height="100%" viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <clipPath id="titleClip">
+            <text x="${textX}" y="${textY}" text-anchor="start" dominant-baseline="text-after-edge"
+                  font-family="Didot, 'Didot LT STD', 'Didot LT Std', 'Bodoni MT', 'Bodoni 72', 'Bodoni Moda', 'Times New Roman', serif" font-weight="700" font-size="${fontSize}"
+                  textLength="${textLength.toFixed(1)}" lengthAdjust="spacingAndGlyphs" xml:space="preserve"
+                  transform="translate(${textX} ${textY}) rotate(-90) scale(1 ${heightScale}) translate(${-textX} ${-textY})">${displayTitleText}</text>
+          </clipPath>
+        </defs>
+        <rect width="${svgWidth}" height="${svgHeight}" fill="#ffffff" />
+        <g clip-path="url(#titleClip)">
+          ${mosaicSvg}
+        </g>
+      </svg>
+      </div>
+    </div>
+    <div class="cover-mask-right">
+      <div class="cover-mask-text">
+        <div class="cover-mask-title-box">
+          <div class="cover-mask-title-placeholder">
+            <div class="cover-mask-title">${coverTitle}</div>
+          </div>
+        </div>
+        <div class="cover-mask-subtitle-box">
+          <div class="cover-mask-subtitle-placeholder">
+            <div class="cover-mask-subtitle">${coverSubtitle}</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 `;

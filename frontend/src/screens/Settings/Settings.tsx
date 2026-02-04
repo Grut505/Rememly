@@ -15,6 +15,10 @@ export function Settings() {
 
   const [familyName, setFamilyName] = useState('')
   const [initialFamilyName, setInitialFamilyName] = useState('')
+  const [coverTitle, setCoverTitle] = useState('')
+  const [initialCoverTitle, setInitialCoverTitle] = useState('')
+  const [coverSubtitle, setCoverSubtitle] = useState('')
+  const [initialCoverSubtitle, setInitialCoverSubtitle] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [logsLoading, setLogsLoading] = useState(true)
@@ -29,6 +33,8 @@ export function Settings() {
   const [usersLoading, setUsersLoading] = useState(false)
   const [users, setUsers] = useState<DeclaredUser[]>([])
   const isDirty = familyName.trim() !== initialFamilyName.trim()
+    || coverTitle.trim() !== initialCoverTitle.trim()
+    || coverSubtitle.trim() !== initialCoverSubtitle.trim()
 
   useEffect(() => {
     loadConfig()
@@ -38,10 +44,20 @@ export function Settings() {
 
   const loadConfig = async () => {
     try {
-      const result = await configApi.get('family_name')
-      const value = result.value || ''
-      setFamilyName(value)
-      setInitialFamilyName(value)
+      const [familyResult, titleResult, subtitleResult] = await Promise.all([
+        configApi.get('family_name'),
+        configApi.get('pdf_cover_title'),
+        configApi.get('pdf_cover_subtitle'),
+      ])
+      const familyValue = familyResult.value || ''
+      const titleValue = titleResult.value || ''
+      const subtitleValue = subtitleResult.value || ''
+      setFamilyName(familyValue)
+      setInitialFamilyName(familyValue)
+      setCoverTitle(titleValue)
+      setInitialCoverTitle(titleValue)
+      setCoverSubtitle(subtitleValue)
+      setInitialCoverSubtitle(subtitleValue)
     } catch (error) {
       showToast('Error while loading', 'error')
     } finally {
@@ -53,9 +69,19 @@ export function Settings() {
     setIsSaving(true)
     try {
       const nextValue = familyName.trim()
-      await configApi.set('family_name', nextValue)
+      const nextTitle = coverTitle.trim()
+      const nextSubtitle = coverSubtitle.trim()
+      await Promise.all([
+        configApi.set('family_name', nextValue),
+        configApi.set('pdf_cover_title', nextTitle),
+        configApi.set('pdf_cover_subtitle', nextSubtitle),
+      ])
       setFamilyName(nextValue)
       setInitialFamilyName(nextValue)
+      setCoverTitle(nextTitle)
+      setInitialCoverTitle(nextTitle)
+      setCoverSubtitle(nextSubtitle)
+      setInitialCoverSubtitle(nextSubtitle)
       showToast('Configuration saved', 'success')
     } catch (error) {
       showToast('Error while saving', 'error')
@@ -286,6 +312,20 @@ export function Settings() {
                 onChange={(e) => setFamilyName(e.target.value)}
                 placeholder="e.g., Dupont family"
               />
+              <div className="mt-3 space-y-3">
+                <Input
+                  label="Cover title"
+                  value={coverTitle}
+                  onChange={(e) => setCoverTitle(e.target.value)}
+                  placeholder="e.g., Memory Book"
+                />
+                <Input
+                  label="Cover subtitle"
+                  value={coverSubtitle}
+                  onChange={(e) => setCoverSubtitle(e.target.value)}
+                  placeholder="e.g., 2024 — 2025"
+                />
+              </div>
               <p className="text-xs text-gray-500 mt-2">
                 Appears on the PDF cover title.
               </p>

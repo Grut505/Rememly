@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['icons/*.png'],
+      includeAssets: ['icons/*.png', 'dictionaries/*.dic', 'dictionaries/*.aff'],
       manifest: {
         name: 'Rememly',
         short_name: 'Rememly',
@@ -35,7 +35,7 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,dic,aff}'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

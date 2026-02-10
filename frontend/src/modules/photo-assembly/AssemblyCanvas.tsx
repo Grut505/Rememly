@@ -27,6 +27,12 @@ export function AssemblyCanvas({
   const imageCacheRef = useRef<Map<File, CanvasImageSource>>(new Map())
   const lastPhotosKeyRef = useRef<string>('')
   const activeZoneRef = useRef<number | null>(null)
+  const lastClickRef = useRef<{ time: number; zone: number | null }>({ time: 0, zone: null })
+  const moveCandidateRef = useRef<{
+    zoneIndex: number
+    start: { x: number; y: number }
+    moved: boolean
+  } | null>(null)
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
   const gestureRef = useRef({
     startX: 0,
@@ -58,11 +64,13 @@ export function AssemblyCanvas({
   }, [template, images, stateVersion, selectedZoneIndex, separatorWidth])
 
   const getImageSize = (img: CanvasImageSource) => {
+    if (img instanceof HTMLImageElement) {
+      return { width: img.naturalWidth || img.width, height: img.naturalHeight || img.height }
+    }
     if ('width' in img && 'height' in img) {
       return { width: img.width as number, height: img.height as number }
     }
-    const htmlImg = img as HTMLImageElement
-    return { width: htmlImg.naturalWidth || htmlImg.width, height: htmlImg.naturalHeight || htmlImg.height }
+    return { width: 0, height: 0 }
   }
 
   const loadImages = async () => {
@@ -84,7 +92,7 @@ export function AssemblyCanvas({
             img = await createImageBitmap(file)
             imageCacheRef.current.set(file, img)
           } catch (error) {
-            img = null
+            img = undefined
           }
         }
 
@@ -153,8 +161,8 @@ export function AssemblyCanvas({
       ctx.fillStyle = index === selectedZoneIndex ? 'rgba(37, 99, 235, 0.08)' : 'rgba(255, 255, 255, 0.6)'
       ctx.fillRect(zoneX, zoneY, zoneWidth, zoneHeight)
 
-      ctx.strokeStyle = '#ffffff'
-      ctx.lineWidth = Math.max(1, separatorWidth)
+      ctx.strokeStyle = index === selectedZoneIndex ? '#2563eb' : '#ffffff'
+      ctx.lineWidth = index === selectedZoneIndex ? Math.max(2, separatorWidth + 1) : Math.max(1, separatorWidth)
       ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
 
       if (img) {
@@ -240,16 +248,20 @@ export function AssemblyCanvas({
     const zoneIndex = hitTestZone(point)
     if (zoneIndex < 0) return
 
-    onZoneSelect(zoneIndex)
+    moveCandidateRef.current = {
+      zoneIndex,
+      start: { x: point.x, y: point.y },
+      moved: false,
+    }
 
+    const pointers = pointersRef.current
+    pointers.set(e.pointerId, { x: point.x, y: point.y })
+    ;(e.target as HTMLCanvasElement).setPointerCapture(e.pointerId)
     const zoneState = stateManager.getState().zoneStates[zoneIndex]
     if (zoneState.photoIndex < 0) return
 
     activeZoneRef.current = zoneIndex
 
-    const pointers = pointersRef.current
-    pointers.set(e.pointerId, { x: point.x, y: point.y })
-    ;(e.target as HTMLCanvasElement).setPointerCapture(e.pointerId)
     const gesture = gestureRef.current
 
     if (pointers.size === 1) {
@@ -300,12 +312,20 @@ export function AssemblyCanvas({
     const point = getCanvasPoint(e)
     if (!point) return
 
-    const zoneIndex = activeZoneRef.current
-    if (zoneIndex === null) return
-
     const pointers = pointersRef.current
     if (!pointers.has(e.pointerId)) return
     pointers.set(e.pointerId, { x: point.x, y: point.y })
+
+    if (moveCandidateRef.current && !moveCandidateRef.current.moved) {
+      const dx = point.x - moveCandidateRef.current.start.x
+      const dy = point.y - moveCandidateRef.current.start.y
+      if (Math.hypot(dx, dy) > 6) {
+        moveCandidateRef.current.moved = true
+      }
+    }
+
+    const zoneIndex = activeZoneRef.current
+    if (zoneIndex === null) return
 
     const swap = swapRef.current
     if (swap.startPoint && !swap.isSwapMode) {
@@ -401,6 +421,18 @@ export function AssemblyCanvas({
     }
 
     if (pointers.size === 0) {
+      const candidate = moveCandidateRef.current
+      moveCandidateRef.current = null
+      if (candidate && !candidate.moved) {
+        const now = Date.now()
+        const last = lastClickRef.current
+        if (!(last.zone === candidate.zoneIndex && now - last.time < 300)) {
+          lastClickRef.current = { time: now, zone: candidate.zoneIndex }
+          onZoneSelect(candidate.zoneIndex)
+        } else {
+          lastClickRef.current = { time: 0, zone: null }
+        }
+      }
       activeZoneRef.current = null
     }
   }

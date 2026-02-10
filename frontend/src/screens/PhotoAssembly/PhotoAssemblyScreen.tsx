@@ -1,4 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { PhotoAssembly } from '../../modules/photo-assembly/PhotoAssembly'
 import { AppHeader } from '../../ui/AppHeader'
 import { useAuth } from '../../auth/AuthContext'
@@ -12,6 +13,7 @@ export function PhotoAssemblyScreen() {
   const { user } = useAuth()
   const { updateArticle: updateArticleInStore } = useArticlesStore()
   const { showToast } = useUiStore()
+  const [isValidating, setIsValidating] = useState(false)
 
   // Get mode and article ID from navigation state
   const editMode = location.state?.editMode || false
@@ -59,12 +61,28 @@ export function PhotoAssemblyScreen() {
         error instanceof Error ? error.message : 'Failed to save article',
         'error'
       )
+    } finally {
+      setIsValidating(false)
     }
   }
 
   const handleCancel = () => {
+    if (isValidating) return
     navigate(editMode && articleId ? `/editor/${articleId}` : '/editor')
   }
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ loading?: boolean }>).detail
+      if (detail && typeof detail.loading === 'boolean') {
+        setIsValidating(detail.loading)
+      }
+    }
+    window.addEventListener('photo-assembly-validating', handler as EventListener)
+    return () => {
+      window.removeEventListener('photo-assembly-validating', handler as EventListener)
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -75,7 +93,12 @@ export function PhotoAssemblyScreen() {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('photo-assembly-cancel'))}
-              className="p-2 rounded-full border border-gray-200 text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+              disabled={isValidating}
+              className={`p-2 rounded-full border transition-colors ${
+                isValidating
+                  ? 'border-gray-200 text-gray-300 cursor-not-allowed'
+                  : 'border-gray-200 text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+              }`}
               aria-label="Close"
             >
               <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
@@ -86,13 +109,22 @@ export function PhotoAssemblyScreen() {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('photo-assembly-validate'))}
-              className="px-3 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700"
+              disabled={isValidating}
+              className={`px-3 py-2 rounded-lg text-sm font-medium ${isValidating ? 'bg-green-300 text-white cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
             >
-              Valider
+              {isValidating ? 'Processing...' : 'Valider'}
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto relative">
             <PhotoAssembly onComplete={handleComplete} onCancel={handleCancel} />
+            {isValidating && (
+              <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
+                <div className="flex items-center gap-3 text-sm text-gray-700 bg-white px-4 py-3 rounded-xl shadow">
+                  <div className="w-5 h-5 border-2 border-green-200 border-t-green-600 rounded-full animate-spin"></div>
+                  Creating article...
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -228,7 +228,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   }, [pendingZoneIndex, stateManager, closeWebcam])
 
   const handleZoneClick = (zoneIndex: number) => {
-    setSelectedZoneIndex(zoneIndex)
+    setSelectedZoneIndex((prev) => (prev === zoneIndex ? null : zoneIndex))
   }
 
   const handleZoneUpdate = () => {
@@ -412,6 +412,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
     }
 
     try {
+      window.dispatchEvent(new CustomEvent('photo-assembly-validating', { detail: { loading: true } }))
       // Generate final image from canvas
       const canvas = document.querySelector('canvas') as HTMLCanvasElement
       if (!canvas) {
@@ -427,6 +428,18 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
       showToast('Failed to create assembly', 'error')
     }
   }
+
+  const lastTemplateIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!selectedTemplate?.id) return
+    if (lastTemplateIdRef.current !== selectedTemplate.id) {
+      lastTemplateIdRef.current = selectedTemplate.id
+      if (selectedTemplate.zones?.length) {
+        setSelectedZoneIndex(0)
+      }
+    }
+  }, [selectedTemplate])
 
   useEffect(() => {
     const onValidate = () => {

@@ -75,6 +75,20 @@ export function FamileoPosterModal({
     return acc
   }, {})
 
+  const toLocalInputValue = (value: string) => {
+    if (!value) return ''
+    const date = new Date(value)
+    if (isNaN(date.getTime())) return value
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const yyyy = date.getFullYear()
+    const mm = pad(date.getMonth() + 1)
+    const dd = pad(date.getDate())
+    const hh = pad(date.getHours())
+    const min = pad(date.getMinutes())
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`
+  }
+  const baseDateLocal = toLocalInputValue(baseDate)
+
   const allOverride = familyOverrides.all
   const canPost = selectionMode === 'all'
     ? Boolean(allOverride && allOverride.text.trim() && allOverride.text.length <= 300 && families.length > 0)
@@ -114,7 +128,7 @@ export function FamileoPosterModal({
             ...prev,
             all: {
               text: baseText,
-              date: baseDate,
+              date: baseDateLocal,
               fullPage: false,
               author: baseAuthor
             }
@@ -312,7 +326,7 @@ export function FamileoPosterModal({
                     ...prev,
                     [value]: {
                       text: baseText,
-                      date: baseDate,
+                      date: baseDateLocal,
                       fullPage: false,
                       author: baseAuthor
                     }
@@ -372,7 +386,7 @@ export function FamileoPosterModal({
             if (!famileoId) return null
             const override = familyOverrides[famileoId] || {
               text: baseText,
-              date: baseDate,
+              date: baseDateLocal,
               fullPage: false,
               author: baseAuthor
             }
@@ -414,7 +428,7 @@ export function FamileoPosterModal({
                       setFamilyOverrides((prev) => ({
                         ...prev,
                         [famileoId]: {
-                          ...(prev[famileoId] || { text: baseText, date: baseDate, fullPage: false, author: '' }),
+                          ...(prev[famileoId] || { text: baseText, date: baseDateLocal, fullPage: false, author: '' }),
                           author: value
                         }
                       }))
@@ -443,7 +457,7 @@ export function FamileoPosterModal({
                       setFamilyOverrides((prev) => ({
                         ...prev,
                         [famileoId]: {
-                          ...(prev[famileoId] || { text: '', date: baseDate, fullPage: false, author: '' }),
+                          ...(prev[famileoId] || { text: '', date: baseDateLocal, fullPage: false, author: '' }),
                           text: value
                         }
                       }))
@@ -459,13 +473,13 @@ export function FamileoPosterModal({
                   <label className="block text-xs font-medium text-gray-600 mb-1">Date</label>
                   <input
                     type="datetime-local"
-                    value={(override.date || '').slice(0, 16)}
+                    value={toLocalInputValue(override.date || '')}
                     onChange={(e) => {
                       const value = e.target.value
                       setFamilyOverrides((prev) => ({
                         ...prev,
                         [famileoId]: {
-                          ...(prev[famileoId] || { text: baseText, date: baseDate, fullPage: false, author: '' }),
+                          ...(prev[famileoId] || { text: baseText, date: baseDateLocal, fullPage: false, author: '' }),
                           date: value
                         }
                       }))
@@ -482,7 +496,7 @@ export function FamileoPosterModal({
                       setFamilyOverrides((prev) => ({
                         ...prev,
                         [famileoId]: {
-                          ...(prev[famileoId] || { text: baseText, date: baseDate, fullPage: false, author: '' }),
+                          ...(prev[famileoId] || { text: baseText, date: baseDateLocal, fullPage: false, author: '' }),
                           fullPage: value
                         }
                       }))

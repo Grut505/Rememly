@@ -307,7 +307,7 @@ export function PhotoPicker({ onPhotoSelected, currentImage, onPhotoAssembly }: 
             alt="Selected"
             className="w-full h-auto rounded-lg max-h-[40vh] object-contain"
           />
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-4 flex flex-row gap-2">
             <div className="relative flex-1">
               <Button
                 onClick={() => {
@@ -357,7 +357,7 @@ export function PhotoPicker({ onPhotoSelected, currentImage, onPhotoAssembly }: 
             </div>
             {onPhotoAssembly && (
               <Button variant="secondary" onClick={onPhotoAssembly} fullWidth>
-                Photo Assembly
+                Assembly
               </Button>
             )}
           </div>
@@ -366,7 +366,7 @@ export function PhotoPicker({ onPhotoSelected, currentImage, onPhotoAssembly }: 
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
           <div className="text-4xl mb-2">📷</div>
           <p className="text-gray-600 mb-4">Add a photo</p>
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+          <div className="flex flex-row gap-2 justify-center">
             <div className="relative">
               <Button
                 onClick={() => {
@@ -415,7 +415,7 @@ export function PhotoPicker({ onPhotoSelected, currentImage, onPhotoAssembly }: 
             </div>
             {onPhotoAssembly && (
               <Button variant="secondary" onClick={onPhotoAssembly}>
-                Photo Assembly
+                Assembly
               </Button>
             )}
           </div>

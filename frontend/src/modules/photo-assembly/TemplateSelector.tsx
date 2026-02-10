@@ -17,6 +17,8 @@ export function TemplateSelector({
 
   const ratioPresets = [
     { label: '1:1', value: 1 },
+    { label: '1:1.44', value: 1 / 1.44 },
+    { label: '1:0.54', value: 1 / 0.54 },
     { label: '4:3', value: 4 / 3 },
     { label: '3:4', value: 3 / 4 },
     { label: '16:9', value: 16 / 9 },
@@ -26,7 +28,7 @@ export function TemplateSelector({
   ]
 
   const getRatioLabel = (ratio: number) => {
-    const preset = ratioPresets.find((item) => Math.abs(item.value - ratio) < 0.03)
+    const preset = ratioPresets.find((item) => Math.abs(item.value - ratio) < 0.01)
     return preset ? preset.label : ratio.toFixed(2)
   }
 
@@ -57,7 +59,7 @@ export function TemplateSelector({
   }, [activeCount, activeRatio, layouts])
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 flex flex-col gap-4 h-[70vh] sm:h-[70vh]">
       <div>
         <h3 className="text-sm font-medium text-gray-700 mb-2">
           Ratio
@@ -120,7 +122,7 @@ export function TemplateSelector({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto pr-1 flex-1">
         {visibleLayouts.map((template) => (
           <button
             key={template.id}

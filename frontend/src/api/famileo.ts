@@ -102,9 +102,9 @@ export const famileoApi = {
   createPost: (body: { text: string; published_at: string; family_id?: string; image_key?: string; is_full_page?: boolean; author_email?: string }) =>
     apiClient.post<FamileoCreatePostResponse>('famileo/create-post', body),
 
-  presignImage: () =>
-    apiClient.post<FamileoPresignResponse>('famileo/presigned-image'),
+  presignImage: (body?: { author_email?: string }) =>
+    apiClient.post<FamileoPresignResponse>('famileo/presigned-image', body || {}),
 
-  uploadImage: (body: { presign: string | Record<string, unknown>; image_base64: string; mime_type?: string; filename?: string }) =>
+  uploadImage: (body: { presign: string | Record<string, unknown>; image_base64: string; mime_type?: string; filename?: string; author_email?: string }) =>
     apiClient.post<FamileoUploadImageResponse>('famileo/upload-image', body),
 }

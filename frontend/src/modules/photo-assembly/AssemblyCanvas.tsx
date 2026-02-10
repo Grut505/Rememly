@@ -23,7 +23,9 @@ export function AssemblyCanvas({
   separatorWidth,
 }: AssemblyCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [images, setImages] = useState<Map<number, HTMLImageElement>>(new Map())
+  const [images, setImages] = useState<Map<number, CanvasImageSource>>(new Map())
+  const imageCacheRef = useRef<Map<File, CanvasImageSource>>(new Map())
+  const lastPhotosKeyRef = useRef<string>('')
   const activeZoneRef = useRef<number | null>(null)
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
   const gestureRef = useRef({
@@ -55,29 +57,74 @@ export function AssemblyCanvas({
     drawCanvas()
   }, [template, images, stateVersion, selectedZoneIndex, separatorWidth])
 
+  const getImageSize = (img: CanvasImageSource) => {
+    if ('width' in img && 'height' in img) {
+      return { width: img.width as number, height: img.height as number }
+    }
+    const htmlImg = img as HTMLImageElement
+    return { width: htmlImg.naturalWidth || htmlImg.width, height: htmlImg.naturalHeight || htmlImg.height }
+  }
+
   const loadImages = async () => {
-    const newImages = new Map<number, HTMLImageElement>()
+    const newImages = new Map<number, CanvasImageSource>()
     const state = stateManager.getState()
-    const objectUrls: string[] = []
+    const photosKey = state.photos.map((file) => `${file.name}-${file.size}-${file.lastModified}`).join('|')
+    if (photosKey === lastPhotosKeyRef.current) {
+      return
+    }
+    lastPhotosKeyRef.current = photosKey
 
     for (let i = 0; i < state.photos.length; i++) {
       const file = state.photos[i]
-      const img = new Image()
-      const url = URL.createObjectURL(file)
-      objectUrls.push(url)
 
-      await new Promise<void>((resolve) => {
-        img.onload = () => {
-          newImages.set(i, img)
-          resolve()
+      let img = imageCacheRef.current.get(file)
+      if (!img) {
+        if (typeof createImageBitmap === 'function') {
+          try {
+            img = await createImageBitmap(file)
+            imageCacheRef.current.set(file, img)
+          } catch (error) {
+            img = null
+          }
         }
-        img.src = url
-      })
+
+        if (!img) {
+          const htmlImg = new Image()
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(String(reader.result || ''))
+            reader.onerror = () => reject(new Error('read'))
+            reader.readAsDataURL(file)
+          }).catch(() => '')
+          await new Promise<void>((resolve) => {
+            htmlImg.onload = () => resolve()
+            htmlImg.onerror = () => resolve()
+            htmlImg.src = dataUrl
+          })
+          if (!htmlImg.naturalWidth || !htmlImg.naturalHeight) {
+            continue
+          }
+          img = htmlImg
+          imageCacheRef.current.set(file, img)
+        }
+      }
+      newImages.set(i, img)
     }
 
     setImages(newImages)
-    objectUrls.forEach((url) => URL.revokeObjectURL(url))
+
   }
+
+  useEffect(() => {
+    return () => {
+      for (const img of imageCacheRef.current.values()) {
+        if (img && typeof (img as ImageBitmap).close === 'function') {
+          ;(img as ImageBitmap).close()
+        }
+      }
+      imageCacheRef.current.clear()
+    }
+  }, [])
 
   const drawCanvas = () => {
     const canvas = canvasRef.current
@@ -117,8 +164,9 @@ export function AssemblyCanvas({
         ctx.clip()
 
         const scale = zoneState.zoom
-        const imgWidth = img.width * scale
-        const imgHeight = img.height * scale
+        const size = getImageSize(img)
+        const imgWidth = size.width * scale
+        const imgHeight = size.height * scale
         const centerX = zoneX + zoneWidth / 2 + zoneState.x
         const centerY = zoneY + zoneHeight / 2 + zoneState.y
         const rotation = (zoneState.rotation || 0) * (Math.PI / 180)

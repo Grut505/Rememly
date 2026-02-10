@@ -210,7 +210,7 @@ function doPost(e) {
         return handleFamileoCreatePost(body, authResult.user.email);
 
       case 'famileo/presigned-image':
-        return handleFamileoPresignedImage(authResult.user.email);
+        return handleFamileoPresignedImage(body, authResult.user.email);
 
       case 'famileo/upload-image':
         return handleFamileoUploadImage(body, authResult.user.email);

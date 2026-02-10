@@ -1,4 +1,5 @@
 import { ReactNode, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 interface ModalProps {
   isOpen: boolean
@@ -25,8 +26,8 @@ export function Modal({ isOpen, onClose, title, children, align = 'bottom' }: Mo
   const alignmentClass = align === 'center' ? 'items-center' : 'items-end sm:items-center'
   const modalRadius = align === 'center' ? 'rounded-2xl' : 'rounded-t-2xl sm:rounded-2xl'
 
-  return (
-    <div className={`fixed inset-0 z-[60] flex ${alignmentClass} justify-center`}>
+  return createPortal(
+    <div className={`fixed inset-0 z-[1000] flex ${alignmentClass} justify-center`}>
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black bg-opacity-50"
@@ -53,6 +54,7 @@ export function Modal({ isOpen, onClose, title, children, align = 'bottom' }: Mo
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

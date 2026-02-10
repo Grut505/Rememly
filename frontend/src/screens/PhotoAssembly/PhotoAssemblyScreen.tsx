@@ -71,8 +71,25 @@ export function PhotoAssemblyScreen() {
       <AppHeader />
       <div className="fixed inset-0 app-safe-top-14 z-20 bg-black/30 flex items-start justify-center p-3 sm:p-6">
         <div className="bg-white w-full h-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-center">
+          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('photo-assembly-cancel'))}
+              className="p-2 rounded-full border border-gray-200 text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+              aria-label="Close"
+            >
+              <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
             <h1 className="text-lg font-semibold text-gray-900">Photo Assembly</h1>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('photo-assembly-validate'))}
+              className="px-3 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700"
+            >
+              Valider
+            </button>
           </div>
           <div className="flex-1 overflow-y-auto">
             <PhotoAssembly onComplete={handleComplete} onCancel={handleCancel} />

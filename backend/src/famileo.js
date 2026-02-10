@@ -180,7 +180,14 @@ function famileoFetchPosts(limit = 20, timestamp = null, familyId = null, userEm
     familyId = props.getProperty('FAMILEO_FAMILY_ID') || '321238';
   }
 
-  const session = getFamileoSession();
+  logFamileoEvent('info', 'Famileo posts fetch: start', userEmail, {
+    family_id: familyId,
+    limit: limit,
+    timestamp: timestamp || '',
+    session_key: getFamileoSessionKey(userEmail),
+  });
+
+  const session = getFamileoSession(userEmail);
 
   let url = `https://www.famileo.com/api/families/${familyId}/posts?limit=${limit}`;
   if (timestamp) {
@@ -200,11 +207,22 @@ function famileoFetchPosts(limit = 20, timestamp = null, familyId = null, userEm
   const responseCode = response.getResponseCode();
   Logger.log('Fetch posts response code: ' + responseCode);
 
+  logFamileoEvent('info', 'Famileo posts fetch: response', userEmail, {
+    family_id: familyId,
+    status: responseCode,
+  });
+
   if (responseCode === 401 || responseCode === 403) {
     throw new Error('Session expired. Please update cookies by running initFamileoSession() with fresh cookies from browser.');
   }
 
   if (responseCode !== 200) {
+    const responseText = response.getContentText();
+    logFamileoEvent('error', 'Famileo posts fetch: error', userEmail, {
+      family_id: familyId,
+      status: responseCode,
+      body_preview: String(responseText || '').substring(0, 500),
+    });
     throw new Error('Failed to fetch posts: HTTP ' + responseCode);
   }
 
@@ -765,9 +783,16 @@ function handleFamileoImportedIds() {
 /**
  * Handler for famileo/presigned-image endpoint
  */
-function handleFamileoPresignedImage(userEmail) {
+function handleFamileoPresignedImage(body, userEmail) {
   try {
-    const result = famileoGetPresignedImageUrl(userEmail);
+    const authorEmail = body && body.author_email ? String(body.author_email) : '';
+    const effectiveEmail = authorEmail || userEmail;
+    if (authorEmail) {
+      logFamileoEvent('info', 'Famileo presign author override', userEmail, { author_email: authorEmail });
+    }
+
+    logFamileoEvent('info', 'Famileo presign: start', effectiveEmail, { author_email: authorEmail || undefined });
+    const result = famileoGetPresignedImageUrl(effectiveEmail);
     const lowerBody = String(result.body || '').toLowerCase();
     const sessionExpired = result.status === 401 ||
       lowerBody.includes('session expired') ||
@@ -776,9 +801,9 @@ function handleFamileoPresignedImage(userEmail) {
 
     if (sessionExpired) {
       try {
-        handleFamileoTriggerRefresh(userEmail);
+        handleFamileoTriggerRefresh(effectiveEmail);
       } catch (refreshError) {
-        logFamileoEvent('error', 'Famileo presign refresh error', userEmail, { error: String(refreshError) });
+        logFamileoEvent('error', 'Famileo presign refresh error', effectiveEmail, { error: String(refreshError) });
       }
       return createResponse({
         ok: false,
@@ -787,12 +812,17 @@ function handleFamileoPresignedImage(userEmail) {
     }
 
     if (result.status < 200 || result.status >= 300) {
+      logFamileoEvent('error', 'Famileo presign failed', effectiveEmail, {
+        status: result.status,
+        body_preview: String(result.body || '').substring(0, 500),
+      });
       return createResponse({
         ok: false,
         error: { code: 'FAMILEO_ERROR', message: 'Famileo presign failed (HTTP ' + result.status + ')' }
       });
     }
 
+    logFamileoEvent('info', 'Famileo presign: success', effectiveEmail, { status: result.status });
     return createResponse({
       ok: true,
       data: { raw: result.body }
@@ -816,15 +846,31 @@ function handleFamileoUploadImage(body, userEmail) {
     const imageBase64 = body && body.image_base64 ? String(body.image_base64) : '';
     const mimeType = body && body.mime_type ? String(body.mime_type) : '';
     const filename = body && body.filename ? String(body.filename) : '';
+    const authorEmail = body && body.author_email ? String(body.author_email) : '';
+    const effectiveEmail = authorEmail || userEmail;
 
-    const result = famileoUploadImage(presign, imageBase64, mimeType, filename, userEmail);
+    if (authorEmail) {
+      logFamileoEvent('info', 'Famileo upload author override', userEmail, { author_email: authorEmail });
+    }
+
+    logFamileoEvent('info', 'Famileo upload: start', effectiveEmail, {
+      filename: filename || '',
+      mime_type: mimeType || '',
+    });
+
+    const result = famileoUploadImage(presign, imageBase64, mimeType, filename, effectiveEmail);
     if (result.status < 200 || result.status >= 300) {
+      logFamileoEvent('error', 'Famileo upload failed', effectiveEmail, {
+        status: result.status,
+        body_preview: String(result.body || '').substring(0, 500),
+      });
       return createResponse({
         ok: false,
         error: { code: 'FAMILEO_ERROR', message: 'Famileo upload failed (HTTP ' + result.status + ')' }
       });
     }
 
+    logFamileoEvent('info', 'Famileo upload: success', effectiveEmail, { status: result.status, key: result.key || '' });
     return createResponse({
       ok: true,
       data: result
@@ -849,12 +895,19 @@ function handleFamileoCreatePost(body, userEmail) {
     const imageKey = body && body.image_key ? String(body.image_key) : '';
     const isFullPage = body && (body.is_full_page === true || body.is_full_page === '1' || body.is_full_page === 1);
     const authorEmail = body && body.author_email ? String(body.author_email) : '';
+    const effectiveEmail = authorEmail || userEmail;
 
     if (authorEmail) {
       logFamileoEvent('info', 'Famileo create post author override', userEmail, { author_email: authorEmail });
     }
 
-    const result = famileoCreatePost(text, publishedAt, familyId, imageKey, isFullPage, userEmail);
+    logFamileoEvent('info', 'Famileo create post: start', effectiveEmail, {
+      family_id: familyId || '',
+      has_image: Boolean(imageKey),
+      is_full_page: Boolean(isFullPage),
+    });
+
+    const result = famileoCreatePost(text, publishedAt, familyId, imageKey, isFullPage, effectiveEmail);
     const lowerBody = String(result.body || '').toLowerCase();
     const sessionExpired = result.status === 401 ||
       lowerBody.includes('session expired') ||
@@ -863,9 +916,9 @@ function handleFamileoCreatePost(body, userEmail) {
 
     if (sessionExpired) {
       try {
-        handleFamileoTriggerRefresh(userEmail);
+        handleFamileoTriggerRefresh(effectiveEmail);
       } catch (refreshError) {
-        logFamileoEvent('error', 'Famileo create post refresh error', userEmail, { error: String(refreshError) });
+        logFamileoEvent('error', 'Famileo create post refresh error', effectiveEmail, { error: String(refreshError) });
       }
       return createResponse({
         ok: false,
@@ -874,12 +927,17 @@ function handleFamileoCreatePost(body, userEmail) {
     }
 
     if (result.status < 200 || result.status >= 300) {
+      logFamileoEvent('error', 'Famileo create post failed', effectiveEmail, {
+        status: result.status,
+        body_preview: String(result.body || '').substring(0, 500),
+      });
       return createResponse({
         ok: false,
         error: { code: 'FAMILEO_ERROR', message: 'Famileo post failed (HTTP ' + result.status + ')' }
       });
     }
 
+    logFamileoEvent('info', 'Famileo create post: success', effectiveEmail, { status: result.status });
     return createResponse({
       ok: true,
       data: result

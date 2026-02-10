@@ -1,0 +1,36 @@
+{
+  "id": "grid-4x1-1x0.54",
+  "name": "Grid 4x1 (1x0.54)",
+  "aspectRatio": 1.851852,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 25,
+      "width": 100,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 100,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 75,
+      "width": 100,
+      "height": 25
+    }
+  ],
+  "tags": [
+    "grid",
+    "4-photos",
+    "1x0.54"
+  ]
+}

@@ -1,7 +1,7 @@
 import { useRef, ChangeEvent, useState, useEffect, useCallback } from 'react'
 import { Button } from '../../ui/Button'
 
-// Check if device has camera capability (mobile or desktop with webcam)
+// Check if device is mobile (PWA native picker already offers camera/gallery/file)
 function isMobileDevice(): boolean {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 }
@@ -161,7 +161,6 @@ interface PhotoPickerProps {
 export { extractExifDate }
 
 export function PhotoPicker({ onPhotoSelected, currentImage, onPhotoAssembly }: PhotoPickerProps) {
-  const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -169,10 +168,8 @@ export function PhotoPicker({ onPhotoSelected, currentImage, onPhotoAssembly }: 
   const [showWebcam, setShowWebcam] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [webcamError, setWebcamError] = useState<string>('')
-
   const isMobile = isMobileDevice()
 
-  // Cleanup stream on unmount
   useEffect(() => {
     return () => {
       if (stream) {
@@ -207,43 +204,37 @@ export function PhotoPicker({ onPhotoSelected, currentImage, onPhotoAssembly }: 
       // Extract EXIF date from the image
       const exifDate = await extractExifDate(file)
       onPhotoSelected(file, exifDate || undefined)
-      setShowOptions(false)
     }
     // Reset input value to allow selecting the same file again
     e.target.value = ''
   }
 
+  const handleSelectFromGallery = () => {
+    galleryInputRef.current?.click()
+  }
+
   const handleTakePhoto = useCallback(async () => {
     setWebcamError('')
-    if (isMobile) {
-      // On mobile, use native camera
-      cameraInputRef.current?.click()
-    } else {
-      if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
-        setWebcamError('Webcam not available. Choose from Gallery.')
-        galleryInputRef.current?.click()
-        return
-      }
-      // On desktop, open webcam
-      try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
-        })
-        setStream(mediaStream)
-        setShowWebcam(true)
-        // Wait for video element to be available
-        setTimeout(() => {
-          if (videoRef.current) {
-            videoRef.current.srcObject = mediaStream
-          }
-        }, 100)
-      } catch (err) {
-        console.error('Error accessing webcam:', err)
-        setWebcamError('Webcam not available. Choose from Gallery.')
-        setShowOptions(true)
-      }
+    if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
+      setWebcamError('Webcam not available. Choose from files.')
+      return
     }
-  }, [isMobile])
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
+      })
+      setStream(mediaStream)
+      setShowWebcam(true)
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream
+        }
+      }, 100)
+    } catch (err) {
+      console.error('Error accessing webcam:', err)
+      setWebcamError('Webcam not available. Choose from files.')
+    }
+  }, [])
 
   const captureFromWebcam = useCallback(() => {
     if (videoRef.current && canvasRef.current) {
@@ -257,9 +248,8 @@ export function PhotoPicker({ onPhotoSelected, currentImage, onPhotoAssembly }: 
         canvas.toBlob(async (blob) => {
           if (blob) {
             const file = new File([blob], `webcam-${Date.now()}.jpg`, { type: 'image/jpeg' })
-            onPhotoSelected(file, new Date()) // Use current date for webcam photos
+            onPhotoSelected(file, new Date())
             closeWebcam()
-            setShowOptions(false)
           }
         }, 'image/jpeg', 0.9)
       }
@@ -274,12 +264,6 @@ export function PhotoPicker({ onPhotoSelected, currentImage, onPhotoAssembly }: 
     setShowWebcam(false)
   }, [stream])
 
-  const handleSelectFromGallery = () => {
-    setWebcamError('')
-    galleryInputRef.current?.click()
-  }
-
-  // Webcam modal
   if (showWebcam) {
     return (
       <div className="w-full">
@@ -307,15 +291,6 @@ export function PhotoPicker({ onPhotoSelected, currentImage, onPhotoAssembly }: 
 
   return (
     <div className="w-full">
-      {/* Camera input - with capture attribute (for mobile) */}
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleFileChange}
-        className="hidden"
-      />
       {/* Gallery input - without capture attribute */}
       <input
         ref={galleryInputRef}
@@ -332,99 +307,118 @@ export function PhotoPicker({ onPhotoSelected, currentImage, onPhotoAssembly }: 
             alt="Selected"
             className="w-full h-auto rounded-lg max-h-[40vh] object-contain"
           />
-          <button
-            type="button"
-            onClick={() => setShowOptions((prev) => !prev)}
-            className="absolute top-3 right-3 h-9 w-9 rounded-full bg-white/90 shadow-md border border-gray-200 flex items-center justify-center"
-            aria-label="Edit photo"
-            data-photo-menu-trigger
-          >
-            <svg className="w-4 h-4 text-gray-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-            </svg>
-          </button>
-          {showOptions && (
-            <div
-              data-photo-menu
-              className="absolute right-3 top-14 z-20 w-56 rounded-xl border border-gray-200 bg-white shadow-lg p-2"
-            >
-              <button
-                type="button"
-                className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
-                onClick={handleTakePhoto}
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <div className="relative flex-1">
+              <Button
+                onClick={() => {
+                  if (isMobile) {
+                    handleSelectFromGallery()
+                  } else {
+                    setShowOptions((prev) => !prev)
+                  }
+                }}
+                fullWidth
+                data-photo-menu-trigger
               >
-                Take Photo
-              </button>
-              <button
-                type="button"
-                className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
-                onClick={handleSelectFromGallery}
-              >
-                Choose from Gallery
-              </button>
-              {onPhotoAssembly && (
-                <button
-                  type="button"
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
-                  onClick={onPhotoAssembly}
+                Select Photo
+              </Button>
+              {!isMobile && showOptions && (
+                <div
+                  data-photo-menu
+                  className="absolute left-0 right-0 mt-2 z-20 rounded-xl border border-gray-200 bg-white shadow-lg p-2"
                 >
-                  Photo Assembly
-                </button>
-              )}
-              {webcamError && (
-                <div className="px-3 py-2 text-xs text-gray-500">
-                  {webcamError}
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
+                    onClick={() => {
+                      setShowOptions(false)
+                      handleSelectFromGallery()
+                    }}
+                  >
+                    Choose from files
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
+                    onClick={() => {
+                      setShowOptions(false)
+                      handleTakePhoto()
+                    }}
+                  >
+                    Use webcam
+                  </button>
+                  {webcamError && (
+                    <div className="px-3 py-2 text-xs text-gray-500">
+                      {webcamError}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
+            {onPhotoAssembly && (
+              <Button variant="secondary" onClick={onPhotoAssembly} fullWidth>
+                Photo Assembly
+              </Button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
           <div className="text-4xl mb-2">📷</div>
           <p className="text-gray-600 mb-4">Add a photo</p>
-          {showOptions ? (
-            <div
-              data-photo-menu
-              className="mt-4 rounded-xl border border-gray-200 bg-white shadow-lg p-2 w-full max-w-xs mx-auto"
-            >
-              <button
-                type="button"
-                className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
-                onClick={handleTakePhoto}
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <div className="relative">
+              <Button
+                onClick={() => {
+                  if (isMobile) {
+                    handleSelectFromGallery()
+                  } else {
+                    setShowOptions((prev) => !prev)
+                  }
+                }}
+                data-photo-menu-trigger
               >
-                Take Photo
-              </button>
-              <button
-                type="button"
-                className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
-                onClick={handleSelectFromGallery}
-              >
-                Choose from Gallery
-              </button>
-              {onPhotoAssembly && (
-                <button
-                  type="button"
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
-                  onClick={onPhotoAssembly}
+                Select Photo
+              </Button>
+              {!isMobile && showOptions && (
+                <div
+                  data-photo-menu
+                  className="absolute left-0 right-0 mt-2 z-20 rounded-xl border border-gray-200 bg-white shadow-lg p-2"
                 >
-                  Photo Assembly
-                </button>
-              )}
-              {webcamError && (
-                <div className="px-3 py-2 text-xs text-gray-500">
-                  {webcamError}
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
+                    onClick={() => {
+                      setShowOptions(false)
+                      handleSelectFromGallery()
+                    }}
+                  >
+                    Choose from files
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
+                    onClick={() => {
+                      setShowOptions(false)
+                      handleTakePhoto()
+                    }}
+                  >
+                    Use webcam
+                  </button>
+                  {webcamError && (
+                    <div className="px-3 py-2 text-xs text-gray-500">
+                      {webcamError}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          ) : (
-            <div className="flex justify-center">
-              <Button onClick={() => setShowOptions(true)} data-photo-menu-trigger>
-                Select Photo
+            {onPhotoAssembly && (
+              <Button variant="secondary" onClick={onPhotoAssembly}>
+                Photo Assembly
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

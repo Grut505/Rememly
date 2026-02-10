@@ -8,6 +8,9 @@ interface ZoneControllerProps {
   onClose: () => void
   onAddPhoto: (zoneIndex: number) => void
   onFitPhoto: (zoneIndex: number) => void
+  onFitPhotoContain: (zoneIndex: number) => void
+  onFitPhotoWidth: (zoneIndex: number) => void
+  onFitPhotoHeight: (zoneIndex: number) => void
   onCenterPhoto: (zoneIndex: number) => void
 }
 
@@ -18,6 +21,9 @@ export function ZoneController({
   onClose,
   onAddPhoto,
   onFitPhoto,
+  onFitPhotoContain,
+  onFitPhotoWidth,
+  onFitPhotoHeight,
   onCenterPhoto,
 }: ZoneControllerProps) {
   const state = stateManager.getState()
@@ -96,10 +102,32 @@ export function ZoneController({
             Auto-fit
           </button>
           <button
+            onClick={() => onFitPhotoContain(zoneIndex)}
+            className="px-3 py-2 rounded-lg bg-gray-200 text-gray-900 text-sm font-medium hover:bg-gray-300"
+          >
+            Fit inside
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => onFitPhotoWidth(zoneIndex)}
+            className="px-3 py-2 rounded-lg bg-gray-200 text-gray-900 text-sm font-medium hover:bg-gray-300"
+          >
+            Fit width
+          </button>
+          <button
+            onClick={() => onFitPhotoHeight(zoneIndex)}
+            className="px-3 py-2 rounded-lg bg-gray-200 text-gray-900 text-sm font-medium hover:bg-gray-300"
+          >
+            Fit height
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
             onClick={() => onCenterPhoto(zoneIndex)}
             className="px-3 py-2 rounded-lg bg-gray-200 text-gray-900 text-sm font-medium hover:bg-gray-300"
           >
-            Centrer
+            Center
           </button>
         </div>
 
@@ -109,8 +137,8 @@ export function ZoneController({
           </label>
           <input
             type="range"
-            min="0.5"
-            max="5"
+            min="0.1"
+            max="8"
             step="0.1"
             value={zoom}
             onChange={(e) => handleZoomChange(parseFloat(e.target.value))}

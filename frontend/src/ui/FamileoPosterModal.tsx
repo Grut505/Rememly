@@ -205,17 +205,21 @@ export function FamileoPosterModal({
         const dateValue = override ? override.date : publishedAt
         const parsedDate = dateValue ? new Date(dateValue) : new Date()
         const finalPublishedAt = isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString()
+        const finalAuthorEmail = override ? override.author : baseAuthor
 
         setProgressLabel(`Uploading image · ${family ? family.name : 'Unknown family'}`)
         let imageKey = ''
         if (base64) {
-          const presign = await famileoApi.presignImage()
+          const presign = await famileoApi.presignImage({
+            author_email: finalAuthorEmail || undefined,
+          })
           const presignObj = JSON.parse(presign.raw)
           const upload = await famileoApi.uploadImage({
             presign: presignObj,
             image_base64: base64,
             mime_type: 'image/jpeg',
             filename: 'Untitled.jpg',
+            author_email: finalAuthorEmail || undefined,
           })
           imageKey = upload.key || ''
         }
@@ -227,7 +231,7 @@ export function FamileoPosterModal({
           family_id: famileoId,
           image_key: imageKey || undefined,
           is_full_page: override ? override.fullPage : isFullPage,
-          author_email: override ? override.author : undefined,
+          author_email: finalAuthorEmail || undefined,
         })
       }
       setPostResult(`Post created for ${targetFamilies.length} ${targetFamilies.length > 1 ? 'families' : 'family'}.`)

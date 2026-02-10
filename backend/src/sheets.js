@@ -310,6 +310,7 @@ function getUsersHeaders() {
   return [
     'email',
     'pseudo',
+    'famileo_email',
     'famileo_name',
     'famileo_password_enc',
     'avatar_url',
@@ -401,6 +402,7 @@ function getUserRowData(row, headerMap) {
   return {
     email: row[headerMap.email],
     pseudo: headerMap.pseudo === undefined ? null : row[headerMap.pseudo],
+    famileo_email: headerMap.famileo_email === undefined ? null : row[headerMap.famileo_email],
     famileo_name: headerMap.famileo_name === undefined ? null : row[headerMap.famileo_name],
     famileo_password_enc: headerMap.famileo_password_enc === undefined ? null : row[headerMap.famileo_password_enc],
     avatar_url: headerMap.avatar_url === undefined ? null : row[headerMap.avatar_url],

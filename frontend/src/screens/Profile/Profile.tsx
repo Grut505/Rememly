@@ -41,6 +41,8 @@ export function Profile() {
 
   const [pseudo, setPseudo] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [famileoEmail, setFamileoEmail] = useState('')
+  const [initialFamileoEmail, setInitialFamileoEmail] = useState('')
   const [famileoName, setFamileoName] = useState('')
   const [initialFamileoName, setInitialFamileoName] = useState('')
   const [famileoPassword, setFamileoPassword] = useState('')
@@ -50,6 +52,7 @@ export function Profile() {
   const [initialPseudo, setInitialPseudo] = useState('')
   const isDirty =
     pseudo.trim() !== initialPseudo.trim() ||
+    famileoEmail.trim() !== initialFamileoEmail.trim() ||
     famileoName.trim() !== initialFamileoName.trim() ||
     avatarFile !== null ||
     famileoPassword.trim().length > 0
@@ -58,6 +61,8 @@ export function Profile() {
     if (profile) {
       setPseudo(profile.pseudo)
       setInitialPseudo(profile.pseudo || '')
+      setFamileoEmail(profile.famileo_email || '')
+      setInitialFamileoEmail(profile.famileo_email || '')
       setFamileoName(profile.famileo_name || '')
       setInitialFamileoName(profile.famileo_name || '')
       setHasFamileoPassword(!!profile.famileo_password_set)
@@ -66,6 +71,8 @@ export function Profile() {
     } else if (user) {
       setPseudo(user.name)
       setInitialPseudo(user.name || '')
+      setFamileoEmail('')
+      setInitialFamileoEmail('')
       setFamileoName('')
       setInitialFamileoName('')
       setHasFamileoPassword(false)
@@ -92,7 +99,7 @@ export function Profile() {
     setIsSaving(true)
     try {
       const nextPseudo = pseudo.trim()
-      await saveProfile(nextPseudo, famileoName.trim(), famileoPassword.trim() || undefined, avatarFile || undefined)
+      await saveProfile(nextPseudo, famileoEmail.trim(), famileoName.trim(), famileoPassword.trim() || undefined, avatarFile || undefined)
       setPseudo(nextPseudo)
       setInitialPseudo(nextPseudo)
       setAvatarFile(null)
@@ -176,6 +183,17 @@ export function Profile() {
             value={famileoName}
             onChange={(e) => setFamileoName(e.target.value)}
             placeholder="Exact name used in Famileo"
+          />
+        </div>
+
+        {/* Famileo email */}
+        <div>
+          <Input
+            label="Famileo email"
+            value={famileoEmail}
+            onChange={(e) => setFamileoEmail(e.target.value)}
+            placeholder="Email used to login to Famileo"
+            type="email"
           />
         </div>
 

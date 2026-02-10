@@ -50,7 +50,7 @@ jobs:
         env:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
           BACKEND_SECRET_TOKEN: ${{ secrets.BACKEND_SECRET_TOKEN }}
-          FAMILEO_EMAIL: ${{ env.FAMILEO_EMAIL }}
+          FAMILEO_USER_EMAIL: ${{ env.FAMILEO_USER_EMAIL }}
         run: |
           cd scripts/famileo-refresh
           node update-backend.js

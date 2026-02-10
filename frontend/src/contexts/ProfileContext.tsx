@@ -18,6 +18,7 @@ function fileToBase64(file: File): Promise<string> {
 
 export interface UserProfile {
   pseudo: string
+  famileo_email?: string
   famileo_name?: string
   famileo_password_set?: boolean
   avatar_url: string
@@ -26,7 +27,7 @@ export interface UserProfile {
 interface ProfileContextType {
   profile: UserProfile | null
   isLoading: boolean
-  saveProfile: (pseudo: string, famileoName: string, famileoPassword?: string, avatarFile?: File) => Promise<void>
+  saveProfile: (pseudo: string, famileoEmail: string, famileoName: string, famileoPassword?: string, avatarFile?: File) => Promise<void>
   reloadProfile: () => void
   avatarBlobUrl: string | null
 }
@@ -51,6 +52,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const data = await profileApi.get()
       setProfile({
         pseudo: data.pseudo,
+        famileo_email: data.famileo_email,
         famileo_name: data.famileo_name,
         famileo_password_set: data.famileo_password_set,
         avatar_url: data.avatar_url
@@ -95,9 +97,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, authLoading])
 
-  const saveProfile = async (pseudo: string, famileoName: string, famileoPassword?: string, avatarFile?: File) => {
+  const saveProfile = async (pseudo: string, famileoEmail: string, famileoName: string, famileoPassword?: string, avatarFile?: File) => {
     try {
-      const payload: SaveProfilePayload = { pseudo, famileo_name: famileoName }
+      const payload: SaveProfilePayload = { pseudo, famileo_email: famileoEmail, famileo_name: famileoName }
       if (famileoPassword && famileoPassword.trim()) {
         payload.famileo_password = famileoPassword.trim()
       }
@@ -111,6 +113,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const data = await profileApi.save(payload)
       setProfile({
         pseudo: data.pseudo,
+        famileo_email: data.famileo_email,
         famileo_password_set: data.famileo_password_set,
         avatar_url: data.avatar_url
       })

@@ -97,6 +97,7 @@ function handleUsersList() {
     rows.push({
       email: row[headerMap.email],
       pseudo: headerMap.pseudo === undefined ? '' : row[headerMap.pseudo],
+      famileo_email: headerMap.famileo_email === undefined ? '' : row[headerMap.famileo_email],
       famileo_name: headerMap.famileo_name === undefined ? '' : row[headerMap.famileo_name],
       famileo_password_set: headerMap.famileo_password_enc === undefined
         ? false
@@ -120,6 +121,7 @@ function getProfileByEmail(email) {
     return {
       email: email,
       pseudo: email.split('@')[0],
+      famileo_email: '',
       famileo_name: '',
       famileo_password_set: false,
       avatar_url: '',
@@ -144,6 +146,7 @@ function getProfileByEmail(email) {
   return {
     email: user.email,
     pseudo: user.pseudo,
+    famileo_email: user.famileo_email || '',
     famileo_name: user.famileo_name || '',
     famileo_password_set: !!user.famileo_password_enc,
     avatar_url: user.avatar_url,
@@ -157,6 +160,7 @@ function saveProfile(email, body) {
   const existingUser = findUserByEmail(email);
   const dateNow = new Date().toISOString();
   const famileoName = body.famileo_name || '';
+  const famileoEmail = body.famileo_email || '';
   const famileoPassword = body.famileo_password;
   const famileoPasswordEnc = famileoPassword ? encryptFamileoPassword(famileoPassword) : '';
 
@@ -190,6 +194,7 @@ function saveProfile(email, body) {
   if (existingUser) {
     // Update existing user
     if (headerMap.pseudo !== undefined) sheet.getRange(existingUser.rowIndex, headerMap.pseudo + 1).setValue(body.pseudo);
+    if (headerMap.famileo_email !== undefined) sheet.getRange(existingUser.rowIndex, headerMap.famileo_email + 1).setValue(famileoEmail);
     if (headerMap.famileo_name !== undefined) sheet.getRange(existingUser.rowIndex, headerMap.famileo_name + 1).setValue(famileoName);
     if (famileoPassword && headerMap.famileo_password_enc !== undefined) {
       sheet.getRange(existingUser.rowIndex, headerMap.famileo_password_enc + 1).setValue(famileoPasswordEnc);
@@ -202,6 +207,7 @@ function saveProfile(email, body) {
     appendUserRow(sheet, {
       email,
       pseudo: body.pseudo,
+      famileo_email: famileoEmail,
       famileo_name: famileoName,
       famileo_password_enc: famileoPasswordEnc,
       avatar_url: avatarUrl,
@@ -219,6 +225,7 @@ function saveProfile(email, body) {
   return {
     email: email,
     pseudo: body.pseudo,
+    famileo_email: famileoEmail,
     famileo_name: famileoName,
     famileo_password_set: passwordSet,
     avatar_url: avatarUrl,

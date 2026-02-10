@@ -31,14 +31,16 @@ async function fetchPassword() {
   }
 
   const passwordEnc = result.data && result.data.password_enc;
-  const email = result.data && result.data.user_email;
+  const appEmail = result.data && result.data.user_email;
+  const famileoEmail = result.data && result.data.famileo_email;
 
-  if (!passwordEnc || !email) {
-    console.error('Missing password_enc or user_email in response');
+  if (!passwordEnc || !appEmail || !famileoEmail) {
+    console.error('Missing password_enc, user_email, or famileo_email in response');
     process.exit(1);
   }
 
-  fs.appendFileSync(githubEnv, `FAMILEO_EMAIL=${email}\n`);
+  fs.appendFileSync(githubEnv, `FAMILEO_EMAIL=${famileoEmail}\n`);
+  fs.appendFileSync(githubEnv, `FAMILEO_USER_EMAIL=${appEmail}\n`);
   fs.appendFileSync(githubEnv, `FAMILEO_PASSWORD_ENC=${passwordEnc}\n`);
 }
 

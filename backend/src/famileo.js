@@ -34,10 +34,24 @@ function clearFamileoSession() {
   Logger.log('Famileo session cleared');
 }
 
-function getFamileoSessionKey(userEmail) {
+function resolveFamileoEmail(userEmail) {
   const normalized = normalizeEmail(userEmail || '');
-  if (!normalized) return 'famileo_session';
-  return `famileo_session_${normalized}`;
+  if (!normalized) return '';
+  const userByAppEmail = findUserByEmail(normalized);
+  if (userByAppEmail && userByAppEmail.famileo_email) {
+    return normalizeEmail(userByAppEmail.famileo_email);
+  }
+  const userByFamileoEmail = findUserByFamileoEmail(normalized);
+  if (userByFamileoEmail && userByFamileoEmail.famileo_email) {
+    return normalizeEmail(userByFamileoEmail.famileo_email);
+  }
+  return normalized;
+}
+
+function getFamileoSessionKey(userEmail) {
+  const famileoEmail = resolveFamileoEmail(userEmail);
+  if (!famileoEmail) return 'famileo_session';
+  return `famileo_session_${famileoEmail}`;
 }
 
 /**
@@ -82,7 +96,8 @@ function handleFamileoUpdateSession(body) {
     // Verify secret token
     const props = PropertiesService.getScriptProperties();
     const expectedToken = props.getProperty('FAMILEO_UPDATE_TOKEN');
-    const targetEmail = normalizeEmail(body.user_email || body.userEmail || '');
+    const targetEmail = normalizeEmail(body.famileo_email || body.famileoEmail || body.user_email || body.userEmail || '');
+    const resolvedFamileoEmail = resolveFamileoEmail(targetEmail);
 
     if (!expectedToken) {
       logFamileoEvent('error', 'Famileo session update failed: missing update token', targetEmail, {});
@@ -113,7 +128,7 @@ function handleFamileoUpdateSession(body) {
       PHPSESSID: body.phpsessid,
       REMEMBERME: body.rememberme
     };
-    const sessionKey = getFamileoSessionKey(targetEmail);
+    const sessionKey = getFamileoSessionKey(resolvedFamileoEmail || targetEmail);
     setConfigValue(sessionKey, JSON.stringify(session));
 
     // Optionally update family ID
@@ -122,11 +137,18 @@ function handleFamileoUpdateSession(body) {
     }
 
     Logger.log('Famileo session updated via API');
-    logFamileoEvent('info', 'Famileo session updated via API', targetEmail, { session_key: sessionKey });
+    logFamileoEvent('info', 'Famileo session updated via API', targetEmail, {
+      session_key: sessionKey,
+      famileo_email: resolvedFamileoEmail || targetEmail,
+    });
 
     return createResponse({
       ok: true,
-      data: { message: 'Session updated successfully', session_key: sessionKey }
+      data: {
+        message: 'Session updated successfully',
+        session_key: sessionKey,
+        famileo_email: resolvedFamileoEmail || targetEmail,
+      }
     });
   } catch (error) {
     Logger.log('Update session error: ' + error);
@@ -328,7 +350,7 @@ function handleFamileoUserCredentials(body) {
   try {
     const props = PropertiesService.getScriptProperties();
     const expectedToken = props.getProperty('FAMILEO_UPDATE_TOKEN');
-    const targetEmail = normalizeEmail(body.user_email || body.userEmail || '');
+    const targetEmail = normalizeEmail(body.famileo_email || body.famileoEmail || body.user_email || body.userEmail || '');
 
     if (!expectedToken) {
       logFamileoEvent('error', 'Famileo credentials failed: missing update token', targetEmail, {});
@@ -347,14 +369,16 @@ function handleFamileoUserCredentials(body) {
     }
 
     if (!targetEmail) {
-      logFamileoEvent('error', 'Famileo credentials failed: missing user_email', targetEmail, {});
+      logFamileoEvent('error', 'Famileo credentials failed: missing famileo_email', targetEmail, {});
       return createResponse({
         ok: false,
-        error: { code: 'INVALID_DATA', message: 'Missing user_email' }
+        error: { code: 'INVALID_DATA', message: 'Missing famileo_email' }
       });
     }
 
-    const user = findUserByEmail(targetEmail);
+    const user = body.user_email || body.userEmail
+      ? findUserByEmail(targetEmail)
+      : findUserByFamileoEmail(targetEmail);
     if (!user || !user.famileo_password_enc) {
       logFamileoEvent('error', 'Famileo credentials failed: no password configured', targetEmail, {});
       return createResponse({
@@ -364,21 +388,21 @@ function handleFamileoUserCredentials(body) {
     }
 
     logFamileoEvent('info', 'Famileo credentials: success', targetEmail, {
-      user_email: targetEmail,
+      user_email: user.email || '',
       famileo_email: user.famileo_email || '',
     });
 
     return createResponse({
       ok: true,
       data: {
-        user_email: targetEmail,
+        user_email: user.email || '',
         famileo_email: user.famileo_email || targetEmail,
         password_enc: user.famileo_password_enc,
       }
     });
   } catch (error) {
     Logger.log('Famileo user credentials error: ' + error);
-    logFamileoEvent('error', 'Famileo credentials failed: exception', body && (body.user_email || body.userEmail), { error: String(error) });
+    logFamileoEvent('error', 'Famileo credentials failed: exception', body && (body.famileo_email || body.famileoEmail || body.user_email || body.userEmail), { error: String(error) });
     return createResponse({
       ok: false,
       error: { code: 'FAMILEO_ERROR', message: String(error) }
@@ -598,6 +622,7 @@ function handleFamileoTriggerRefresh(userEmail) {
     const props = PropertiesService.getScriptProperties();
     const githubToken = props.getProperty('GITHUB_TOKEN');
     const targetEmail = normalizeEmail(userEmail || '');
+    const resolvedFamileoEmail = resolveFamileoEmail(targetEmail);
 
     if (!targetEmail) {
       logFamileoEvent('error', 'Famileo refresh failed: missing user_email', userEmail, {});
@@ -633,7 +658,10 @@ function handleFamileoTriggerRefresh(userEmail) {
     }
 
     // Trigger the workflow via GitHub API
-    logFamileoEvent('info', 'Famileo refresh trigger: start', userEmail, { user_email: targetEmail });
+    logFamileoEvent('info', 'Famileo refresh trigger: start', userEmail, {
+      user_email: targetEmail,
+      famileo_email: resolvedFamileoEmail || user.famileo_email || '',
+    });
     const response = UrlFetchApp.fetch(
       'https://api.github.com/repos/Grut505/Rememly/actions/workflows/famileo-refresh.yml/dispatches',
       {
@@ -646,7 +674,7 @@ function handleFamileoTriggerRefresh(userEmail) {
         payload: JSON.stringify({
           ref: 'main',
           inputs: {
-            user_email: targetEmail
+            famileo_email: resolvedFamileoEmail || user.famileo_email || ''
           }
         }),
         muteHttpExceptions: true
@@ -657,7 +685,10 @@ function handleFamileoTriggerRefresh(userEmail) {
     Logger.log('GitHub API response code: ' + responseCode);
 
     if (responseCode === 204) {
-      logFamileoEvent('info', 'Famileo refresh trigger: queued', userEmail, { user_email: targetEmail });
+      logFamileoEvent('info', 'Famileo refresh trigger: queued', userEmail, {
+        user_email: targetEmail,
+        famileo_email: resolvedFamileoEmail || user.famileo_email || '',
+      });
       return createResponse({
         ok: true,
         data: { message: 'Workflow triggered successfully. Session will be refreshed in ~2 minutes.' }
@@ -667,6 +698,7 @@ function handleFamileoTriggerRefresh(userEmail) {
       Logger.log('GitHub API error: ' + responseText);
       logFamileoEvent('error', 'Famileo refresh trigger failed', userEmail, {
         user_email: targetEmail,
+        famileo_email: resolvedFamileoEmail || user.famileo_email || '',
         status: responseCode,
         response: responseText,
       });

@@ -3,11 +3,11 @@ const fs = require('fs');
 async function fetchPassword() {
   const backendUrl = process.env.BACKEND_URL;
   const secretToken = process.env.BACKEND_SECRET_TOKEN;
-  const userEmail = process.env.FAMILEO_USER_EMAIL;
+  const famileoEmail = process.env.FAMILEO_EMAIL;
   const githubEnv = process.env.GITHUB_ENV;
 
-  if (!backendUrl || !secretToken || !userEmail) {
-    console.error('Error: BACKEND_URL, BACKEND_SECRET_TOKEN, and FAMILEO_USER_EMAIL are required');
+  if (!backendUrl || !secretToken || !famileoEmail) {
+    console.error('Error: BACKEND_URL, BACKEND_SECRET_TOKEN, and FAMILEO_EMAIL are required');
     process.exit(1);
   }
 
@@ -21,7 +21,7 @@ async function fetchPassword() {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: secretToken, user_email: userEmail })
+    body: JSON.stringify({ token: secretToken, famileo_email: famileoEmail })
   });
 
   const result = await response.json();
@@ -32,15 +32,17 @@ async function fetchPassword() {
 
   const passwordEnc = result.data && result.data.password_enc;
   const appEmail = result.data && result.data.user_email;
-  const famileoEmail = result.data && result.data.famileo_email;
+  const resolvedFamileoEmail = result.data && result.data.famileo_email;
 
-  if (!passwordEnc || !appEmail || !famileoEmail) {
-    console.error('Missing password_enc, user_email, or famileo_email in response');
+  if (!passwordEnc || !resolvedFamileoEmail) {
+    console.error('Missing password_enc or famileo_email in response');
     process.exit(1);
   }
 
-  fs.appendFileSync(githubEnv, `FAMILEO_EMAIL=${famileoEmail}\n`);
-  fs.appendFileSync(githubEnv, `FAMILEO_USER_EMAIL=${appEmail}\n`);
+  fs.appendFileSync(githubEnv, `FAMILEO_EMAIL=${resolvedFamileoEmail}\n`);
+  if (appEmail) {
+    fs.appendFileSync(githubEnv, `FAMILEO_APP_EMAIL=${appEmail}\n`);
+  }
   fs.appendFileSync(githubEnv, `FAMILEO_PASSWORD_ENC=${passwordEnc}\n`);
 }
 

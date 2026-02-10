@@ -519,6 +519,26 @@ function findUserByEmail(email) {
   return null;
 }
 
+function findUserByFamileoEmail(email) {
+  const sheet = getUsersSheet();
+  const headerMap = getUsersHeaderMap(sheet);
+  const data = sheet.getDataRange().getValues();
+  const famileoIndex = headerMap.famileo_email;
+  if (famileoIndex === undefined) return null;
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+
+  for (let i = 1; i < data.length; i++) {
+    if (normalizeEmail(data[i][famileoIndex]) === normalized) {
+      return {
+        ...getUserRowData(data[i], headerMap),
+        rowIndex: i + 1,
+      };
+    }
+  }
+  return null;
+}
+
 function addPendingUser(email) {
   const normalized = normalizeEmail(email);
   if (!normalized) return null;

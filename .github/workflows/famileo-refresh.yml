@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     # Allow manual trigger from GitHub UI or API
     inputs:
-      user_email:
-        description: 'Famileo user email to refresh'
+      famileo_email:
+        description: 'Famileo account email to refresh'
         required: true
         type: string
 
@@ -31,7 +31,7 @@ jobs:
         env:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
           BACKEND_SECRET_TOKEN: ${{ secrets.BACKEND_SECRET_TOKEN }}
-          FAMILEO_USER_EMAIL: ${{ inputs.user_email }}
+          FAMILEO_EMAIL: ${{ inputs.famileo_email }}
         run: |
           cd scripts/famileo-refresh
           node fetch-password.js
@@ -50,7 +50,7 @@ jobs:
         env:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
           BACKEND_SECRET_TOKEN: ${{ secrets.BACKEND_SECRET_TOKEN }}
-          FAMILEO_USER_EMAIL: ${{ env.FAMILEO_USER_EMAIL }}
+          FAMILEO_EMAIL: ${{ env.FAMILEO_EMAIL }}
         run: |
           cd scripts/famileo-refresh
           node update-backend.js

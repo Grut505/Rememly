@@ -1,13 +1,49 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+
+function normalizeEncodedPayload(payload) {
+  if (!payload) return '';
+  const raw = String(payload);
+  return raw.startsWith('v1:') ? raw.slice(3) : raw;
+}
+
+function deriveHmacBlock(keyBuffer, nonceBuffer, counter) {
+  const counterBuffer = Buffer.alloc(4);
+  counterBuffer.writeUInt32BE(counter, 0);
+  return crypto.createHmac('sha256', keyBuffer).update(Buffer.concat([nonceBuffer, counterBuffer])).digest();
+}
+
+function decryptFamileoPassword(encrypted, key) {
+  if (!encrypted || !key) return '';
+  const encoded = normalizeEncodedPayload(encrypted);
+  const payload = Buffer.from(encoded, 'base64');
+  if (payload.length < 17) return '';
+  const nonce = payload.subarray(0, 16);
+  const cipher = payload.subarray(16);
+  const keyBuffer = Buffer.from(String(key), 'utf8');
+  const plain = Buffer.alloc(cipher.length);
+  let counter = 0;
+  for (let i = 0; i < cipher.length; i += 32) {
+    const block = deriveHmacBlock(keyBuffer, nonce, counter++);
+    const len = Math.min(32, cipher.length - i);
+    for (let j = 0; j < len; j++) {
+      plain[i + j] = cipher[i + j] ^ block[j];
+    }
+  }
+  return plain.toString('utf8');
+}
 
 async function loginToFamileo() {
   const email = process.env.FAMILEO_EMAIL;
-  const password = process.env.FAMILEO_PASSWORD;
+  const rawPassword = process.env.FAMILEO_PASSWORD;
+  const encryptedPassword = process.env.FAMILEO_PASSWORD_ENC;
+  const passwordKey = process.env.FAMILEO_PW_KEY;
+  const password = rawPassword || decryptFamileoPassword(encryptedPassword, passwordKey);
 
   if (!email || !password) {
-    console.error('Error: FAMILEO_EMAIL and FAMILEO_PASSWORD environment variables are required');
+    console.error('Error: FAMILEO_EMAIL and password are required (FAMILEO_PASSWORD or FAMILEO_PASSWORD_ENC + FAMILEO_PW_KEY)');
     process.exit(1);
   }
 

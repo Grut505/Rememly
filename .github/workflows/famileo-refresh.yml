@@ -3,6 +3,11 @@ name: Refresh Famileo Session
 on:
   workflow_dispatch:
     # Allow manual trigger from GitHub UI or API
+    inputs:
+      user_email:
+        description: 'Famileo user email to refresh'
+        required: true
+        type: string
 
 jobs:
   refresh-session:
@@ -22,11 +27,21 @@ jobs:
           cd scripts/famileo-refresh
           npm install
 
+      - name: Fetch Famileo credentials
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          BACKEND_SECRET_TOKEN: ${{ secrets.BACKEND_SECRET_TOKEN }}
+          FAMILEO_USER_EMAIL: ${{ inputs.user_email }}
+        run: |
+          cd scripts/famileo-refresh
+          node fetch-password.js
+
       - name: Run Famileo login and get cookies
         id: login
         env:
-          FAMILEO_EMAIL: ${{ secrets.FAMILEO_EMAIL }}
-          FAMILEO_PASSWORD: ${{ secrets.FAMILEO_PASSWORD }}
+          FAMILEO_EMAIL: ${{ env.FAMILEO_EMAIL }}
+          FAMILEO_PASSWORD_ENC: ${{ env.FAMILEO_PASSWORD_ENC }}
+          FAMILEO_PW_KEY: ${{ secrets.FAMILEO_PW_KEY }}
         run: |
           cd scripts/famileo-refresh
           node login.js
@@ -35,6 +50,7 @@ jobs:
         env:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
           BACKEND_SECRET_TOKEN: ${{ secrets.BACKEND_SECRET_TOKEN }}
+          FAMILEO_EMAIL: ${{ env.FAMILEO_EMAIL }}
         run: |
           cd scripts/famileo-refresh
           node update-backend.js

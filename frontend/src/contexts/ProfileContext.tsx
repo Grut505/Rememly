@@ -19,13 +19,14 @@ function fileToBase64(file: File): Promise<string> {
 export interface UserProfile {
   pseudo: string
   famileo_name?: string
+  famileo_password_set?: boolean
   avatar_url: string
 }
 
 interface ProfileContextType {
   profile: UserProfile | null
   isLoading: boolean
-  saveProfile: (pseudo: string, famileoName: string, avatarFile?: File) => Promise<void>
+  saveProfile: (pseudo: string, famileoName: string, famileoPassword?: string, avatarFile?: File) => Promise<void>
   reloadProfile: () => void
   avatarBlobUrl: string | null
 }
@@ -51,6 +52,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setProfile({
         pseudo: data.pseudo,
         famileo_name: data.famileo_name,
+        famileo_password_set: data.famileo_password_set,
         avatar_url: data.avatar_url
       })
 
@@ -93,9 +95,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, authLoading])
 
-  const saveProfile = async (pseudo: string, famileoName: string, avatarFile?: File) => {
+  const saveProfile = async (pseudo: string, famileoName: string, famileoPassword?: string, avatarFile?: File) => {
     try {
       const payload: SaveProfilePayload = { pseudo, famileo_name: famileoName }
+      if (famileoPassword && famileoPassword.trim()) {
+        payload.famileo_password = famileoPassword.trim()
+      }
 
       if (avatarFile) {
         // Convert image to base64
@@ -106,6 +111,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const data = await profileApi.save(payload)
       setProfile({
         pseudo: data.pseudo,
+        famileo_password_set: data.famileo_password_set,
         avatar_url: data.avatar_url
       })
 

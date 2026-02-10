@@ -43,13 +43,16 @@ export function Profile() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [famileoName, setFamileoName] = useState('')
   const [initialFamileoName, setInitialFamileoName] = useState('')
+  const [famileoPassword, setFamileoPassword] = useState('')
+  const [hasFamileoPassword, setHasFamileoPassword] = useState(false)
   const [previewUrl, setPreviewUrl] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [initialPseudo, setInitialPseudo] = useState('')
   const isDirty =
     pseudo.trim() !== initialPseudo.trim() ||
     famileoName.trim() !== initialFamileoName.trim() ||
-    avatarFile !== null
+    avatarFile !== null ||
+    famileoPassword.trim().length > 0
 
   useEffect(() => {
     if (profile) {
@@ -57,6 +60,7 @@ export function Profile() {
       setInitialPseudo(profile.pseudo || '')
       setFamileoName(profile.famileo_name || '')
       setInitialFamileoName(profile.famileo_name || '')
+      setHasFamileoPassword(!!profile.famileo_password_set)
       // Use blob URL from context if available, otherwise use Drive URL
       setPreviewUrl(avatarBlobUrl || profile.avatar_url)
     } else if (user) {
@@ -64,8 +68,10 @@ export function Profile() {
       setInitialPseudo(user.name || '')
       setFamileoName('')
       setInitialFamileoName('')
+      setHasFamileoPassword(false)
     }
     setAvatarFile(null)
+    setFamileoPassword('')
   }, [profile, user, avatarBlobUrl])
 
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,10 +92,11 @@ export function Profile() {
     setIsSaving(true)
     try {
       const nextPseudo = pseudo.trim()
-      await saveProfile(nextPseudo, famileoName.trim(), avatarFile || undefined)
+      await saveProfile(nextPseudo, famileoName.trim(), famileoPassword.trim() || undefined, avatarFile || undefined)
       setPseudo(nextPseudo)
       setInitialPseudo(nextPseudo)
       setAvatarFile(null)
+      setFamileoPassword('')
       showToast('Profile saved', 'success')
     } catch (error) {
       showToast('Failed to save profile', 'error')
@@ -170,6 +177,22 @@ export function Profile() {
             onChange={(e) => setFamileoName(e.target.value)}
             placeholder="Exact name used in Famileo"
           />
+        </div>
+
+        {/* Famileo password */}
+        <div>
+          <Input
+            label="Famileo password"
+            type="password"
+            value={famileoPassword}
+            onChange={(e) => setFamileoPassword(e.target.value)}
+            placeholder={hasFamileoPassword ? 'Leave empty to keep current password' : 'Set Famileo password'}
+          />
+          {hasFamileoPassword && (
+            <p className="text-xs text-gray-500 mt-2">
+              A password is already saved for Famileo.
+            </p>
+          )}
         </div>
 
         {/* Email (read-only) */}

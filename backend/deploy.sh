@@ -6,7 +6,19 @@ echo "📤 Pushing backend to Google Apps Script..."
 npx clasp push
 
 echo "🚀 Deploying new version..."
-DEPLOYMENT_OUTPUT=$(npx clasp deploy --description "Auto-deploy $(date '+%Y-%m-%d %H:%M:%S')")
+DEPLOYMENT_OUTPUT=$(npx clasp deploy --description "Auto-deploy $(date '+%Y-%m-%d %H:%M:%S')" 2>&1)
+DEPLOY_STATUS=$?
+
+if [ $DEPLOY_STATUS -ne 0 ]; then
+  if echo "$DEPLOYMENT_OUTPUT" | grep -qi "limit of 200 versions"; then
+    echo "❌ Deploy failed: Apps Script reached the 200 versions limit."
+    echo "➡️  Fix: open the Apps Script project, go to Version history, delete old versions, then re-run deploy."
+  else
+    echo "❌ Deploy failed:"
+    echo "$DEPLOYMENT_OUTPUT"
+  fi
+  exit 1
+fi
 
 # Extract deployment ID from output
 DEPLOYMENT_ID=$(echo "$DEPLOYMENT_OUTPUT" | grep -oP 'AKfycb[a-zA-Z0-9_-]+' | tail -1)

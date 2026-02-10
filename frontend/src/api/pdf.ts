@@ -9,6 +9,33 @@ export interface PdfOptions {
   family_name?: string
   cover_title?: string
   cover_subtitle?: string
+  cover_vertical_letter_spacing_em?: number
+  cover_family_x_cm?: number
+  cover_family_font_family?: string
+  cover_family_font_weight?: number
+  cover_family_letter_spacing_em?: number
+  cover_family_h_cm?: number
+  cover_family_scale_x?: number
+  cover_family_scale_y?: number
+  cover_title_font_family?: string
+  cover_title_font_weight?: number
+  cover_title_letter_spacing_em?: number
+  cover_title_scale_x?: number
+  cover_title_scale_y?: number
+  cover_title_x_cm?: number
+  cover_title_y_cm?: number
+  cover_title_w_cm?: number
+  cover_title_h_cm?: number
+  cover_subtitle_font_family?: string
+  cover_subtitle_font_weight?: number
+  cover_subtitle_letter_spacing_em?: number
+  cover_subtitle_scale_x?: number
+  cover_subtitle_scale_y?: number
+  cover_subtitle_x_cm?: number
+  cover_subtitle_y_cm?: number
+  cover_subtitle_w_cm?: number
+  cover_subtitle_h_cm?: number
+  preview_solid?: boolean
   auto_merge?: boolean
   clean_chunks?: boolean
 }

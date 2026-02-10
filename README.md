@@ -132,12 +132,18 @@ Configure Script Properties:
 2. (Optional) Add Script Property:
    - Key: `SPREADSHEET_ID` (will be created automatically on first run)
 
+See `docs/ENVIRONMENT_VARIABLES.md` for the full list of Script Properties and GitHub Secrets.
+
 Configure authorized users:
 1. Open the spreadsheet
 2. In the `users` sheet, add authorized emails in the `email` column
 3. Set `status` to `ACTIVE` (only `ACTIVE` is allowed; new users auto-added as `PENDING` on first access)
 
 See [backend/README.md](backend/README.md) for detailed backend setup.
+
+### GitHub Secrets
+
+See `docs/ENVIRONMENT_VARIABLES.md`.
 
 ### 4. Run Development Server
 

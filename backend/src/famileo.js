@@ -34,14 +34,21 @@ function clearFamileoSession() {
   Logger.log('Famileo session cleared');
 }
 
+function getFamileoSessionKey(userEmail) {
+  const normalized = normalizeEmail(userEmail || '');
+  if (!normalized) return 'famileo_session';
+  return `famileo_session_${normalized}`;
+}
+
 /**
  * Get stored session cookies
  * First tries to read from Config sheet (updated by GitHub Actions)
  * Falls back to Script Properties (legacy/manual method)
  */
-function getFamileoSession() {
+function getFamileoSession(userEmail) {
   // Try Config sheet first (populated by GitHub Actions)
-  const configSession = getConfigValue('famileo_session');
+  const configKey = getFamileoSessionKey(userEmail);
+  const configSession = getConfigValue(configKey) || getConfigValue('famileo_session');
   if (configSession) {
     try {
       return JSON.parse(configSession);
@@ -98,12 +105,13 @@ function handleFamileoUpdateSession(body) {
       });
     }
 
-    // Store session in Config sheet
     const session = {
       PHPSESSID: body.phpsessid,
       REMEMBERME: body.rememberme
     };
-    setConfigValue('famileo_session', JSON.stringify(session));
+    const targetEmail = body.user_email || body.userEmail || '';
+    const sessionKey = getFamileoSessionKey(targetEmail);
+    setConfigValue(sessionKey, JSON.stringify(session));
 
     // Optionally update family ID
     if (body.familyId) {
@@ -114,7 +122,7 @@ function handleFamileoUpdateSession(body) {
 
     return createResponse({
       ok: true,
-      data: { message: 'Session updated successfully' }
+      data: { message: 'Session updated successfully', session_key: sessionKey }
     });
   } catch (error) {
     Logger.log('Update session error: ' + error);
@@ -140,7 +148,7 @@ function formatCookies(cookies) {
  * @param {string} timestamp - ISO timestamp for pagination (fetches posts before this date)
  * @param {string} familyId - Optional family ID to use (overrides default)
  */
-function famileoFetchPosts(limit = 20, timestamp = null, familyId = null) {
+function famileoFetchPosts(limit = 20, timestamp = null, familyId = null, userEmail = null) {
   if (!familyId) {
     const props = PropertiesService.getScriptProperties();
     familyId = props.getProperty('FAMILEO_FAMILY_ID') || '321238';
@@ -184,7 +192,7 @@ function famileoFetchPosts(limit = 20, timestamp = null, familyId = null) {
  *   - timestamp: ISO date string to fetch posts before (for pagination)
  *   - family_id: optional Famileo family ID to use
  */
-function handleFamileoPosts(params) {
+function handleFamileoPosts(params, userEmail) {
   try {
     const limit = parseInt(params.limit) || 20;
     const timestamp = params.timestamp || null;
@@ -193,7 +201,7 @@ function handleFamileoPosts(params) {
     const authorFilter = String(authorFilterRaw).toLowerCase();
     const isSpecificAuthor = authorFilter && authorFilter !== 'all' && authorFilter !== 'others' && authorFilter !== 'declared';
 
-    const response = famileoFetchPosts(limit, timestamp, familyId);
+    const response = famileoFetchPosts(limit, timestamp, familyId, userEmail);
 
     // Build allowed authors from users sheet (famileo_name)
     const famileoAuthorMap = buildFamileoAuthorMap();
@@ -272,7 +280,7 @@ function handleFamileoPosts(params) {
 /**
  * Fetch a Famileo image and return as base64
  */
-function famileoFetchImage(imageUrl) {
+function famileoFetchImage(imageUrl, userEmail) {
   // Accept Famileo image URLs from cloudfront or direct famileo.com domains
   if (!imageUrl || (!imageUrl.includes('cloudfront.net') && !imageUrl.includes('famileo.com') && !imageUrl.includes('famileo.'))) {
     throw new Error('Invalid Famileo image URL: ' + (imageUrl || 'empty'));
@@ -305,10 +313,65 @@ function famileoFetchImage(imageUrl) {
 }
 
 /**
+ * Handler for famileo/user-credentials endpoint (GitHub Actions)
+ * Returns encrypted Famileo password for a given user email
+ */
+function handleFamileoUserCredentials(body) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const expectedToken = props.getProperty('FAMILEO_UPDATE_TOKEN');
+
+    if (!expectedToken) {
+      return createResponse({
+        ok: false,
+        error: { code: 'NOT_CONFIGURED', message: 'Update token not configured in Script Properties' }
+      });
+    }
+
+    if (body.token !== expectedToken) {
+      return createResponse({
+        ok: false,
+        error: { code: 'UNAUTHORIZED', message: 'Invalid token' }
+      });
+    }
+
+    const userEmail = normalizeEmail(body.user_email || body.userEmail || '');
+    if (!userEmail) {
+      return createResponse({
+        ok: false,
+        error: { code: 'INVALID_DATA', message: 'Missing user_email' }
+      });
+    }
+
+    const user = findUserByEmail(userEmail);
+    if (!user || !user.famileo_password_enc) {
+      return createResponse({
+        ok: false,
+        error: { code: 'NOT_FOUND', message: 'No password configured for this user' }
+      });
+    }
+
+    return createResponse({
+      ok: true,
+      data: {
+        user_email: userEmail,
+        password_enc: user.famileo_password_enc,
+      }
+    });
+  } catch (error) {
+    Logger.log('Famileo user credentials error: ' + error);
+    return createResponse({
+      ok: false,
+      error: { code: 'FAMILEO_ERROR', message: String(error) }
+    });
+  }
+}
+
+/**
  * Create a Famileo post
  */
 function famileoCreatePost(text, publishedAt, familyId, imageKey, isFullPage, userEmail) {
-  const session = getFamileoSession();
+  const session = getFamileoSession(userEmail);
   const targetFamilyId = familyId || '321238';
   const url = `https://www.famileo.com/api/families/${targetFamilyId}/posts?return_validation_errors=1`;
 
@@ -356,7 +419,7 @@ function famileoCreatePost(text, publishedAt, familyId, imageKey, isFullPage, us
  * Request a presigned upload URL for Famileo post image
  */
 function famileoGetPresignedImageUrl(userEmail) {
-  const session = getFamileoSession();
+  const session = getFamileoSession(userEmail);
   const url = 'https://www.famileo.com/api/v1/presigned_urls';
   const payload = JSON.stringify({ type: 'post.image' });
 
@@ -436,7 +499,7 @@ function famileoUploadImage(presign, base64, mimeType, filename, userEmail) {
 /**
  * Handler for famileo/image endpoint
  */
-function handleFamileoImage(params) {
+function handleFamileoImage(params, userEmail) {
   try {
     const imageUrl = params.url;
     if (!imageUrl) {
@@ -446,7 +509,7 @@ function handleFamileoImage(params) {
       });
     }
 
-    const image = famileoFetchImage(decodeURIComponent(imageUrl));
+    const image = famileoFetchImage(decodeURIComponent(imageUrl), userEmail);
 
     return createResponse({
       ok: true,
@@ -467,10 +530,9 @@ function handleFamileoImage(params) {
 /**
  * Handler for famileo/status endpoint - check if session is valid
  */
-function handleFamileoStatus(params) {
+function handleFamileoStatus(params, userEmail) {
   try {
-    const props = PropertiesService.getScriptProperties();
-    const sessionJson = props.getProperty('FAMILEO_SESSION');
+    const sessionJson = getConfigValue(getFamileoSessionKey(userEmail)) || getConfigValue('famileo_session');
 
     if (!sessionJson) {
       return createResponse({
@@ -489,7 +551,7 @@ function handleFamileoStatus(params) {
 
     try {
       const familyId = params && params.family_id ? params.family_id : null;
-      famileoFetchPosts(1, null, familyId);
+      famileoFetchPosts(1, null, familyId, userEmail);
       return createResponse({
         ok: true,
         data: { configured: true, valid: true, message: 'Session valid' }
@@ -512,10 +574,18 @@ function handleFamileoStatus(params) {
  * Handler for famileo/trigger-refresh endpoint
  * Triggers the GitHub Actions workflow to refresh Famileo session
  */
-function handleFamileoTriggerRefresh() {
+function handleFamileoTriggerRefresh(userEmail) {
   try {
     const props = PropertiesService.getScriptProperties();
     const githubToken = props.getProperty('GITHUB_TOKEN');
+    const targetEmail = normalizeEmail(userEmail || '');
+
+    if (!targetEmail) {
+      return createResponse({
+        ok: false,
+        error: { code: 'INVALID_DATA', message: 'user_email is required' }
+      });
+    }
 
     if (!githubToken) {
       return createResponse({
@@ -534,7 +604,12 @@ function handleFamileoTriggerRefresh() {
           'Accept': 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28'
         },
-        payload: JSON.stringify({ ref: 'main' }),
+        payload: JSON.stringify({
+          ref: 'main',
+          inputs: {
+            user_email: targetEmail
+          }
+        }),
         muteHttpExceptions: true
       }
     );
@@ -552,7 +627,11 @@ function handleFamileoTriggerRefresh() {
       Logger.log('GitHub API error: ' + responseText);
       return createResponse({
         ok: false,
-        error: { code: 'GITHUB_ERROR', message: 'Failed to trigger workflow: HTTP ' + responseCode }
+        error: {
+          code: 'GITHUB_ERROR',
+          message: 'Failed to trigger workflow: HTTP ' + responseCode,
+          details: responseText
+        }
       });
     }
   } catch (error) {
@@ -620,7 +699,7 @@ function handleFamileoPresignedImage(userEmail) {
 
     if (sessionExpired) {
       try {
-        handleFamileoTriggerRefresh();
+        handleFamileoTriggerRefresh(userEmail);
       } catch (refreshError) {
         logFamileoEvent('error', 'Famileo presign refresh error', userEmail, { error: String(refreshError) });
       }
@@ -707,7 +786,7 @@ function handleFamileoCreatePost(body, userEmail) {
 
     if (sessionExpired) {
       try {
-        handleFamileoTriggerRefresh();
+        handleFamileoTriggerRefresh(userEmail);
       } catch (refreshError) {
         logFamileoEvent('error', 'Famileo create post refresh error', userEmail, { error: String(refreshError) });
       }

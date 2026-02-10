@@ -24,6 +24,24 @@ interface MonthCount {
 
 type Step = 'dates' | 'preview' | 'options'
 
+const parseDateParts = (value: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return { y: '', m: '', d: '' }
+  return { y: match[1], m: match[2], d: match[3] }
+}
+
+const buildDateString = (y: string, m: string, d: string) => {
+  if (!y || !m || !d) return ''
+  return `${y}-${m}-${d}`
+}
+
+const getDaysInMonth = (year: string, month: string) => {
+  const y = Number(year)
+  const m = Number(month)
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return 31
+  return new Date(y, m, 0).getDate()
+}
+
 export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateModalProps) {
   const { startGeneration, isGenerating } = usePdfGenerationStore()
 
@@ -51,9 +69,12 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const [coverTitle, setCoverTitle] = useState('')
   const [coverSubtitle, setCoverSubtitle] = useState('')
   const [configLoading, setConfigLoading] = useState(false)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [previewFileId, setPreviewFileId] = useState<string | null>(null)
-  const [previewLoading, setPreviewLoading] = useState(false)
+  const [activePicker, setActivePicker] = useState<'start' | 'end'>('start')
+  const [tempDate, setTempDate] = useState({ y: '', m: '', d: '' })
+  const [isPwa, setIsPwa] = useState(false)
+
+  const currentYear = new Date().getFullYear()
+  const yearOptions = Array.from({ length: 26 }, (_, i) => String(currentYear - 10 + i))
 
   const reset = () => {
     setStep('dates')
@@ -74,9 +95,6 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   }
 
   const handleClose = () => {
-    if (previewUrl || previewFileId) {
-      void handleClosePreview()
-    }
     reset()
     onClose()
   }
@@ -192,64 +210,34 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     onComplete(job)
   }
 
-  const handleOpenPreview = async () => {
-    if (!startDate || !endDate) {
-      setError('Please select a start and end date')
-      return
+
+  const openDatePicker = (which: 'start' | 'end') => {
+    const source = which === 'start' ? startDate : endDate
+    const parts = parseDateParts(source)
+    if (!parts.y || !parts.m || !parts.d) {
+      const today = new Date()
+      parts.y = String(today.getFullYear())
+      parts.m = String(today.getMonth() + 1).padStart(2, '0')
+      parts.d = String(today.getDate()).padStart(2, '0')
     }
-    setPreviewLoading(true)
-    setError(null)
-    try {
-      const response = await pdfApi.previewCover({
-        from: startDate,
-        to: endDate,
-        options: {
-          max_mosaic_photos: maxMosaicPhotos > 0 ? maxMosaicPhotos : undefined,
-          cover_style: coverStyle,
-          family_name: familyName.trim() || undefined,
-          cover_title: coverTitle.trim() || undefined,
-          cover_subtitle: coverSubtitle.trim() || undefined,
-        },
-      })
-      setPreviewFileId(response.file_id)
-      const content = await pdfApi.previewCoverContent(response.file_id)
-      const byteCharacters = atob(content.base64)
-      const byteArrays: Uint8Array[] = []
-      const sliceSize = 1024
-      for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
-        const slice = byteCharacters.slice(offset, offset + sliceSize)
-        const byteNumbers = new Array(slice.length)
-        for (let i = 0; i < slice.length; i++) {
-          byteNumbers[i] = slice.charCodeAt(i)
-        }
-        byteArrays.push(new Uint8Array(byteNumbers))
-      }
-      const blob = new Blob(byteArrays, { type: content.mime_type || 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      setPreviewUrl(url)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate cover preview')
-    } finally {
-      setPreviewLoading(false)
-    }
+    setTempDate(parts)
+    setActivePicker(which)
   }
 
-  const handleClosePreview = async () => {
-    const fileId = previewFileId
-    const url = previewUrl
-    setPreviewUrl(null)
-    setPreviewFileId(null)
-    if (url && url.startsWith('blob:')) {
-      URL.revokeObjectURL(url)
+  // preview moved to Settings
+
+  const applyTempDate = (next: string) => {
+    if (!next) return
+    if (activePicker === 'start') {
+      setStartDate(next)
+      if (endDate && next > endDate) setEndDate(next)
+    } else {
+      setEndDate(next)
+      if (startDate && next < startDate) setStartDate(next)
     }
-    if (fileId) {
-      try {
-        await pdfApi.deleteCoverPreview(fileId)
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
+    if (error) setError(null)
   }
+
 
   useEffect(() => {
     if (!isOpen) return
@@ -274,7 +262,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
           configApi.get('pdf_cover_subtitle'),
         ])
         if (cancelled) return
-        setFamilyName(familyResult.value || '')
+        const familyValue = familyResult.value || ''
+        setFamilyName(familyValue)
         setCoverTitle(titleResult.value || '')
         setCoverSubtitle(subtitleResult.value || '')
       } catch {
@@ -290,6 +279,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       }
     }
     loadConfig()
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as { standalone?: boolean }).standalone === true
+    setIsPwa(standalone)
     return () => {
       cancelled = true
       document.body.style.overflow = previous.overflow
@@ -299,6 +290,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       window.scrollTo(0, scrollY)
     }
   }, [isOpen])
+
 
   if (!isOpen) return null
 
@@ -310,34 +302,20 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         onClick={handleClose}
       />
 
-      {previewUrl && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={handleClosePreview} />
-          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-4xl h-[85vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Cover preview</h3>
-              <button
-                onClick={handleClosePreview}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                  <path d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 bg-gray-50">
-              <iframe
-                title="Cover preview"
-                src={previewUrl}
-                className="w-full h-full"
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal */}
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col mx-2">
+      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col mx-2 pdf-generate-modal">
+        <style>
+          {`
+            .pdf-generate-modal input[type="date"] {
+              width: 100% !important;
+              max-width: 100% !important;
+              min-width: 0 !important;
+              box-sizing: border-box !important;
+              display: block;
+            }
+          `}
+        </style>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">
@@ -373,42 +351,121 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Start date
                 </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => {
-                    const next = e.target.value
-                    setStartDate(next)
-                    if (endDate && next && endDate < next) {
-                      setEndDate(next)
-                    }
-                    if (error) setError(null)
-                  }}
-                  disabled={loading}
-                  max={endDate || undefined}
-                  className="block w-full min-w-0 max-w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
-                />
+                {isPwa ? (
+                  <button
+                    type="button"
+                    onClick={() => openDatePicker('start')}
+                    disabled={loading}
+                    className={`w-full px-3 py-2 border rounded-lg text-left text-sm bg-white ${
+                      activePicker === 'start' ? 'border-primary-500 ring-1 ring-primary-200' : 'border-gray-300'
+                    }`}
+                  >
+                    {startDate || 'Select date'}
+                  </button>
+                ) : (
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      const next = e.target.value
+                      setStartDate(next)
+                      if (endDate && next && endDate < next) setEndDate(next)
+                      if (error) setError(null)
+                    }}
+                    disabled={loading}
+                    max={endDate || undefined}
+                    className="block w-full min-w-0 max-w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                    style={{ maxWidth: '100%', width: '100%' }}
+                  />
+                )}
               </div>
               <div className="min-w-0">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   End date
                 </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => {
-                    const next = e.target.value
-                    setEndDate(next)
-                    if (startDate && next && next < startDate) {
-                      setStartDate(next)
-                    }
-                    if (error) setError(null)
-                  }}
-                  disabled={loading}
-                  min={startDate || undefined}
-                  className="block w-full min-w-0 max-w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
-                />
+                {isPwa ? (
+                  <button
+                    type="button"
+                    onClick={() => openDatePicker('end')}
+                    disabled={loading}
+                    className={`w-full px-3 py-2 border rounded-lg text-left text-sm bg-white ${
+                      activePicker === 'end' ? 'border-primary-500 ring-1 ring-primary-200' : 'border-gray-300'
+                    }`}
+                  >
+                    {endDate || 'Select date'}
+                  </button>
+                ) : (
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => {
+                      const next = e.target.value
+                      setEndDate(next)
+                      if (startDate && next && next < startDate) setStartDate(next)
+                      if (error) setError(null)
+                    }}
+                    disabled={loading}
+                    min={startDate || undefined}
+                    className="block w-full min-w-0 max-w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                    style={{ maxWidth: '100%', width: '100%' }}
+                  />
+                )}
               </div>
+              {isPwa && (
+                <div className="mt-2 border border-gray-200 rounded-lg bg-gray-50 p-3">
+                  <div className="text-xs text-gray-500 mb-2">Select date (wheel)</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(() => {
+                      const days = getDaysInMonth(tempDate.y, tempDate.m)
+                      const lists = [
+                        { key: 'y', values: yearOptions },
+                        { key: 'm', values: Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')) },
+                        { key: 'd', values: Array.from({ length: days }, (_, i) => String(i + 1).padStart(2, '0')) },
+                      ] as const
+                      const itemHeight = 32
+                      return lists.map((list) => (
+                        <div
+                          key={list.key}
+                          className="h-40 overflow-y-auto snap-y snap-mandatory bg-white border border-gray-200 rounded-lg"
+                          onScroll={(e) => {
+                            const el = e.currentTarget
+                            const index = Math.round(el.scrollTop / itemHeight)
+                            const value = list.values[Math.max(0, Math.min(list.values.length - 1, index))] || ''
+                            setTempDate((prev) => {
+                              const next = { ...prev, [list.key]: value }
+                              if (list.key === 'm') {
+                                const maxDays = getDaysInMonth(next.y, value)
+                                if (next.d && Number(next.d) > maxDays) {
+                                  next.d = String(maxDays).padStart(2, '0')
+                                }
+                              }
+                              const nextStr = buildDateString(next.y, next.m, next.d)
+                              applyTempDate(nextStr)
+                              return next
+                            })
+                          }}
+                        >
+                          <div style={{ height: itemHeight }} />
+                          {list.values.map((val) => {
+                            const selected = tempDate[list.key as 'y' | 'm' | 'd'] === val
+                            return (
+                              <div
+                                key={val}
+                                className={`h-8 flex items-center justify-center snap-center text-sm ${
+                                  selected ? 'text-primary-700 font-semibold' : 'text-gray-600'
+                                }`}
+                              >
+                                {val}
+                              </div>
+                            )
+                          })}
+                          <div style={{ height: itemHeight }} />
+                        </div>
+                      ))
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -530,7 +587,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                     <input
                       type="text"
                       value={familyName}
-                      onChange={(e) => setFamilyName(e.target.value)}
+                      onChange={(e) => setFamilyName(e.target.value.slice(0, 30))}
+                      maxLength={30}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                       placeholder="Famille Dupont"
                     />
@@ -542,7 +600,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                     <input
                       type="text"
                       value={coverTitle}
-                      onChange={(e) => setCoverTitle(e.target.value)}
+                      onChange={(e) => setCoverTitle(e.target.value.slice(0, 30))}
+                      maxLength={30}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                       placeholder="Memory Book"
                     />
@@ -554,7 +613,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                     <input
                       type="text"
                       value={coverSubtitle}
-                      onChange={(e) => setCoverSubtitle(e.target.value)}
+                      onChange={(e) => setCoverSubtitle(e.target.value.slice(0, 30))}
+                      maxLength={30}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                       placeholder="Du 01/01/2024 au 31/12/2024"
                     />
@@ -564,53 +624,6 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                   </p>
                 </div>
 
-                <div>
-                  {!previewUrl ? (
-                    <Button
-                      variant="secondary"
-                      onClick={handleOpenPreview}
-                      disabled={previewLoading || totalArticles === 0}
-                      fullWidth
-                    >
-                      {previewLoading ? (
-                        <span className="inline-flex items-center gap-2">
-                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Generating cover preview...
-                        </span>
-                      ) : (
-                        'Preview cover'
-                      )}
-                    </Button>
-                  ) : (
-                    <div className="space-y-2">
-                      <a
-                        href={previewUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-primary-200 bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 transition-colors"
-                      >
-                        Open cover PDF
-                        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                          <path d="M14 3h7v7m0-7L10 14m-4 7h7a2 2 0 002-2v-7"></path>
-                        </svg>
-                      </a>
-                      <button
-                        onClick={handleClosePreview}
-                        className="w-full text-xs text-gray-500 hover:text-gray-700"
-                      >
-                        Close preview
-                      </button>
-                    </div>
-                  )}
-                  {totalArticles === 0 && (
-                    <p className="text-xs text-amber-600 mt-2">
-                      No active articles in this range.
-                    </p>
-                  )}
-                </div>
               </div>
 
               {/* Month divider layout */}
@@ -739,6 +752,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
           )}
         </div>
       </div>
+
     </div>
   )
 }

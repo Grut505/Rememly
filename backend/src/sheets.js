@@ -311,6 +311,7 @@ function getUsersHeaders() {
     'email',
     'pseudo',
     'famileo_name',
+    'famileo_password_enc',
     'avatar_url',
     'avatar_file_id',
     'status',
@@ -367,7 +368,7 @@ function getUsersHeaderMap(sheet) {
     .getValues()[0];
   const map = {};
   headers.forEach((header, index) => {
-    if (header) map[header] = index;
+    if (header && map[header] === undefined) map[header] = index;
   });
   return map;
 }
@@ -401,6 +402,7 @@ function getUserRowData(row, headerMap) {
     email: row[headerMap.email],
     pseudo: headerMap.pseudo === undefined ? null : row[headerMap.pseudo],
     famileo_name: headerMap.famileo_name === undefined ? null : row[headerMap.famileo_name],
+    famileo_password_enc: headerMap.famileo_password_enc === undefined ? null : row[headerMap.famileo_password_enc],
     avatar_url: headerMap.avatar_url === undefined ? null : row[headerMap.avatar_url],
     avatar_file_id: headerMap.avatar_file_id === undefined ? null : row[headerMap.avatar_file_id],
     status: headerMap.status === undefined ? null : row[headerMap.status],
@@ -602,15 +604,20 @@ function setConfigValue(key, value) {
   const sheet = getConfigSheet();
   const data = sheet.getDataRange().getValues();
   const now = new Date().toISOString();
+  const valueStr = value === null || value === undefined ? '' : String(value);
 
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === key) {
-      sheet.getRange(i + 1, 2).setValue(value);
+      const cell = sheet.getRange(i + 1, 2);
+      cell.setNumberFormat('@');
+      cell.setValue(valueStr);
       sheet.getRange(i + 1, 3).setValue(now);
       return;
     }
   }
 
   // Key not found, add new row
-  sheet.appendRow([key, value, now]);
+  const nextRow = data.length + 1;
+  sheet.getRange(nextRow, 1, 1, 3).setValues([[key, valueStr, now]]);
+  sheet.getRange(nextRow, 2).setNumberFormat('@');
 }

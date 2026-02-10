@@ -51,7 +51,6 @@ function doGet(e) {
       };
       return handlePdfCoverPreviewContent(body);
     }
-
     return ContentService.createTextOutput(
       JSON.stringify({ error: 'Use POST requests' })
     ).setMimeType(ContentService.MimeType.JSON);
@@ -71,6 +70,10 @@ function doPost(e) {
     if (path === 'famileo/update-session') {
       const body = e.postData ? JSON.parse(e.postData.contents) : {};
       return handleFamileoUpdateSession(body);
+    }
+    if (path === 'famileo/user-credentials') {
+      const body = e.postData ? JSON.parse(e.postData.contents) : {};
+      return handleFamileoUserCredentials(body);
     }
     if (path === 'pdf/merge-complete') {
       const body = e.postData ? JSON.parse(e.postData.contents) : {};
@@ -183,16 +186,16 @@ function doPost(e) {
         return handleImageFetch(params.fileId);
 
       case 'famileo/status':
-        return handleFamileoStatus(params);
+        return handleFamileoStatus(params, authResult.user.email);
 
       case 'famileo/posts':
-        return handleFamileoPosts(params);
+        return handleFamileoPosts(params, authResult.user.email);
 
       case 'famileo/image':
-        return handleFamileoImage(params);
+        return handleFamileoImage(params, authResult.user.email);
 
       case 'famileo/trigger-refresh':
-        return handleFamileoTriggerRefresh();
+        return handleFamileoTriggerRefresh(authResult.user.email);
 
       case 'famileo/families':
         return handleFamileoFamilies();

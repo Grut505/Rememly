@@ -11,4 +11,9 @@ New photo
 - Interface assembly sur pwa
 
 Post Famileo
-- Gestion de l'auteur par cookie...
+- Gestion de l'auteur par cookie.
+
+
+--
+Ajoute un bouton reset pour revenir à la valeur sauvegardé dans la sheet
+Ajoute un champ similaire permettant de régler la position horizontale et la taille de la font

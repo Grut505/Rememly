@@ -4,9 +4,10 @@ const path = require('path');
 async function updateBackend() {
   const backendUrl = process.env.BACKEND_URL;
   const secretToken = process.env.BACKEND_SECRET_TOKEN;
+  const userEmail = process.env.FAMILEO_EMAIL;
 
-  if (!backendUrl || !secretToken) {
-    console.error('Error: BACKEND_URL and BACKEND_SECRET_TOKEN environment variables are required');
+  if (!backendUrl || !secretToken || !userEmail) {
+    console.error('Error: BACKEND_URL, BACKEND_SECRET_TOKEN, and FAMILEO_EMAIL environment variables are required');
     process.exit(1);
   }
 
@@ -34,7 +35,8 @@ async function updateBackend() {
       body: JSON.stringify({
         token: secretToken,
         phpsessid: cookies.phpsessid,
-        rememberme: cookies.rememberme
+        rememberme: cookies.rememberme,
+        user_email: userEmail
       })
     });
 

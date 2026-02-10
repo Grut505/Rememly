@@ -107,6 +107,30 @@ function handlePdfCreate(body, user) {
     familyName: body.options?.family_name || undefined,
     coverTitle: body.options?.cover_title || undefined,
     coverSubtitle: body.options?.cover_subtitle || undefined,
+    coverVerticalLetterSpacingEm: body.options?.cover_vertical_letter_spacing_em || undefined,
+    coverTitleXcm: body.options?.cover_title_x_cm || undefined,
+    coverTitleYcm: body.options?.cover_title_y_cm || undefined,
+    coverTitleHcm: body.options?.cover_title_h_cm || undefined,
+    coverTitleFontFamily: body.options?.cover_title_font_family || undefined,
+    coverTitleFontWeight: body.options?.cover_title_font_weight || undefined,
+    coverTitleLetterSpacingEm: body.options?.cover_title_letter_spacing_em || undefined,
+    coverTitleScaleX: body.options?.cover_title_scale_x || undefined,
+    coverTitleScaleY: body.options?.cover_title_scale_y || undefined,
+    coverSubtitleXcm: body.options?.cover_subtitle_x_cm || undefined,
+    coverSubtitleYcm: body.options?.cover_subtitle_y_cm || undefined,
+    coverSubtitleHcm: body.options?.cover_subtitle_h_cm || undefined,
+    coverSubtitleFontFamily: body.options?.cover_subtitle_font_family || undefined,
+    coverSubtitleFontWeight: body.options?.cover_subtitle_font_weight || undefined,
+    coverSubtitleLetterSpacingEm: body.options?.cover_subtitle_letter_spacing_em || undefined,
+    coverSubtitleScaleX: body.options?.cover_subtitle_scale_x || undefined,
+    coverSubtitleScaleY: body.options?.cover_subtitle_scale_y || undefined,
+    coverFamilyXcm: body.options?.cover_family_x_cm || undefined,
+    coverFamilyFontFamily: body.options?.cover_family_font_family || undefined,
+    coverFamilyFontWeight: body.options?.cover_family_font_weight || undefined,
+    coverFamilyLetterSpacingEm: body.options?.cover_family_letter_spacing_em || undefined,
+    coverFamilyHcm: body.options?.cover_family_h_cm || undefined,
+    coverFamilyScaleX: body.options?.cover_family_scale_x || undefined,
+    coverFamilyScaleY: body.options?.cover_family_scale_y || undefined,
     autoMerge: body.options?.auto_merge === true,
     cleanChunks: body.options?.clean_chunks === true
   }));
@@ -144,6 +168,31 @@ function handlePdfCoverPreview(body, user) {
       familyName: options.family_name,
       coverTitle: options.cover_title,
       coverSubtitle: options.cover_subtitle,
+      coverVerticalLetterSpacingEm: options.cover_vertical_letter_spacing_em,
+      coverTitleXcm: options.cover_title_x_cm,
+      coverTitleYcm: options.cover_title_y_cm,
+      coverTitleHcm: options.cover_title_h_cm,
+      coverTitleFontFamily: options.cover_title_font_family,
+      coverTitleFontWeight: options.cover_title_font_weight,
+      coverTitleLetterSpacingEm: options.cover_title_letter_spacing_em,
+      coverTitleScaleX: options.cover_title_scale_x,
+      coverTitleScaleY: options.cover_title_scale_y,
+      coverSubtitleXcm: options.cover_subtitle_x_cm,
+      coverSubtitleYcm: options.cover_subtitle_y_cm,
+      coverSubtitleHcm: options.cover_subtitle_h_cm,
+      coverSubtitleFontFamily: options.cover_subtitle_font_family,
+      coverSubtitleFontWeight: options.cover_subtitle_font_weight,
+      coverSubtitleLetterSpacingEm: options.cover_subtitle_letter_spacing_em,
+      coverSubtitleScaleX: options.cover_subtitle_scale_x,
+      coverSubtitleScaleY: options.cover_subtitle_scale_y,
+      coverFamilyXcm: options.cover_family_x_cm,
+      coverFamilyFontFamily: options.cover_family_font_family,
+      coverFamilyFontWeight: options.cover_family_font_weight,
+      coverFamilyLetterSpacingEm: options.cover_family_letter_spacing_em,
+      coverFamilyHcm: options.cover_family_h_cm,
+      coverFamilyScaleX: options.cover_family_scale_x,
+      coverFamilyScaleY: options.cover_family_scale_y,
+      previewSolid: options.preview_solid === true,
     });
 
     const coverPdf = convertHtmlToPdf(coverHtml);
@@ -402,6 +451,23 @@ async function processNextPdfChunk(jobId) {
       familyName: undefined,
       coverTitle: undefined,
       coverSubtitle: undefined,
+      coverTitleXcm: undefined,
+      coverTitleYcm: undefined,
+      coverTitleHcm: undefined,
+      coverSubtitleXcm: undefined,
+      coverSubtitleYcm: undefined,
+      coverSubtitleHcm: undefined,
+      coverFamilyXcm: undefined,
+      coverFamilyFontFamily: undefined,
+      coverFamilyFontWeight: undefined,
+      coverFamilyLetterSpacingEm: undefined,
+      coverFamilyHcm: undefined,
+      coverTitleFontFamily: undefined,
+      coverTitleFontWeight: undefined,
+      coverTitleLetterSpacingEm: undefined,
+      coverSubtitleFontFamily: undefined,
+      coverSubtitleFontWeight: undefined,
+      coverSubtitleLetterSpacingEm: undefined,
     };
 
     const monthsFr = [
@@ -1389,10 +1455,95 @@ function generateCoverOnlyHtml(articles, from, to, options = {}) {
     familyName,
     coverTitle,
     coverSubtitle,
+    coverVerticalLetterSpacingEm,
+    coverTitleXcm,
+    coverTitleYcm,
+    coverTitleHcm,
+    coverTitleFontFamily,
+    coverTitleFontWeight,
+    coverTitleLetterSpacingEm,
+    coverTitleScaleX,
+    coverTitleScaleY,
+    coverSubtitleXcm,
+    coverSubtitleYcm,
+    coverSubtitleHcm,
+    coverSubtitleFontFamily,
+    coverSubtitleFontWeight,
+    coverSubtitleLetterSpacingEm,
+    coverSubtitleScaleX,
+    coverSubtitleScaleY,
+    coverFamilyXcm,
+    coverFamilyFontFamily,
+    coverFamilyFontWeight,
+    coverFamilyLetterSpacingEm,
+    coverFamilyHcm,
+    coverFamilyScaleX,
+    coverFamilyScaleY,
+    previewSolid,
   } = options || {};
   const style = coverStyle || 'mosaic';
   const coverHtml = style === 'masked-title'
-    ? generateCoverMaskedMosaic(articles, from, to, maxMosaicPhotos, { familyName, coverTitle, coverSubtitle })
+    ? (previewSolid
+      ? generateCoverMaskedSolid({
+        familyName,
+        coverTitle,
+        coverSubtitle,
+        coverVerticalLetterSpacingEm,
+        previewSolid: true,
+        coverTitleXcm,
+        coverTitleYcm,
+        coverTitleHcm,
+        coverTitleFontFamily,
+        coverTitleFontWeight,
+        coverTitleLetterSpacingEm,
+        coverTitleScaleX,
+        coverTitleScaleY,
+        coverSubtitleXcm,
+        coverSubtitleYcm,
+        coverSubtitleHcm,
+        coverSubtitleFontFamily,
+        coverSubtitleFontWeight,
+        coverSubtitleLetterSpacingEm,
+        coverSubtitleScaleX,
+        coverSubtitleScaleY,
+        coverFamilyXcm,
+        coverFamilyFontFamily,
+        coverFamilyFontWeight,
+        coverFamilyLetterSpacingEm,
+        coverFamilyHcm,
+        coverFamilyScaleX,
+        coverFamilyScaleY,
+      })
+      : generateCoverMaskedMosaic(articles, from, to, maxMosaicPhotos, {
+        familyName,
+        coverTitle,
+        coverSubtitle,
+        coverVerticalLetterSpacingEm,
+        previewSolid: false,
+        coverTitleXcm,
+        coverTitleYcm,
+        coverTitleHcm,
+        coverTitleFontFamily,
+        coverTitleFontWeight,
+        coverTitleLetterSpacingEm,
+        coverTitleScaleX,
+        coverTitleScaleY,
+        coverSubtitleXcm,
+        coverSubtitleYcm,
+        coverSubtitleHcm,
+        coverSubtitleFontFamily,
+        coverSubtitleFontWeight,
+        coverSubtitleLetterSpacingEm,
+        coverSubtitleScaleX,
+        coverSubtitleScaleY,
+        coverFamilyXcm,
+        coverFamilyFontFamily,
+        coverFamilyFontWeight,
+        coverFamilyLetterSpacingEm,
+        coverFamilyHcm,
+        coverFamilyScaleX,
+        coverFamilyScaleY,
+      }))
     : generateCoverMosaic(articles, from, to, maxMosaicPhotos, { familyName });
   return `
 <!DOCTYPE html>
@@ -1589,78 +1740,64 @@ function getPdfStyles() {
       height: 27.7cm;
       display: flex;
       gap: 0;
+      position: relative;
     }
 
     .cover-mask-left {
-      width: 9.2cm;
+      width: 19cm;
       height: 100%;
     }
 
     .cover-mask-right {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 1.2cm;
-      text-align: center;
+      display: none;
     }
 
-    .cover-mask-text {
-      display: flex;
-      flex-direction: column;
-      gap: 0.4cm;
-      align-items: flex-end;
-      width: 100%;
+    .cover-mask-overlays {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
     }
 
-    .cover-mask-title {
-      font-size: 38pt;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      color: #1f2937;
-      font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
-      white-space: nowrap;
-    }
-
-    .cover-mask-subtitle {
-      font-size: 18pt;
-      color: #6b7280;
-      font-family: "Optima", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-      white-space: nowrap;
-    }
-
-    .cover-mask-title-box,
-    .cover-mask-subtitle-box {
-      width: 100%;
-      display: flex;
-      justify-content: flex-end;
-    }
-
-    .cover-mask-title-placeholder,
-    .cover-mask-subtitle-placeholder {
-      width: 100%;
-      max-width: 100%;
+    .cover-mask-box {
+      position: absolute;
       border: 2px dashed rgba(31, 41, 55, 0.25);
       border-radius: 0.2cm;
-      padding: 0.25cm 0.35cm;
+      padding: 0;
       box-sizing: border-box;
+      background: transparent;
     }
 
-    .cover-mask-title-placeholder {
-      border-color: rgba(59, 130, 246, 0.5);
-      text-align: right;
+    .cover-mask-family-box {
+      border-color: rgba(245, 158, 11, 0.7);
+      background: transparent;
     }
 
-    .cover-mask-subtitle-placeholder {
-      border-color: rgba(16, 185, 129, 0.5);
-      text-align: center;
+    .cover-mask-family-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
+
+    .cover-mask-title-box {
+      border-color: rgba(59, 130, 246, 0.55);
+    }
+
+    .cover-mask-subtitle-box {
+      border-color: rgba(16, 185, 129, 0.55);
+    }
+
+    .cover-mask-text-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      overflow: visible;
+    }
+
 
     .cover-mask-family-placeholder {
       width: 100%;
       height: 100%;
-      border: 2px dashed rgba(239, 68, 68, 0.55);
-      border-radius: 0.2cm;
+      border: none;
     }
 
     .cover-mask {
@@ -1680,40 +1817,50 @@ function getPdfStyles() {
       height: 27.7cm;
       display: flex;
       gap: 0;
+      position: relative;
     }
 
     .cover-mask-left {
-      width: 9.2cm;
+      width: 19cm;
       height: 100%;
     }
 
     .cover-mask-right {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 1.2cm;
-      text-align: center;
+      display: none;
     }
 
-    .cover-mask-text {
-      display: flex;
-      flex-direction: column;
-      gap: 0.4cm;
+    .cover-mask-overlays {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
     }
 
-    .cover-mask-title {
-      font-size: 34pt;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      color: #1f2937;
-      font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    .cover-mask-box {
+      position: absolute;
+      border: 2px dashed rgba(31, 41, 55, 0.25);
+      border-radius: 0.2cm;
+      padding: 0;
+      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.35);
     }
 
-    .cover-mask-subtitle {
-      font-size: 16pt;
-      color: #6b7280;
-      font-family: "Optima", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    .cover-mask-family-box {
+      border-color: rgba(245, 158, 11, 0.7);
+      background: rgba(254, 243, 199, 0.35);
+    }
+
+    .cover-mask-title-box {
+      border-color: rgba(59, 130, 246, 0.55);
+    }
+
+    .cover-mask-subtitle-box {
+      border-color: rgba(16, 185, 129, 0.55);
+    }
+
+    .cover-mask-text-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
 
     .mosaic-container {
@@ -2804,23 +2951,6 @@ function generateCoverMosaic(articles, from, to, maxPhotos, coverOptions = {}) {
  * Generate a masked title cover page where the family name reveals a mosaic
  */
 function generateCoverMaskedMosaic(articles, from, to, maxPhotos, coverOptions = {}) {
-  const familyNameConfig = getConfigValue('family_name');
-  const coverTitleConfig = getConfigValue('pdf_cover_title');
-  const coverSubtitleConfig = getConfigValue('pdf_cover_subtitle');
-  const familyNameValue = coverOptions.familyName !== undefined && coverOptions.familyName !== null
-    ? coverOptions.familyName
-    : familyNameConfig;
-  const titleText = escapeHtml((familyNameValue || 'Rememly').toUpperCase());
-  const datesText = `Du ${formatDateFr(from)} au ${formatDateFr(to)}`;
-  const coverTitleValue = coverOptions.coverTitle !== undefined && coverOptions.coverTitle !== null
-    ? coverOptions.coverTitle
-    : coverTitleConfig;
-  const coverSubtitleValue = coverOptions.coverSubtitle !== undefined && coverOptions.coverSubtitle !== null
-    ? coverOptions.coverSubtitle
-    : coverSubtitleConfig;
-  const coverTitle = escapeHtml(coverTitleValue || 'Memory Book');
-  const coverSubtitle = escapeHtml(coverSubtitleValue || datesText);
-
   const images = [];
   const photoLimit = maxPhotos || articles.length;
   const coverMaxDim = parseInt(getConfigValue('pdf_cover_mask_max_dim') || '', 10) || 420;
@@ -2847,80 +2977,346 @@ function generateCoverMaskedMosaic(articles, from, to, maxPhotos, coverOptions =
     }
   }
 
-  if (images.length === 0) {
-    return `
-  <div class="cover">
-    <h1>${titleText}</h1>
-  </div>
-`;
-  }
-
-  const pageWidthCm = 21;
-  const pageHeightCm = 29.7;
-  const leftWidthCm = 9.2;
+  const pageWidthCm = 19;
+  const pageHeightCm = 27.7;
   const gap = 0.07;
   const targetCellCount = Math.max(images.length, 90);
   const tiledImages = images.length > 0 ? images.slice() : [];
   while (tiledImages.length < targetCellCount) {
     tiledImages.push(images[tiledImages.length % images.length]);
   }
-  const cells = generateSmartMosaicLayout(tiledImages, leftWidthCm, pageHeightCm, gap);
-  const scale = 100;
-  const svgWidth = Math.round(leftWidthCm * scale);
-  const svgHeight = Math.round(pageHeightCm * scale);
-  const margin = 0.1 * scale;
-  const usableHeight = svgHeight - margin * 2;
-  const heightScale = 1.18;
-  const textLength = usableHeight;
-  const textX = margin + (4.8 * scale);
-  const textY = svgHeight - margin;
-  const displayTitleText = titleText;
-  const maxFont = Math.min(600, Math.round(svgHeight * 0.6));
-  const fontSize = maxFont;
-  const familyPlaceholderWidthCm = Math.min(
-    leftWidthCm,
-    Math.max(2.6, (fontSize / scale) + 0.6)
-  );
-
+  const cells = images.length > 0
+    ? generateSmartMosaicLayout(tiledImages, pageWidthCm, pageHeightCm, gap)
+    : [];
+  const scale = 100; // 100px per cm
   let mosaicSvg = '';
   for (const cell of cells) {
     mosaicSvg += `
       <image x="${(cell.x * scale).toFixed(1)}" y="${(cell.y * scale).toFixed(1)}" width="${(cell.w * scale).toFixed(1)}" height="${(cell.h * scale).toFixed(1)}" href="data:${cell.img.mimeType};base64,${cell.img.base64}" preserveAspectRatio="xMidYMid slice" />`;
   }
 
+  return generateCoverMaskedTextHtml({
+    mosaicSvg,
+    usePreviewValues: coverOptions.previewSolid === true,
+    coverFamilyName: coverOptions.familyName,
+    coverTitle: coverOptions.coverTitle,
+    coverSubtitle: coverOptions.coverSubtitle,
+    coverVerticalLetterSpacingEm: coverOptions.coverVerticalLetterSpacingEm,
+    coverTitleXcm: coverOptions.coverTitleXcm,
+    coverTitleYcm: coverOptions.coverTitleYcm,
+    coverTitleHcm: coverOptions.coverTitleHcm,
+    coverTitleFontFamily: coverOptions.coverTitleFontFamily,
+    coverTitleFontWeight: coverOptions.coverTitleFontWeight,
+    coverTitleLetterSpacingEm: coverOptions.coverTitleLetterSpacingEm,
+    coverTitleScaleX: coverOptions.coverTitleScaleX,
+    coverTitleScaleY: coverOptions.coverTitleScaleY,
+    coverSubtitleXcm: coverOptions.coverSubtitleXcm,
+    coverSubtitleYcm: coverOptions.coverSubtitleYcm,
+    coverSubtitleHcm: coverOptions.coverSubtitleHcm,
+    coverSubtitleFontFamily: coverOptions.coverSubtitleFontFamily,
+    coverSubtitleFontWeight: coverOptions.coverSubtitleFontWeight,
+    coverSubtitleLetterSpacingEm: coverOptions.coverSubtitleLetterSpacingEm,
+    coverSubtitleScaleX: coverOptions.coverSubtitleScaleX,
+    coverSubtitleScaleY: coverOptions.coverSubtitleScaleY,
+    coverFamilyXcm: coverOptions.coverFamilyXcm,
+    coverFamilyFontFamily: coverOptions.coverFamilyFontFamily,
+    coverFamilyFontWeight: coverOptions.coverFamilyFontWeight,
+    coverFamilyLetterSpacingEm: coverOptions.coverFamilyLetterSpacingEm,
+    coverFamilyHcm: coverOptions.coverFamilyHcm,
+    coverFamilyScaleX: coverOptions.coverFamilyScaleX,
+    coverFamilyScaleY: coverOptions.coverFamilyScaleY,
+  });
+}
+
+function generateCoverMaskedSolid(coverOptions = {}) {
+  return generateCoverMaskedTextHtml({
+    mosaicSvg: '',
+    usePreviewValues: coverOptions.previewSolid === true,
+    coverFamilyName: coverOptions.familyName,
+    coverTitle: coverOptions.coverTitle,
+    coverSubtitle: coverOptions.coverSubtitle,
+    coverVerticalLetterSpacingEm: coverOptions.coverVerticalLetterSpacingEm,
+    coverTitleXcm: coverOptions.coverTitleXcm,
+    coverTitleYcm: coverOptions.coverTitleYcm,
+    coverTitleHcm: coverOptions.coverTitleHcm,
+    coverTitleFontFamily: coverOptions.coverTitleFontFamily,
+    coverTitleFontWeight: coverOptions.coverTitleFontWeight,
+    coverTitleLetterSpacingEm: coverOptions.coverTitleLetterSpacingEm,
+    coverSubtitleXcm: coverOptions.coverSubtitleXcm,
+    coverSubtitleYcm: coverOptions.coverSubtitleYcm,
+    coverSubtitleHcm: coverOptions.coverSubtitleHcm,
+    coverSubtitleFontFamily: coverOptions.coverSubtitleFontFamily,
+    coverSubtitleFontWeight: coverOptions.coverSubtitleFontWeight,
+    coverSubtitleLetterSpacingEm: coverOptions.coverSubtitleLetterSpacingEm,
+    coverFamilyXcm: coverOptions.coverFamilyXcm,
+    coverFamilyFontFamily: coverOptions.coverFamilyFontFamily,
+    coverFamilyFontWeight: coverOptions.coverFamilyFontWeight,
+    coverFamilyLetterSpacingEm: coverOptions.coverFamilyLetterSpacingEm,
+    coverFamilyHcm: coverOptions.coverFamilyHcm,
+  });
+}
+
+function generateCoverMaskedTextHtml({
+  mosaicSvg,
+  usePreviewValues,
+  coverTitle,
+  coverSubtitle,
+  coverVerticalLetterSpacingEm,
+  coverFamilyName,
+  coverFamilyXcm,
+  coverFamilyFontFamily,
+  coverFamilyFontWeight,
+  coverFamilyLetterSpacingEm,
+  coverFamilyHcm,
+  coverFamilyScaleX,
+  coverFamilyScaleY,
+  coverTitleXcm,
+  coverTitleYcm,
+  coverTitleHcm,
+  coverTitleFontFamily,
+  coverTitleFontWeight,
+  coverTitleLetterSpacingEm,
+  coverTitleScaleX,
+  coverTitleScaleY,
+  coverSubtitleXcm,
+  coverSubtitleYcm,
+  coverSubtitleHcm,
+  coverSubtitleFontFamily,
+  coverSubtitleFontWeight,
+  coverSubtitleLetterSpacingEm,
+  coverSubtitleScaleX,
+  coverSubtitleScaleY,
+}) {
+  const widthPx = 1900;
+  const heightPx = 2770;
+  const v1x = 560;
+  const v2x = 1160;
+  const v3x = 1760;
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+  const resolveNumber = ({ previewValue, configKey, fallback }) => {
+    const raw = usePreviewValues && previewValue !== undefined
+      ? previewValue
+      : getConfigValue(configKey);
+    const parsed = Number.isFinite(parseFloat(raw)) ? parseFloat(raw) : fallback;
+    return parsed;
+  };
+  const fontFamilies = {
+    garamond: "'Garamond', 'EB Garamond', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif",
+    palatino: "'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif",
+    baskerville: "'Baskerville', 'Baskerville Old Face', 'Hoefler Text', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif",
+    didot: "'Didot', 'Didot LT STD', 'Bodoni MT', 'Hoefler Text', 'Times New Roman', serif",
+    caslon: "'Adobe Caslon Pro', 'Caslon', 'Garamond', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif",
+    georgia: "Georgia, 'Times New Roman', serif",
+    optima: "'Optima', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+  };
+  const resolveFontFamily = ({ previewValue, configKey, fallback }) => {
+    const raw = usePreviewValues && previewValue !== undefined
+      ? previewValue
+      : getConfigValue(configKey);
+    if (raw && fontFamilies[raw]) return fontFamilies[raw];
+    return fallback;
+  };
+  const resolveFontWeight = ({ previewValue, configKey, fallback }) => {
+    const raw = usePreviewValues && previewValue !== undefined
+      ? previewValue
+      : getConfigValue(configKey);
+    const parsed = Number.isFinite(parseFloat(raw)) ? parseFloat(raw) : fallback;
+    return clamp(parsed, 100, 900);
+  };
+  const normalizeMultiline = (value) => {
+    const safeValue = value === undefined || value === null ? '' : String(value);
+    return safeValue.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n');
+  };
+  const renderMultiline = (value) => {
+    const normalizedValue = normalizeMultiline(value);
+    const lines = normalizedValue.split(/\r?\n/);
+    if (lines.length <= 1) {
+      return escapeHtml(normalizedValue);
+    }
+    return lines.map((line) => `<div>${escapeHtml(line)}</div>`).join('');
+  };
+  const renderSvgMultiline = (value, x, y, lineHeightPx) => {
+    const normalizedValue = normalizeMultiline(value);
+    const lines = normalizedValue.split(/\r?\n/);
+    if (lines.length === 0) return '';
+    return lines.map((line, index) => {
+      const dy = index === 0 ? '0' : String(lineHeightPx);
+      return `<tspan x="${x}" dy="${dy}">${escapeHtml(line)}</tspan>`;
+    }).join('');
+  };
+  const coverTitleValue = usePreviewValues && coverTitle !== undefined
+    ? coverTitle
+    : (getConfigValue('pdf_cover_title') || 'test H1');
+  const coverSubtitleValue = usePreviewValues && coverSubtitle !== undefined
+    ? coverSubtitle
+    : (getConfigValue('pdf_cover_subtitle') || 'test H2');
+  const familySpacingSource = usePreviewValues && coverFamilyLetterSpacingEm !== undefined
+    ? String(coverFamilyLetterSpacingEm)
+    : (usePreviewValues && coverVerticalLetterSpacingEm !== undefined
+      ? String(coverVerticalLetterSpacingEm)
+      : (getConfigValue('pdf_cover_vertical_letter_spacing') || '0'));
+  const parsedFamilySpacing = Number.isFinite(parseFloat(familySpacingSource)) ? parseFloat(familySpacingSource) : 0;
+  const familyLetterSpacing = Math.min(0.2, Math.max(-0.2, parsedFamilySpacing));
+  const titleLetterSpacingSource = usePreviewValues && coverTitleLetterSpacingEm !== undefined
+    ? String(coverTitleLetterSpacingEm)
+    : (getConfigValue('pdf_cover_title_letter_spacing_em') || '0');
+  const parsedTitleSpacing = Number.isFinite(parseFloat(titleLetterSpacingSource)) ? parseFloat(titleLetterSpacingSource) : 0;
+  const titleLetterSpacing = Math.min(0.2, Math.max(-0.2, parsedTitleSpacing));
+  const subtitleLetterSpacingSource = usePreviewValues && coverSubtitleLetterSpacingEm !== undefined
+    ? String(coverSubtitleLetterSpacingEm)
+    : (getConfigValue('pdf_cover_subtitle_letter_spacing_em') || '0');
+  const parsedSubtitleSpacing = Number.isFinite(parseFloat(subtitleLetterSpacingSource)) ? parseFloat(subtitleLetterSpacingSource) : 0;
+  const subtitleLetterSpacing = Math.min(0.2, Math.max(-0.2, parsedSubtitleSpacing));
+  const titleXcm = clamp(resolveNumber({
+    previewValue: coverTitleXcm,
+    configKey: 'pdf_cover_title_x_cm',
+    fallback: 8.5,
+  }), 0, 18);
+  const titleYcm = clamp(resolveNumber({
+    previewValue: coverTitleYcm,
+    configKey: 'pdf_cover_title_y_cm',
+    fallback: 9,
+  }), 0, 27);
+  const titleFontCm = clamp(resolveNumber({
+    previewValue: coverTitleHcm,
+    configKey: 'pdf_cover_title_h_cm',
+    fallback: 0.99,
+  }), 0.4, 2.5);
+  const titleFontFamily = resolveFontFamily({
+    previewValue: coverTitleFontFamily,
+    configKey: 'pdf_cover_title_font_family',
+    fallback: "'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif",
+  });
+  const titleFontWeight = resolveFontWeight({
+    previewValue: coverTitleFontWeight,
+    configKey: 'pdf_cover_title_font_weight',
+    fallback: 700,
+  });
+  const subtitleXcm = clamp(resolveNumber({
+    previewValue: coverSubtitleXcm,
+    configKey: 'pdf_cover_subtitle_x_cm',
+    fallback: 8.5,
+  }), 0, 18);
+  const subtitleYcm = clamp(resolveNumber({
+    previewValue: coverSubtitleYcm,
+    configKey: 'pdf_cover_subtitle_y_cm',
+    fallback: 12.2,
+  }), 0, 27);
+  const subtitleFontCm = clamp(resolveNumber({
+    previewValue: coverSubtitleHcm,
+    configKey: 'pdf_cover_subtitle_h_cm',
+    fallback: 0.85,
+  }), 0.4, 2.5);
+  const subtitleFontFamily = resolveFontFamily({
+    previewValue: coverSubtitleFontFamily,
+    configKey: 'pdf_cover_subtitle_font_family',
+    fallback: "'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif",
+  });
+  const subtitleFontWeight = resolveFontWeight({
+    previewValue: coverSubtitleFontWeight,
+    configKey: 'pdf_cover_subtitle_font_weight',
+    fallback: 700,
+  });
+  const familyXcm = clamp(resolveNumber({
+    previewValue: coverFamilyXcm,
+    configKey: 'pdf_cover_family_x_cm',
+    fallback: 5,
+  }), 0, 12);
+  const familyFontCm = clamp(resolveNumber({
+    previewValue: coverFamilyHcm,
+    configKey: 'pdf_cover_family_h_cm',
+    fallback: 3.5,
+  }), 1.5, 6);
+  const familyFontPx = familyFontCm * 100;
+  const familyFontFamily = resolveFontFamily({
+    previewValue: coverFamilyFontFamily,
+    configKey: 'pdf_cover_family_font_family',
+    fallback: "'Garamond', 'EB Garamond', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif",
+  });
+  const familyFontWeight = resolveFontWeight({
+    previewValue: coverFamilyFontWeight,
+    configKey: 'pdf_cover_family_font_weight',
+    fallback: 700,
+  });
+  const familyTextValue = usePreviewValues && coverFamilyName !== undefined
+    ? coverFamilyName
+    : (getConfigValue('family_name') || '');
+  const familyMaskText = familyTextValue || 'Souvenirs de famille';
+  const familyScaleX = clamp(resolveNumber({
+    previewValue: coverFamilyScaleX,
+    configKey: 'pdf_cover_family_scale_x',
+    fallback: 1,
+  }), 0.6, 3);
+  const familyScaleY = clamp(resolveNumber({
+    previewValue: coverFamilyScaleY,
+    configKey: 'pdf_cover_family_scale_y',
+    fallback: 1,
+  }), 0.6, 3);
+  const titleScaleX = clamp(resolveNumber({
+    previewValue: coverTitleScaleX,
+    configKey: 'pdf_cover_title_scale_x',
+    fallback: 1,
+  }), 0.6, 3);
+  const titleScaleY = clamp(resolveNumber({
+    previewValue: coverTitleScaleY,
+    configKey: 'pdf_cover_title_scale_y',
+    fallback: 1,
+  }), 0.6, 3);
+  const subtitleScaleX = clamp(resolveNumber({
+    previewValue: coverSubtitleScaleX,
+    configKey: 'pdf_cover_subtitle_scale_x',
+    fallback: 1,
+  }), 0.6, 3);
+  const subtitleScaleY = clamp(resolveNumber({
+    previewValue: coverSubtitleScaleY,
+    configKey: 'pdf_cover_subtitle_scale_y',
+    fallback: 1,
+  }), 0.6, 3);
   return `
-  <div class="cover-mask-layout">
-    <div class="cover-mask-left">
-      <div class="cover-mask-family-placeholder" style="width: ${familyPlaceholderWidthCm.toFixed(2)}cm;">
-        <svg class="cover-mask-svg" width="100%" height="100%" viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <clipPath id="titleClip">
-            <text x="${textX}" y="${textY}" text-anchor="start" dominant-baseline="text-after-edge"
-                  font-family="Didot, 'Didot LT STD', 'Didot LT Std', 'Bodoni MT', 'Bodoni 72', 'Bodoni Moda', 'Times New Roman', serif" font-weight="700" font-size="${fontSize}"
-                  textLength="${textLength.toFixed(1)}" lengthAdjust="spacingAndGlyphs" xml:space="preserve"
-                  transform="translate(${textX} ${textY}) rotate(-90) scale(1 ${heightScale}) translate(${-textX} ${-textY})">${displayTitleText}</text>
-          </clipPath>
-        </defs>
-        <rect width="${svgWidth}" height="${svgHeight}" fill="#ffffff" />
-        <g clip-path="url(#titleClip)">
-          ${mosaicSvg}
-        </g>
-      </svg>
+  <div class="cover-mask-layout" style="width: 19cm; height: 27.7cm; position: relative;">
+    <svg width="19cm" height="27.7cm" viewBox="0 0 ${widthPx} ${heightPx}" xmlns="http://www.w3.org/2000/svg" style="position:absolute; inset:0;">
+      <rect width="100%" height="100%" fill="#ffffff" />
+      ${mosaicSvg ? `
+      <defs>
+        <clipPath id="coverTextClip">
+          <text x="${v1x}" y="${heightPx}" text-anchor="end" dominant-baseline="alphabetic"
+                font-family="${familyFontFamily}" font-weight="${familyFontWeight}" font-size="${familyFontPx}"
+                letter-spacing="${familyLetterSpacing}em"
+                transform="rotate(-90 ${v1x} ${heightPx}) scale(${familyScaleX} ${familyScaleY})">
+            ${renderSvgMultiline(familyMaskText, v1x, heightPx, familyFontPx)}
+          </text>
+          <text x="${v2x}" y="${heightPx}" text-anchor="end" dominant-baseline="alphabetic"
+                font-family="${familyFontFamily}" font-weight="${familyFontWeight}" font-size="${familyFontPx}"
+                letter-spacing="${familyLetterSpacing}em"
+                transform="rotate(-90 ${v2x} ${heightPx}) scale(${familyScaleX} ${familyScaleY})">
+            ${renderSvgMultiline(familyMaskText, v2x, heightPx, familyFontPx)}
+          </text>
+          <text x="${v3x}" y="${heightPx}" text-anchor="end" dominant-baseline="alphabetic"
+                font-family="${familyFontFamily}" font-weight="${familyFontWeight}" font-size="${familyFontPx}"
+                letter-spacing="${familyLetterSpacing}em"
+                transform="rotate(-90 ${v3x} ${heightPx}) scale(${familyScaleX} ${familyScaleY})">
+            ${renderSvgMultiline(familyMaskText, v3x, heightPx, familyFontPx)}
+          </text>
+        </clipPath>
+      </defs>
+      <g clip-path="url(#coverTextClip)">
+        ${mosaicSvg}
+      </g>` : ''}
+    </svg>
+    <div style="position:absolute; inset:0; color:#000; font-family: ${familyFontFamily}; font-weight:${familyFontWeight}; font-size:${familyFontCm}cm; letter-spacing:${familyLetterSpacing}em; line-height:1;">
+      <div style="position:absolute; left:${familyXcm}cm; bottom:0.2cm; width:27.7cm; white-space:nowrap; transform: rotate(-90deg) scaleX(${familyScaleX}) scaleY(${familyScaleY}); transform-origin: left bottom;">
+        ${renderMultiline(familyTextValue)}
       </div>
     </div>
-    <div class="cover-mask-right">
-      <div class="cover-mask-text">
-        <div class="cover-mask-title-box">
-          <div class="cover-mask-title-placeholder">
-            <div class="cover-mask-title">${coverTitle}</div>
-          </div>
-        </div>
-        <div class="cover-mask-subtitle-box">
-          <div class="cover-mask-subtitle-placeholder">
-            <div class="cover-mask-subtitle">${coverSubtitle}</div>
-          </div>
-        </div>
-      </div>
+    <div style="position:absolute; left:${titleXcm}cm; top:${titleYcm}cm; max-width:19cm; color:#000; font-family: ${titleFontFamily}; font-weight:${titleFontWeight}; font-size:${titleFontCm}cm; letter-spacing:${titleLetterSpacing}em;">
+      <span style="display:inline-block; transform: scaleX(${titleScaleX}) scaleY(${titleScaleY}); transform-origin: left top;">
+        ${renderMultiline(coverTitleValue)}
+      </span>
+    </div>
+    <div style="position:absolute; left:${subtitleXcm}cm; top:${subtitleYcm}cm; max-width:19cm; color:#000; font-family: ${subtitleFontFamily}; font-weight:${subtitleFontWeight}; font-size:${subtitleFontCm}cm; letter-spacing:${subtitleLetterSpacing}em;">
+      <span style="display:inline-block; transform: scaleX(${subtitleScaleX}) scaleY(${subtitleScaleY}); transform-origin: left top;">
+        ${renderMultiline(coverSubtitleValue)}
+      </span>
     </div>
   </div>
 `;

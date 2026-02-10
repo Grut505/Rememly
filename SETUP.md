@@ -98,6 +98,8 @@ Still in the Apps Script editor:
 
 5. Click "Save script properties"
 
+See `docs/ENVIRONMENT_VARIABLES.md` for the full list of Script Properties and GitHub Secrets.
+
 #### 7. Test Backend
 
 Test that the backend is working:

@@ -2977,8 +2977,15 @@ function generateCoverMaskedMosaic(articles, from, to, maxPhotos, coverOptions =
     }
   }
 
-  const pageWidthCm = 19;
-  const pageHeightCm = 27.7;
+  const familyHeightRaw = coverOptions.coverFamilyHcm !== undefined
+    ? coverOptions.coverFamilyHcm
+    : getConfigValue('pdf_cover_family_h_cm');
+  const familyHeightCmParsed = Number.isFinite(parseFloat(familyHeightRaw))
+    ? parseFloat(familyHeightRaw)
+    : 3.5;
+  const familyHeightCm = Math.min(6, Math.max(1.5, familyHeightCmParsed));
+  const pageWidthCm = 27.7;
+  const pageHeightCm = familyHeightCm;
   const gap = 0.07;
   const targetCellCount = Math.max(images.length, 90);
   const tiledImages = images.length > 0 ? images.slice() : [];
@@ -2994,9 +3001,17 @@ function generateCoverMaskedMosaic(articles, from, to, maxPhotos, coverOptions =
     mosaicSvg += `
       <image x="${(cell.x * scale).toFixed(1)}" y="${(cell.y * scale).toFixed(1)}" width="${(cell.w * scale).toFixed(1)}" height="${(cell.h * scale).toFixed(1)}" href="data:${cell.img.mimeType};base64,${cell.img.base64}" preserveAspectRatio="xMidYMid slice" />`;
   }
+  const stripWidthPx = Math.round(pageWidthCm * 100);
+  const stripHeightPx = Math.round(pageHeightCm * 100);
+  const mosaicImageDataUri = mosaicSvg
+    ? ('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${stripWidthPx}" height="${stripHeightPx}" viewBox="0 0 ${stripWidthPx} ${stripHeightPx}">${mosaicSvg}</svg>`
+    ))
+    : '';
 
   return generateCoverMaskedTextHtml({
     mosaicSvg,
+    familyMaskImageDataUri: mosaicImageDataUri,
     usePreviewValues: true,
     coverFamilyName: coverOptions.familyName,
     coverTitle: coverOptions.coverTitle,
@@ -3030,12 +3045,10 @@ function generateCoverMaskedMosaic(articles, from, to, maxPhotos, coverOptions =
 
 function generateCoverMaskedSolid(coverOptions = {}) {
   const previewImageDataUri = getHardcodedPreviewMaskImageDataUri();
-  const previewMosaicSvg = previewImageDataUri
-    ? `<image x="0" y="0" width="1900" height="2770" href="${previewImageDataUri}" preserveAspectRatio="xMidYMid slice" />`
-    : '';
 
   return generateCoverMaskedTextHtml({
-    mosaicSvg: previewMosaicSvg,
+    mosaicSvg: '',
+    familyMaskImageDataUri: previewImageDataUri,
     usePreviewValues: true,
     coverFamilyName: coverOptions.familyName,
     coverTitle: coverOptions.coverTitle,
@@ -3047,19 +3060,23 @@ function generateCoverMaskedSolid(coverOptions = {}) {
     coverTitleFontFamily: coverOptions.coverTitleFontFamily,
     coverTitleFontWeight: coverOptions.coverTitleFontWeight,
     coverTitleLetterSpacingEm: coverOptions.coverTitleLetterSpacingEm,
+    coverTitleScaleX: coverOptions.coverTitleScaleX,
+    coverTitleScaleY: coverOptions.coverTitleScaleY,
     coverSubtitleXcm: coverOptions.coverSubtitleXcm,
     coverSubtitleYcm: coverOptions.coverSubtitleYcm,
     coverSubtitleHcm: coverOptions.coverSubtitleHcm,
     coverSubtitleFontFamily: coverOptions.coverSubtitleFontFamily,
     coverSubtitleFontWeight: coverOptions.coverSubtitleFontWeight,
     coverSubtitleLetterSpacingEm: coverOptions.coverSubtitleLetterSpacingEm,
+    coverSubtitleScaleX: coverOptions.coverSubtitleScaleX,
+    coverSubtitleScaleY: coverOptions.coverSubtitleScaleY,
     coverFamilyXcm: coverOptions.coverFamilyXcm,
     coverFamilyFontFamily: coverOptions.coverFamilyFontFamily,
     coverFamilyFontWeight: coverOptions.coverFamilyFontWeight,
     coverFamilyLetterSpacingEm: coverOptions.coverFamilyLetterSpacingEm,
     coverFamilyHcm: coverOptions.coverFamilyHcm,
-    forceFamilyOverlay: true,
-    previewDebugImageDataUri: previewImageDataUri,
+    coverFamilyScaleX: coverOptions.coverFamilyScaleX,
+    coverFamilyScaleY: coverOptions.coverFamilyScaleY,
   });
 }
 
@@ -3070,6 +3087,7 @@ function getHardcodedPreviewMaskImageDataUri() {
 
 function generateCoverMaskedTextHtml({
   mosaicSvg,
+  familyMaskImageDataUri,
   usePreviewValues,
   coverTitle,
   coverSubtitle,
@@ -3098,14 +3116,7 @@ function generateCoverMaskedTextHtml({
   coverSubtitleLetterSpacingEm,
   coverSubtitleScaleX,
   coverSubtitleScaleY,
-  forceFamilyOverlay,
-  previewDebugImageDataUri,
 }) {
-  const widthPx = 1900;
-  const heightPx = 2770;
-  const v1x = 560;
-  const v2x = 1160;
-  const v3x = 1760;
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
   const resolveNumber = ({ previewValue, configKey, fallback }) => {
     const raw = usePreviewValues && previewValue !== undefined
@@ -3286,56 +3297,40 @@ function generateCoverMaskedTextHtml({
     configKey: 'pdf_cover_subtitle_scale_y',
     fallback: 1,
   }), 0.6, 3);
-  const previewMaskEnabled = !!previewDebugImageDataUri;
-  const previewMaskHeightPx = Math.max(1, Math.round(familyFontCm * 100));
-  const previewMaskBaselinePx = Math.max(1, Math.round(familyFontPx * 0.86));
-  const previewMaskSvg = previewMaskEnabled ? `
-      <svg width="27.7cm" height="${familyFontCm}cm" viewBox="0 0 2770 ${previewMaskHeightPx}" xmlns="http://www.w3.org/2000/svg" style="display:block;">
+  const familyMaskEnabled = !!familyMaskImageDataUri;
+  const familyMaskHeightPx = Math.max(1, Math.round(familyFontCm * 100));
+  const familyMaskBaselinePx = Math.max(1, Math.round(familyFontPx * 0.86));
+  const familyOutlinePx = Math.min(2.2, Math.max(0.8, familyFontPx * 0.007));
+  const familyClipId = 'coverFamilyClip';
+  const familyMaskSvg = familyMaskEnabled ? `
+      <svg width="27.7cm" height="${familyFontCm}cm" viewBox="0 0 2770 ${familyMaskHeightPx}" xmlns="http://www.w3.org/2000/svg" style="display:block;">
         <defs>
-          <pattern id="previewFamilyPattern" patternUnits="userSpaceOnUse" x="0" y="0" width="2770" height="${previewMaskHeightPx}">
-            <image x="0" y="0" width="2770" height="${previewMaskHeightPx}" href="${previewDebugImageDataUri}" preserveAspectRatio="xMidYMid slice" />
-          </pattern>
+          <clipPath id="${familyClipId}">
+            <text x="0" y="${familyMaskBaselinePx}" text-anchor="start" dominant-baseline="alphabetic"
+                  font-family="${familyFontFamily}" font-weight="${familyFontWeight}" font-size="${familyFontPx}"
+                  letter-spacing="${familyLetterSpacing}em">
+              ${renderSvgMultiline(familyMaskText, 0, familyMaskBaselinePx, familyFontPx)}
+            </text>
+          </clipPath>
         </defs>
-        <text x="0" y="${previewMaskBaselinePx}" text-anchor="start" dominant-baseline="alphabetic"
+        <g clip-path="url(#${familyClipId})">
+          <image x="0" y="0" width="2770" height="${familyMaskHeightPx}" href="${familyMaskImageDataUri}" preserveAspectRatio="xMidYMid slice" />
+        </g>
+        <text x="0" y="${familyMaskBaselinePx}" text-anchor="start" dominant-baseline="alphabetic"
               font-family="${familyFontFamily}" font-weight="${familyFontWeight}" font-size="${familyFontPx}"
-              letter-spacing="${familyLetterSpacing}em" fill="url(#previewFamilyPattern)">
-          ${renderSvgMultiline(familyMaskText, 0, previewMaskBaselinePx, familyFontPx)}
+              letter-spacing="${familyLetterSpacing}em"
+              fill="none" stroke="rgba(0,0,0,0.28)" stroke-width="${familyOutlinePx}" stroke-linejoin="round" paint-order="stroke fill">
+          ${renderSvgMultiline(familyMaskText, 0, familyMaskBaselinePx, familyFontPx)}
         </text>
       </svg>` : '';
   return `
   <div class="cover-mask-layout" style="width: 19cm; height: 27.7cm; position: relative;">
-    <svg width="19cm" height="27.7cm" viewBox="0 0 ${widthPx} ${heightPx}" xmlns="http://www.w3.org/2000/svg" style="position:absolute; inset:0;">
+    <svg width="19cm" height="27.7cm" viewBox="0 0 1900 2770" xmlns="http://www.w3.org/2000/svg" style="position:absolute; inset:0;">
       <rect width="100%" height="100%" fill="#ffffff" />
-      ${mosaicSvg ? `
-      <defs>
-        <clipPath id="coverTextClip">
-          <text x="${v1x}" y="${heightPx}" text-anchor="end" dominant-baseline="alphabetic"
-                font-family="${familyFontFamily}" font-weight="${familyFontWeight}" font-size="${familyFontPx}"
-                letter-spacing="${familyLetterSpacing}em"
-                transform="rotate(-90 ${v1x} ${heightPx}) scale(${familyScaleX} ${familyScaleY})">
-            ${renderSvgMultiline(familyMaskText, v1x, heightPx, familyFontPx)}
-          </text>
-          <text x="${v2x}" y="${heightPx}" text-anchor="end" dominant-baseline="alphabetic"
-                font-family="${familyFontFamily}" font-weight="${familyFontWeight}" font-size="${familyFontPx}"
-                letter-spacing="${familyLetterSpacing}em"
-                transform="rotate(-90 ${v2x} ${heightPx}) scale(${familyScaleX} ${familyScaleY})">
-            ${renderSvgMultiline(familyMaskText, v2x, heightPx, familyFontPx)}
-          </text>
-          <text x="${v3x}" y="${heightPx}" text-anchor="end" dominant-baseline="alphabetic"
-                font-family="${familyFontFamily}" font-weight="${familyFontWeight}" font-size="${familyFontPx}"
-                letter-spacing="${familyLetterSpacing}em"
-                transform="rotate(-90 ${v3x} ${heightPx}) scale(${familyScaleX} ${familyScaleY})">
-            ${renderSvgMultiline(familyMaskText, v3x, heightPx, familyFontPx)}
-          </text>
-        </clipPath>
-      </defs>
-      <g clip-path="url(#coverTextClip)">
-        ${mosaicSvg}
-      </g>` : ''}
     </svg>
-    ${((forceFamilyOverlay || !mosaicSvg) && !previewMaskEnabled) ? `<div style="position:absolute; inset:0; color:#000; font-family: ${familyFontFamily}; font-weight:${familyFontWeight}; font-size:${familyFontCm}cm; letter-spacing:${familyLetterSpacing}em; line-height:1; z-index:30;">
+    ${!familyMaskEnabled ? `<div style="position:absolute; inset:0; color:#000; font-family: ${familyFontFamily}; font-weight:${familyFontWeight}; font-size:${familyFontCm}cm; letter-spacing:${familyLetterSpacing}em; line-height:1; z-index:30;">
       <div style="position:absolute; left:${familyXcm}cm; bottom:0.2cm; width:27.7cm; white-space:nowrap; transform: rotate(-90deg) scaleX(${familyScaleX}) scaleY(${familyScaleY}); transform-origin: left bottom;">
-        ${renderMultiline(familyTextValue)}
+        ${renderMultiline(familyMaskText)}
       </div>
     </div>` : ''}
     <div style="position:absolute; left:${titleXcm}cm; top:${titleYcm}cm; max-width:19cm; color:#000; font-family: ${titleFontFamily}; font-weight:${titleFontWeight}; font-size:${titleFontCm}cm; letter-spacing:${titleLetterSpacing}em;">
@@ -3348,8 +3343,8 @@ function generateCoverMaskedTextHtml({
         ${renderMultiline(coverSubtitleValue)}
       </span>
     </div>
-    ${previewMaskEnabled ? `<div style="position:absolute; left:${familyXcm}cm; bottom:0.2cm; width:27.7cm; height:${familyFontCm}cm; white-space:nowrap; transform: rotate(-90deg) scaleX(${familyScaleX}) scaleY(${familyScaleY}); transform-origin: left bottom; border:1px solid rgba(0,0,0,0.35); background:#fff; overflow:hidden; z-index:20;">
-      ${previewMaskSvg}
+    ${familyMaskEnabled ? `<div style="position:absolute; left:${familyXcm}cm; bottom:0.2cm; width:27.7cm; height:${familyFontCm}cm; white-space:nowrap; transform: rotate(-90deg) scaleX(${familyScaleX}) scaleY(${familyScaleY}); transform-origin: left bottom; overflow:hidden; z-index:20;">
+      ${familyMaskSvg}
     </div>` : ''}
   </div>
 `;

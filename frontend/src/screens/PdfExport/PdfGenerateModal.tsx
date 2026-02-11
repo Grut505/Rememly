@@ -6,7 +6,6 @@ import { getMonthYear } from '../../utils/date'
 import { usePdfGenerationStore } from '../../stores/pdfGenerationStore'
 import type { PdfListItem } from '../../api/pdf'
 import { pdfApi } from '../../api/pdf'
-import { configApi } from '../../api/config'
 
 interface PdfGenerateModalProps {
   isOpen: boolean
@@ -65,10 +64,6 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const [coverStyle, setCoverStyle] = useState<'mosaic' | 'masked-title'>('mosaic')
   const [autoMerge, setAutoMerge] = useState(false)
   const [cleanChunksAfterMerge, setCleanChunksAfterMerge] = useState(false)
-  const [familyName, setFamilyName] = useState('')
-  const [coverTitle, setCoverTitle] = useState('')
-  const [coverSubtitle, setCoverSubtitle] = useState('')
-  const [configLoading, setConfigLoading] = useState(false)
   const [activePicker, setActivePicker] = useState<'start' | 'end'>('start')
   const [tempDate, setTempDate] = useState({ y: '', m: '', d: '' })
   const [isPwa, setIsPwa] = useState(false)
@@ -89,9 +84,6 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     setCoverStyle('mosaic')
     setAutoMerge(false)
     setCleanChunksAfterMerge(false)
-    setFamilyName('')
-    setCoverTitle('')
-    setCoverSubtitle('')
   }
 
   const handleClose = () => {
@@ -197,9 +189,6 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       show_seasonal_fruits: showSeasonalFruits,
       max_mosaic_photos: maxMosaicPhotos > 0 ? maxMosaicPhotos : undefined,
       cover_style: coverStyle,
-      family_name: familyName.trim() || undefined,
-      cover_title: coverTitle.trim() || undefined,
-      cover_subtitle: coverSubtitle.trim() || undefined,
       auto_merge: autoMerge,
       clean_chunks: autoMerge ? cleanChunksAfterMerge : undefined,
     })
@@ -253,32 +242,6 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     document.body.style.position = 'fixed'
     document.body.style.top = `-${scrollY}px`
     document.body.style.width = '100%'
-    const loadConfig = async () => {
-      setConfigLoading(true)
-      try {
-        const [familyResult, titleResult, subtitleResult] = await Promise.all([
-          configApi.get('family_name'),
-          configApi.get('pdf_cover_title'),
-          configApi.get('pdf_cover_subtitle'),
-        ])
-        if (cancelled) return
-        const familyValue = familyResult.value || ''
-        setFamilyName(familyValue)
-        setCoverTitle(titleResult.value || '')
-        setCoverSubtitle(subtitleResult.value || '')
-      } catch {
-        if (!cancelled) {
-          setFamilyName('')
-          setCoverTitle('')
-          setCoverSubtitle('')
-        }
-      } finally {
-        if (!cancelled) {
-          setConfigLoading(false)
-        }
-      }
-    }
-    loadConfig()
     const standalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as { standalone?: boolean }).standalone === true
     setIsPwa(standalone)
     return () => {
@@ -570,57 +533,9 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                   </div>
                 </div>
 
-                {/* Cover text overrides */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Cover text
-                    </label>
-                    {configLoading && (
-                      <span className="text-xs text-gray-400">Loading defaults...</span>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      Family name (vertical)
-                    </label>
-                    <input
-                      type="text"
-                      value={familyName}
-                      onChange={(e) => setFamilyName(e.target.value.slice(0, 30))}
-                      maxLength={30}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      placeholder="Famille Dupont"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      Title
-                    </label>
-                    <input
-                      type="text"
-                      value={coverTitle}
-                      onChange={(e) => setCoverTitle(e.target.value.slice(0, 30))}
-                      maxLength={30}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      placeholder="Memory Book"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      Subtitle
-                    </label>
-                    <input
-                      type="text"
-                      value={coverSubtitle}
-                      onChange={(e) => setCoverSubtitle(e.target.value.slice(0, 30))}
-                      maxLength={30}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      placeholder="Du 01/01/2024 au 31/12/2024"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    Defaults are pulled from Settings and can be overridden per PDF.
+                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                  <p className="text-xs text-gray-600">
+                    Cover text (family name, title, subtitle) uses the values configured in Settings.
                   </p>
                 </div>
 

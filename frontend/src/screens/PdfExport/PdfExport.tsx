@@ -127,6 +127,8 @@ export function PdfExport() {
             progress_message: update.progress_message,
             pdf_url: update.pdf_url,
             pdf_file_id: update.pdf_file_id,
+            chunks_folder_id: update.chunks_folder_id,
+            chunks_folder_url: update.chunks_folder_url,
             error_message: update.error_message,
           }
         }

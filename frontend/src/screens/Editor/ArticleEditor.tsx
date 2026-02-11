@@ -378,6 +378,7 @@ export function ArticleEditor() {
         publishedAt={dateModification}
         imageUrl={articleImageUrl}
         imageFileId={articleImageFileId}
+        articleId={id}
       />
       </div>
     </div>

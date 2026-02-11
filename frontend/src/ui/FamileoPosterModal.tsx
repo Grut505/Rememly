@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { famileoApi } from '../api/famileo'
+import { articlesService } from '../services/articles.service'
 import { apiClient } from '../api/client'
 import { usersApi, DeclaredUser } from '../api/users'
 
@@ -16,6 +17,7 @@ interface FamileoPosterModalProps {
   familyId?: string
   imageUrl?: string
   imageFileId?: string
+  articleId?: string
 }
 
 function extractFileId(url: string): string | null {
@@ -47,7 +49,8 @@ export function FamileoPosterModal({
   publishedAt,
   familyId,
   imageUrl,
-  imageFileId
+  imageFileId,
+  articleId
 }: FamileoPosterModalProps) {
   const [isPosting, setIsPosting] = useState(false)
   const [postError, setPostError] = useState<string | null>(null)
@@ -58,6 +61,8 @@ export function FamileoPosterModal({
   const [imageBase64, setImageBase64] = useState<string>('')
   const [isFullPage, setIsFullPage] = useState(false)
   const [progressLabel, setProgressLabel] = useState<string | null>(null)
+  const [progressStep, setProgressStep] = useState(0)
+  const [progressTotal, setProgressTotal] = useState(0)
   const [families, setFamilies] = useState<{ id: string; name: string; famileo_id: string }[]>([])
   const [loadingFamilies, setLoadingFamilies] = useState(false)
   const [selectedFamilyIds, setSelectedFamilyIds] = useState<string[]>(familyId ? [familyId] : [])
@@ -71,7 +76,7 @@ export function FamileoPosterModal({
   const baseDate = publishedAt || new Date().toISOString()
   const baseAuthor = authorEmail || ''
   const familiesById = families.reduce<Record<string, string>>((acc, family) => {
-    acc[family.famileo_id] = family.name
+    acc[String(family.famileo_id)] = family.name
     return acc
   }, {})
 
@@ -91,11 +96,11 @@ export function FamileoPosterModal({
 
   const allOverride = familyOverrides.all
   const canPost = selectionMode === 'all'
-    ? Boolean(allOverride && allOverride.text.trim() && allOverride.text.length <= 300 && families.length > 0)
+    ? Boolean(allOverride && allOverride.text.length <= 300 && families.length > 0)
     : selectedFamilyIds.length > 0 &&
       selectedFamilyIds.every((id) => {
         const value = familyOverrides[id]?.text || ''
-        return value.trim() && value.length <= 300
+        return value.length <= 300
       })
   const availableFamilies = families.filter((family) => !selectedFamilyIds.includes(String(family.famileo_id)))
 
@@ -109,6 +114,8 @@ export function FamileoPosterModal({
     setImageBase64('')
     setPreviewLoading(false)
     setProgressLabel(null)
+    setProgressStep(0)
+    setProgressTotal(0)
     setSelectedFamilyIds(familyId ? [familyId] : [])
     setSelectionMode(familyId ? 'custom' : 'all')
     setCurrentFamilyIndex(0)
@@ -205,23 +212,31 @@ export function FamileoPosterModal({
         ? families.map((family) => family.famileo_id)
         : selectedFamilyIds
 
+      const stepsPerFamily = base64 ? 2 : 1
+      const totalSteps = targetFamilies.length * stepsPerFamily
+      setProgressTotal(totalSteps)
+      setProgressStep(0)
+
       for (let i = 0; i < targetFamilies.length; i++) {
         const famileoId = targetFamilies[i]
-        const family = families.find((f) => f.famileo_id === famileoId)
+        const family = families.find((f) => String(f.famileo_id) === String(famileoId))
         const override = selectionMode === 'all' ? familyOverrides.all : familyOverrides[famileoId]
-        const finalText = override ? override.text : text || ''
-        if (!finalText || !finalText.trim()) {
-          throw new Error('Text is empty.')
-        }
+        let finalText = override ? override.text : text || ''
         if (finalText.length > 300) {
           throw new Error('Text exceeds 300 characters.')
+        }
+        if (!finalText || !finalText.trim()) {
+          finalText = '\u200b'
         }
         const dateValue = override ? override.date : publishedAt
         const parsedDate = dateValue ? new Date(dateValue) : new Date()
         const finalPublishedAt = isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString()
         const finalAuthorEmail = override ? override.author : baseAuthor
 
-        setProgressLabel(`Uploading image · ${family ? family.name : 'Unknown family'}`)
+        if (base64) {
+          setProgressLabel(`Uploading image · ${family ? family.name : 'Unknown family'}`)
+          setProgressStep((prev) => prev + 1)
+        }
         let imageKey = ''
         if (base64) {
           const presign = await famileoApi.presignImage({
@@ -239,7 +254,8 @@ export function FamileoPosterModal({
         }
 
         setProgressLabel(`Creating post · ${family ? family.name : 'Unknown family'}`)
-        await famileoApi.createPost({
+        setProgressStep((prev) => prev + 1)
+        const response = await famileoApi.createPost({
           text: finalText,
           published_at: finalPublishedAt,
           family_id: famileoId,
@@ -247,6 +263,28 @@ export function FamileoPosterModal({
           is_full_page: override ? override.fullPage : isFullPage,
           author_email: finalAuthorEmail || undefined,
         })
+        const body = response && typeof response.body === 'string' ? response.body : ''
+        let famileoPostId: string | undefined
+        if (body) {
+          try {
+            const parsed = JSON.parse(body)
+            famileoPostId =
+              parsed?.id ||
+              parsed?.post_id ||
+              parsed?.wall_post_id ||
+              parsed?.familyPost?.wall_post_id ||
+              parsed?.data?.id ||
+              parsed?.data?.post_id
+          } catch {
+            // ignore non-json body
+          }
+        }
+        if (articleId) {
+          if (famileoPostId) {
+            console.log('Famileo post created:', famileoPostId)
+          }
+          await articlesService.markFamileoPosted(articleId, famileoPostId)
+        }
       }
       setPostResult(`Post created for ${targetFamilies.length} ${targetFamilies.length > 1 ? 'families' : 'family'}.`)
     } catch (err) {
@@ -254,12 +292,39 @@ export function FamileoPosterModal({
     } finally {
       setIsPosting(false)
       setProgressLabel(null)
+      setProgressStep(0)
+      setProgressTotal(0)
     }
   }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Famileo Poster" align="center">
-      <div className="px-4 py-4 space-y-4 text-sm text-gray-700">
+      <div className="px-4 py-4 space-y-4 text-sm text-gray-700 relative">
+        {isPosting && (
+          <div className="absolute inset-0 z-10 bg-white/80 backdrop-blur-sm flex items-center justify-center">
+            <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-md w-full max-w-xs">
+              <div className="flex items-center gap-3 text-sm text-gray-700">
+                <div className="w-4 h-4 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+                <div className="flex-1">
+                  <div className="font-medium">{progressLabel || 'Processing...'}</div>
+                  {progressTotal > 0 && (
+                    <div className="mt-1 text-xs text-gray-500">
+                      Step {Math.min(progressStep, progressTotal)} / {progressTotal}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {progressTotal > 0 && (
+                <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-purple-600 transition-all"
+                    style={{ width: `${Math.min(progressStep, progressTotal) / progressTotal * 100}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {(authorLabel || dateLabel || excerpt || previewSrc || previewLoading) && (
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 flex items-start gap-3">
             <div className="flex-1 space-y-1">
@@ -322,13 +387,14 @@ export function FamileoPosterModal({
                 }))
                 setFamilyOverrides((prev) => {
                   if (prev[value]) return prev
+                  const seed = prev.all || { text: baseText, date: baseDateLocal, fullPage: false, author: baseAuthor }
                   return {
                     ...prev,
                     [value]: {
-                      text: baseText,
-                      date: baseDateLocal,
-                      fullPage: false,
-                      author: baseAuthor
+                      text: seed.text,
+                      date: seed.date || baseDateLocal,
+                      fullPage: seed.fullPage || false,
+                      author: seed.author || baseAuthor,
                     }
                   }
                 })
@@ -449,7 +515,7 @@ export function FamileoPosterModal({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Text (max 300)</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Text (optional, max 300)</label>
                   <textarea
                     value={override.text}
                     onChange={(e) => {

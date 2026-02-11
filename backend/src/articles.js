@@ -278,9 +278,14 @@ function handleArticleUpdate(body) {
 
   const year = getYear(articleDate);
 
+  const shouldUpdateFamileoPostId = body.famileo_post_id !== undefined;
+  const shouldMarkFamileo = body.famileo_marked === true;
+  let shouldRebuildFingerprint = false;
+
   // Update texte if provided
   if (body.texte !== undefined) {
     row[3] = body.texte;
+    if (row[9] || row[10]) shouldRebuildFingerprint = true;
   }
 
   // Update image if provided
@@ -306,8 +311,20 @@ function handleArticleUpdate(body) {
     row[8] = body.status;
   }
 
-  // Update famileo fingerprint when relevant fields change
-  if (row[9]) {
+  // Update famileo post id if provided
+  if (shouldUpdateFamileoPostId) {
+    row[9] = body.famileo_post_id || '';
+    if (row[9]) {
+      shouldRebuildFingerprint = true;
+    }
+  }
+
+  if (shouldMarkFamileo) {
+    shouldRebuildFingerprint = true;
+  }
+
+  // Update famileo fingerprint when relevant fields change or explicitly requested
+  if (shouldRebuildFingerprint || row[9] || row[10]) {
     row[10] = buildFamileoFingerprint(row[2], row[1], row[3]);
   }
 

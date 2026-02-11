@@ -28,6 +28,8 @@ export interface UpdateArticlePayload {
   assembly_state?: object | null
   full_page?: boolean
   status?: 'ACTIVE' | 'DRAFT' | 'DELETED'
+  famileo_post_id?: string
+  famileo_marked?: boolean
 }
 
 export interface ListArticlesFilters {

@@ -226,18 +226,6 @@ export function Profile() {
           />
         </div>
 
-        {/* Backend URL (debug) */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Backend URL
-          </label>
-          <input
-            type="text"
-            value={import.meta.env.VITE_APPS_SCRIPT_URL || ''}
-            disabled
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 text-xs"
-          />
-        </div>
       </div>
 
       {/* Actions */}

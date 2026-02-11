@@ -221,8 +221,75 @@ function getPdfLogsRange() {
   return { min, max, count };
 }
 
+function getFamileoLogsRange() {
+  const sheet = getFamileoLogsSheet();
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return { min: null, max: null, count: 0 };
+  }
+
+  const data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  let min = null;
+  let max = null;
+  let count = 0;
+
+  for (let i = 0; i < data.length; i++) {
+    const value = data[i][0];
+    if (!value) continue;
+    const d = new Date(value);
+    if (isNaN(d.getTime())) continue;
+    const ts = d.toISOString();
+    if (!min || ts < min) min = ts;
+    if (!max || ts > max) max = ts;
+    count++;
+  }
+
+  return { min, max, count };
+}
+
 function clearPdfLogsRange(fromIso, toIso) {
   const sheet = getPdfLogsSheet();
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return { deleted: 0, remaining: 0 };
+  }
+
+  const from = fromIso ? new Date(fromIso) : null;
+  const to = toIso ? new Date(toIso) : null;
+  if ((from && isNaN(from.getTime())) || (to && isNaN(to.getTime()))) {
+    throw new Error('Invalid date range');
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const header = data[0];
+  const rows = data.slice(1);
+  const keep = [];
+  let deleted = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const ts = rows[i][0];
+    const d = ts ? new Date(ts) : null;
+    const inRange = d && !isNaN(d.getTime()) &&
+      (!from || d >= from) &&
+      (!to || d <= to);
+    if (inRange) {
+      deleted++;
+    } else {
+      keep.push(rows[i]);
+    }
+  }
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  if (keep.length > 0) {
+    sheet.getRange(2, 1, keep.length, header.length).setValues(keep);
+  }
+
+  return { deleted, remaining: keep.length };
+}
+
+function clearFamileoLogsRange(fromIso, toIso) {
+  const sheet = getFamileoLogsSheet();
   const lastRow = sheet.getLastRow();
   if (lastRow <= 1) {
     return { deleted: 0, remaining: 0 };

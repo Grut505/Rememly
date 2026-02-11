@@ -232,6 +232,7 @@ export function ArticleRow({ article, isDuplicate, onDeleted, onRestored, select
         publishedAt={article.date}
         imageUrl={article.image_url}
         imageFileId={article.image_file_id}
+        articleId={article.id}
       />
     </div>
   )

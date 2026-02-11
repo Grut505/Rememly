@@ -239,6 +239,7 @@ export function ArticleTile({ article, isDuplicate, onDeleted, onRestored, selec
         publishedAt={article.date}
         imageUrl={article.image_url}
         imageFileId={article.image_file_id}
+        articleId={article.id}
       />
     </div>
   )

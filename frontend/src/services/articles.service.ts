@@ -36,7 +36,9 @@ class ArticlesService {
     dateModification?: string,
     assemblyState?: object,
     fullPage?: boolean,
-    status?: 'ACTIVE' | 'DRAFT' | 'DELETED'
+    status?: 'ACTIVE' | 'DRAFT' | 'DELETED',
+    famileoPostId?: string,
+    famileoMarked?: boolean
   ): Promise<Article> {
     const payload: UpdateArticlePayload = {
       id,
@@ -45,6 +47,8 @@ class ArticlesService {
       assembly_state: assemblyState,
       full_page: fullPage,
       status,
+      famileo_post_id: famileoPostId,
+      famileo_marked: famileoMarked,
     }
 
     if (imageFile) {
@@ -52,6 +56,14 @@ class ArticlesService {
     }
 
     return articlesApi.update(payload)
+  }
+
+  async markFamileoPosted(id: string, famileoPostId?: string): Promise<Article> {
+    return articlesApi.update({
+      id,
+      famileo_post_id: famileoPostId,
+      famileo_marked: true,
+    })
   }
 
   async deleteArticle(id: string): Promise<void> {

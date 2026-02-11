@@ -30,11 +30,18 @@ export interface ZoneState {
 
 export interface PdfJob {
   job_id: string
-  status: 'PENDING' | 'RUNNING' | 'DONE' | 'ERROR'
+  status: 'PENDING' | 'RUNNING' | 'DONE' | 'ERROR' | 'CANCELLED'
   progress: number
   progress_message?: string
   pdf_file_id?: string
   pdf_url?: string
+  chunks_folder_id?: string
+  chunks_folder_url?: string
+  created_at?: string
+  created_by?: string
+  created_by_pseudo?: string
+  date_from?: string
+  date_to?: string
   error_message?: string
 }
 

@@ -221,11 +221,20 @@ function doPost(e) {
       case 'config/set':
         return handleConfigSet(body);
 
+      case 'config/links':
+        return handleConfigLinks();
+
       case 'logs/pdf/range':
         return createResponse({ ok: true, data: getPdfLogsRange() });
 
       case 'logs/pdf/clear':
         return createResponse({ ok: true, data: clearPdfLogsRange(body?.from, body?.to) });
+
+      case 'logs/famileo/range':
+        return createResponse({ ok: true, data: getFamileoLogsRange() });
+
+      case 'logs/famileo/clear':
+        return createResponse({ ok: true, data: clearFamileoLogsRange(body?.from, body?.to) });
 
       default:
         return createResponse({
@@ -283,4 +292,19 @@ function handleConfigSet(body) {
   }
   setConfigValue(key, value || '');
   return createResponse({ ok: true, data: { key, value: value || '' } });
+}
+
+function handleConfigLinks() {
+  const spreadsheetId = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID') || '';
+  const spreadsheetUrl = spreadsheetId
+    ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}`
+    : '';
+
+  return createResponse({
+    ok: true,
+    data: {
+      spreadsheet_id: spreadsheetId,
+      spreadsheet_url: spreadsheetUrl,
+    },
+  });
 }

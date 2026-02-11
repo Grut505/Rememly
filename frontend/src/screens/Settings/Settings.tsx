@@ -31,6 +31,8 @@ const fontWeightOptions = [
 
 export function Settings() {
   const { showToast, setUnsavedChanges } = useUiStore()
+  const backendUrl = import.meta.env.VITE_APPS_SCRIPT_URL || ''
+  const [sheetUrl, setSheetUrl] = useState('')
 
   const [familyName, setFamilyName] = useState('')
   const [initialFamilyName, setInitialFamilyName] = useState('')
@@ -87,8 +89,15 @@ export function Settings() {
   const [logsMax, setLogsMax] = useState<number | null>(null)
   const [logsFrom, setLogsFrom] = useState<number | null>(null)
   const [logsTo, setLogsTo] = useState<number | null>(null)
+  const [famileoLogsLoading, setFamileoLogsLoading] = useState(true)
+  const [famileoLogsMin, setFamileoLogsMin] = useState<number | null>(null)
+  const [famileoLogsMax, setFamileoLogsMax] = useState<number | null>(null)
+  const [famileoLogsFrom, setFamileoLogsFrom] = useState<number | null>(null)
+  const [famileoLogsTo, setFamileoLogsTo] = useState<number | null>(null)
   const [isClearingLogs, setIsClearingLogs] = useState(false)
   const [clearProgress, setClearProgress] = useState(0)
+  const [isClearingFamileoLogs, setIsClearingFamileoLogs] = useState(false)
+  const [famileoClearProgress, setFamileoClearProgress] = useState(0)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewFileId, setPreviewFileId] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -124,9 +133,20 @@ export function Settings() {
   useEffect(() => {
     loadConfig()
     loadLogsRange()
+    loadFamileoLogsRange()
     loadUsers()
     cleanupStaleCoverPreview()
+    loadLinks()
   }, [])
+
+  async function loadLinks() {
+    try {
+      const links = await configApi.links()
+      setSheetUrl(links.spreadsheet_url || '')
+    } catch (error) {
+      console.warn('Failed to load config links', error)
+    }
+  }
 
   const loadConfig = async () => {
     try {
@@ -480,6 +500,23 @@ export function Settings() {
     }
   }
 
+  const loadFamileoLogsRange = async () => {
+    setFamileoLogsLoading(true)
+    try {
+      const range = await logsApi.getFamileoRange()
+      const minMs = range.min ? new Date(range.min).getTime() : null
+      const maxMs = range.max ? new Date(range.max).getTime() : null
+      setFamileoLogsMin(minMs)
+      setFamileoLogsMax(maxMs)
+      setFamileoLogsFrom(minMs)
+      setFamileoLogsTo(maxMs)
+    } catch (error) {
+      showToast('Failed to load Famileo logs range', 'error')
+    } finally {
+      setFamileoLogsLoading(false)
+    }
+  }
+
   const handleClearLogs = async () => {
     if (logsFrom === null || logsTo === null) return
     setIsClearingLogs(true)
@@ -506,6 +543,36 @@ export function Settings() {
       setTimeout(() => {
         setIsClearingLogs(false)
         setClearProgress(0)
+      }, 300)
+    }
+  }
+
+  const handleClearFamileoLogs = async () => {
+    if (famileoLogsFrom === null || famileoLogsTo === null) return
+    setIsClearingFamileoLogs(true)
+    setFamileoClearProgress(0)
+
+    const start = Date.now()
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - start
+      const next = Math.min(90, Math.floor((elapsed / 3000) * 90))
+      setFamileoClearProgress(next)
+    }, 150)
+
+    try {
+      const fromIso = new Date(famileoLogsFrom).toISOString()
+      const toIso = new Date(famileoLogsTo).toISOString()
+      const result = await logsApi.clearFamileoRange(fromIso, toIso)
+      setFamileoClearProgress(100)
+      showToast(`Famileo logs deleted: ${result.deleted}`, 'success')
+      await loadFamileoLogsRange()
+    } catch (error) {
+      showToast('Failed to clear Famileo logs', 'error')
+    } finally {
+      clearInterval(timer)
+      setTimeout(() => {
+        setIsClearingFamileoLogs(false)
+        setFamileoClearProgress(0)
       }, 300)
     }
   }
@@ -1498,6 +1565,65 @@ export function Settings() {
               )}
             </div>
 
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Famileo logs</h3>
+              {famileoLogsLoading ? (
+                <div className="flex items-center justify-center py-6">
+                  <Spinner size="md" />
+                </div>
+              ) : famileoLogsMin === null || famileoLogsMax === null ? (
+                <p className="text-sm text-gray-500">No logs available.</p>
+              ) : (
+                <>
+                  <div className="text-xs text-gray-500 mb-3">
+                    {formatDateFr(famileoLogsFrom)} → {formatDateFr(famileoLogsTo)}
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-gray-500">From</label>
+                      <input
+                        type="range"
+                        min={famileoLogsMin}
+                        max={famileoLogsMax}
+                        value={famileoLogsFrom ?? famileoLogsMin}
+                        onChange={(e) => {
+                          const value = Number(e.target.value)
+                          setFamileoLogsFrom(value)
+                          if (famileoLogsTo !== null && value > famileoLogsTo) setFamileoLogsTo(value)
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">To</label>
+                      <input
+                        type="range"
+                        min={famileoLogsMin}
+                        max={famileoLogsMax}
+                        value={famileoLogsTo ?? famileoLogsMax}
+                        onChange={(e) => {
+                          const value = Number(e.target.value)
+                          setFamileoLogsTo(value)
+                          if (famileoLogsFrom !== null && value < famileoLogsFrom) setFamileoLogsFrom(value)
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-center">
+                    <Button
+                      variant="secondary"
+                      onClick={handleClearFamileoLogs}
+                      disabled={isClearingFamileoLogs || famileoLogsFrom === null || famileoLogsTo === null}
+                      className="w-full sm:w-auto"
+                    >
+                      Clear logs
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Cleanup properties */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Maintenance</h3>
@@ -1528,6 +1654,33 @@ export function Settings() {
                 </div>
               </div>
             </div>
+            {(backendUrl || sheetUrl) && (
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Links</h3>
+                <div className="flex flex-col gap-2 text-sm">
+                  {backendUrl && (
+                    <a
+                      href={backendUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary-600 hover:text-primary-700"
+                    >
+                      Open Backend URL
+                    </a>
+                  )}
+                  {sheetUrl && (
+                    <a
+                      href={sheetUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary-600 hover:text-primary-700"
+                    >
+                      Open Spreadsheet
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1565,6 +1718,23 @@ export function Settings() {
               <div
                 className="h-full bg-primary-600 transition-all"
                 style={{ width: `${clearProgress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isClearingFamileoLogs && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl px-6 py-5 w-72">
+            <div className="flex items-center justify-center">
+              <Spinner size="md" />
+            </div>
+            <p className="mt-3 text-sm text-gray-700 text-center">Clearing Famileo logs...</p>
+            <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary-600 transition-all"
+                style={{ width: `${famileoClearProgress}%` }}
               />
             </div>
           </div>

@@ -1,6 +1,13 @@
 import { ChangeEvent, useEffect, useRef, useState } from 'react'
 import { CONSTANTS } from '../../utils/constants'
-import { loadSpellchecker, extractWords, escapeRegex } from '../../utils/spellcheck'
+
+interface LanguageToolMatch {
+  offset: number
+  length: number
+  message: string
+  replacements: { value: string }[]
+  context?: { text: string; offset: number; length: number }
+}
 
 interface TextInputProps {
   value: string
@@ -10,7 +17,7 @@ interface TextInputProps {
 export function TextInput({ value, onChange }: TextInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isChecking, setIsChecking] = useState(false)
-  const [spellErrors, setSpellErrors] = useState<{ word: string; count: number; suggestions: string[] }[]>([])
+  const [spellErrors, setSpellErrors] = useState<LanguageToolMatch[]>([])
   const [spellErrorMessage, setSpellErrorMessage] = useState<string | null>(null)
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
@@ -32,42 +39,39 @@ export function TextInput({ value, onChange }: TextInputProps) {
     setIsChecking(true)
     setSpellErrorMessage(null)
     try {
-      const spell = await loadSpellchecker()
-      const words = extractWords(value)
-      const counts = new Map<string, { count: number; suggestions: string[] }>()
-      words.forEach((word) => {
-        if (spell.correct(word)) return
-        const entry = counts.get(word)
-        if (entry) {
-          entry.count += 1
-          return
-        }
-        const suggestions = spell.suggest(word).slice(0, 5)
-        counts.set(word, { count: 1, suggestions })
+      const body = new URLSearchParams()
+      body.set('text', value)
+      body.set('language', 'fr')
+
+      const response = await fetch('https://api.languagetool.org/v2/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
       })
-      const next = Array.from(counts.entries()).map(([word, data]) => ({
-        word,
-        count: data.count,
-        suggestions: data.suggestions,
-      }))
-      setSpellErrors(next)
-      if (next.length === 0) {
+
+      if (!response.ok) {
+        throw new Error(`Spellcheck failed (${response.status})`)
+      }
+
+      const data = await response.json()
+      const matches: LanguageToolMatch[] = Array.isArray(data.matches) ? data.matches : []
+      setSpellErrors(matches)
+      if (matches.length === 0) {
         setSpellErrorMessage('No spelling errors found.')
       }
     } catch (error) {
       setSpellErrors([])
-      setSpellErrorMessage('Spellcheck unavailable. Add fr_FR.aff and fr_FR.dic to /public/dictionaries.')
+      setSpellErrorMessage('Spellcheck unavailable. Please try again later.')
     } finally {
       setIsChecking(false)
     }
   }
 
-  const applySuggestion = async (word: string, suggestion: string) => {
-    const regex = new RegExp(`\\b${escapeRegex(word)}\\b`)
-    const nextText = value.replace(regex, suggestion)
-    if (nextText !== value) {
-      onChange(nextText)
-    }
+  const applySuggestion = async (match: LanguageToolMatch, suggestion: string) => {
+    const before = value.slice(0, match.offset)
+    const after = value.slice(match.offset + match.length)
+    const nextText = `${before}${suggestion}${after}`
+    onChange(nextText)
     await runSpellcheck()
   }
 
@@ -108,21 +112,31 @@ export function TextInput({ value, onChange }: TextInputProps) {
       {spellErrors.length > 0 && (
         <div className="mt-3 space-y-2">
           {spellErrors.map((err) => (
-            <div key={err.word} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+            <div
+              key={`${err.offset}-${err.length}-${err.message}`}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+            >
               <div className="flex items-center justify-between">
-                <span className="font-medium text-gray-800">{err.word}</span>
-                <span className="text-xs text-gray-500">x{err.count}</span>
+                <span className="font-medium text-gray-800">
+                  {value.slice(err.offset, err.offset + err.length)}
+                </span>
+                <span className="text-xs text-gray-500">Error</span>
               </div>
-              {err.suggestions.length > 0 ? (
+              {err.message && (
+                <div className="mt-1 text-xs text-gray-500">
+                  {err.message}
+                </div>
+              )}
+              {err.replacements && err.replacements.length > 0 ? (
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {err.suggestions.map((suggestion) => (
+                  {err.replacements.slice(0, 5).map((replacement) => (
                     <button
-                      key={suggestion}
+                      key={replacement.value}
                       type="button"
-                      onClick={() => applySuggestion(err.word, suggestion)}
+                      onClick={() => applySuggestion(err, replacement.value)}
                       className="px-2 py-1 text-xs rounded-full border border-gray-200 text-gray-700 hover:border-primary-400 hover:text-primary-700"
                     >
-                      {suggestion}
+                      {replacement.value}
                     </button>
                   ))}
                 </div>
@@ -131,6 +145,9 @@ export function TextInput({ value, onChange }: TextInputProps) {
               )}
             </div>
           ))}
+          <div className="text-xs text-gray-400">
+            Suggestions by LanguageTool.
+          </div>
         </div>
       )}
     </div>

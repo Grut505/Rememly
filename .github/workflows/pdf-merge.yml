@@ -56,9 +56,7 @@ jobs:
           echo "merge-token HTTP ${TOKEN_HTTP_CODE}"
           if [ "${TOKEN_HTTP_CODE}" -ge 200 ] && [ "${TOKEN_HTTP_CODE}" -lt 300 ]; then
             set +e
-            python -c "import json,sys; p=json.load(open('/tmp/merge_token_response.json','r',encoding='utf-8')); d=(p.get('data') or {}); raw=d.get('token_json'); \
-if (not p.get('ok')) or (not raw): raise SystemExit(1); t=json.loads(raw); \
-if not t.get('refresh_token'): raise SystemExit(1); json.dump(t, open('token.json','w',encoding='utf-8'))"
+            python -c "import json,sys; p=json.load(open('/tmp/merge_token_response.json','r',encoding='utf-8')); d=(p.get('data') or {}); raw=d.get('token_json'); assert p.get('ok') and raw; t=json.loads(raw); assert t.get('refresh_token'); json.dump(t, open('token.json','w',encoding='utf-8'))"
             TOKEN_PARSE_STATUS=$?
             set -e
             if [ "${TOKEN_PARSE_STATUS}" -eq 0 ]; then

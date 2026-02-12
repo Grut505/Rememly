@@ -9,6 +9,7 @@ Required:
 - `FAMILEO_PW_KEY` — encryption key used to store Famileo passwords in the users sheet.
 - `GITHUB_TOKEN` — token to trigger GitHub workflows (Famileo refresh / PDF merge).
 - `PDF_MERGE_TOKEN` — token used by PDF merge callbacks.
+- `GDRIVE_TOKEN_JSON` — raw JSON token cache used by PDF merge (`token.json` content, not base64).
 
 Optional / Auto:
 - `SPREADSHEET_ID` — created automatically on first run if missing.
@@ -25,7 +26,9 @@ Required:
 - `FAMILEO_PW_KEY` — same value as `FAMILEO_PW_KEY` (Script Properties).
 - `PDF_MERGE_TOKEN` — same value as `PDF_MERGE_TOKEN` (Script Properties).
 - `GDRIVE_CREDENTIALS_JSON`
-- `GDRIVE_TOKEN_JSON`
+
+Optional fallback:
+- `GDRIVE_TOKEN_JSON` — fallback base64 token cache for merge workflow. The workflow first tries backend `pdf/merge-token`.
 
 Deprecated (should be removed):
 - `FAMILEO_EMAIL`

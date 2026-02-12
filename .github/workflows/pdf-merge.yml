@@ -57,20 +57,20 @@ jobs:
           if [ "${TOKEN_HTTP_CODE}" -ge 200 ] && [ "${TOKEN_HTTP_CODE}" -lt 300 ]; then
             set +e
             python - <<'PY'
-import json, sys
-with open('/tmp/merge_token_response.json', 'r', encoding='utf-8') as f:
-    payload = json.load(f)
-if not payload.get('ok'):
-    raise SystemExit(1)
-token_json_raw = (payload.get('data') or {}).get('token_json')
-if not token_json_raw:
-    raise SystemExit(1)
-token_obj = json.loads(token_json_raw)
-if not token_obj.get('refresh_token'):
-    raise SystemExit(1)
-with open('token.json', 'w', encoding='utf-8') as out:
-    json.dump(token_obj, out)
-PY
+            import json, sys
+            with open('/tmp/merge_token_response.json', 'r', encoding='utf-8') as f:
+                payload = json.load(f)
+            if not payload.get('ok'):
+                raise SystemExit(1)
+            token_json_raw = (payload.get('data') or {}).get('token_json')
+            if not token_json_raw:
+                raise SystemExit(1)
+            token_obj = json.loads(token_json_raw)
+            if not token_obj.get('refresh_token'):
+                raise SystemExit(1)
+            with open('token.json', 'w', encoding='utf-8') as out:
+                json.dump(token_obj, out)
+            PY
             TOKEN_PARSE_STATUS=$?
             set -e
             if [ "${TOKEN_PARSE_STATUS}" -eq 0 ]; then

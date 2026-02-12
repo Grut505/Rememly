@@ -51,7 +51,9 @@ scripts/famileo-refresh/node_modules/
 scripts/*.pdf
 scripts/credentials.json
 scripts/token.json
+scripts/token.json.bak.*
 scripts/merge_pdf_from_drive.ini
+scripts/.wsl_browser_open.sh
 
 # Docs
 TODO.md

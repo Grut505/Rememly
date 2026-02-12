@@ -14,6 +14,9 @@ function installPdfWorker() {
     .timeBased()
     .everyMinutes(1)   // ajuster si besoin
     .create();
+
+  // Also install daily token maintenance for merge automation.
+  setupPdfMergeTokenMaintenanceTrigger();
 }
 
 function enqueuePdfJob(jobId) {
@@ -735,11 +738,14 @@ function finalizePdfChunks(jobId) {
     } else {
       updateJobStatus(jobId, 'DONE', 100, undefined, undefined, undefined, 'Chunks ready (merge pending)');
     }
-    sendPdfReadyEmail(jobId, folder.getUrl());
+    sendPdfReadyEmail(jobId, folder.getUrl(), folder.getId());
     if (autoMerge) {
       // Trigger merge workflow automatically
       const triggerResult = triggerPdfMergeWorkflow(jobId, folder.getId(), cleanChunks);
       if (!triggerResult.ok) {
+        const message = triggerResult.code === 'TOKEN_REFRESH_FAILED'
+          ? 'Merge token refresh failed (reconnect required)'
+          : `Merge trigger failed (code ${triggerResult.code || 'n/a'})`;
         updateJobStatus(
           jobId,
           'DONE',
@@ -747,7 +753,7 @@ function finalizePdfChunks(jobId) {
           undefined,
           undefined,
           undefined,
-          `Merge trigger failed (code ${triggerResult.code || 'n/a'})`
+          message
         );
       }
     }
@@ -771,6 +777,15 @@ function triggerPdfMergeWorkflow(jobId, folderId, cleanChunks) {
     if (!githubToken) {
       logPdfEvent(jobId, 'ERROR', 'GitHub token missing for merge trigger');
       return { ok: false, code: 0, message: 'Missing GitHub token' };
+    }
+
+    const refresh = refreshMergeTokenInternal();
+    if (!refresh.ok) {
+      logPdfEvent(jobId, 'ERROR', 'Merge token refresh failed before workflow trigger', {
+        code: refresh.code || 'TOKEN_REFRESH_FAILED',
+        message: refresh.message || '',
+      });
+      return { ok: false, code: 'TOKEN_REFRESH_FAILED', message: refresh.message || 'Token refresh failed' };
     }
 
     const response = UrlFetchApp.fetch(
@@ -803,6 +818,161 @@ function triggerPdfMergeWorkflow(jobId, folderId, cleanChunks) {
     logPdfEvent(jobId, 'ERROR', 'Merge workflow trigger failed', { message: String(e) });
     return { ok: false, code: 0, message: String(e) };
   }
+}
+
+function parseMergeTokenJson(raw) {
+  if (!raw) {
+    throw new Error('GDRIVE_TOKEN_JSON is not configured');
+  }
+  const tokenJson = JSON.parse(raw);
+  if (!tokenJson.refresh_token || !tokenJson.client_id || !tokenJson.client_secret) {
+    throw new Error('Invalid GDRIVE_TOKEN_JSON: missing refresh_token/client_id/client_secret');
+  }
+  return tokenJson;
+}
+
+function refreshMergeTokenInternal() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const tokenRaw = props.getProperty('GDRIVE_TOKEN_JSON');
+    const tokenJson = parseMergeTokenJson(tokenRaw);
+
+    const response = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      payload: {
+        client_id: String(tokenJson.client_id),
+        client_secret: String(tokenJson.client_secret),
+        refresh_token: String(tokenJson.refresh_token),
+        grant_type: 'refresh_token',
+      },
+      muteHttpExceptions: true,
+    });
+
+    const code = response.getResponseCode();
+    const bodyText = response.getContentText ? response.getContentText() : '';
+    if (code < 200 || code >= 300) {
+      return {
+        ok: false,
+        code: 'TOKEN_REFRESH_FAILED',
+        message: `Google token refresh failed (${code}): ${bodyText}`,
+      };
+    }
+
+    const refreshed = JSON.parse(bodyText || '{}');
+    if (!refreshed.access_token) {
+      return {
+        ok: false,
+        code: 'TOKEN_REFRESH_INVALID_RESPONSE',
+        message: 'Google token refresh response missing access_token',
+      };
+    }
+
+    const expiresIn = Number(refreshed.expires_in || 3600);
+    tokenJson.token = String(refreshed.access_token);
+    tokenJson.token_uri = tokenJson.token_uri || 'https://oauth2.googleapis.com/token';
+    tokenJson.scopes = (refreshed.scope ? String(refreshed.scope).split(/\s+/).filter(Boolean) : tokenJson.scopes) || ['https://www.googleapis.com/auth/drive'];
+    tokenJson.expiry = new Date(Date.now() + Math.max(1, expiresIn) * 1000).toISOString();
+
+    props.setProperty('GDRIVE_TOKEN_JSON', JSON.stringify(tokenJson));
+    return {
+      ok: true,
+      expiry: tokenJson.expiry,
+      has_refresh_token: !!tokenJson.refresh_token,
+    };
+  } catch (e) {
+    return { ok: false, code: 'TOKEN_REFRESH_FAILED', message: String(e) };
+  }
+}
+
+function getMergeTokenStatusData() {
+  const props = PropertiesService.getScriptProperties();
+  const raw = props.getProperty('GDRIVE_TOKEN_JSON');
+  if (!raw) {
+    return { configured: false };
+  }
+
+  try {
+    const tokenJson = JSON.parse(raw);
+    const expiry = tokenJson.expiry ? String(tokenJson.expiry) : '';
+    return {
+      configured: true,
+      has_refresh_token: !!tokenJson.refresh_token,
+      has_access_token: !!tokenJson.token,
+      expiry: expiry,
+      client_id_suffix: tokenJson.client_id ? String(tokenJson.client_id).slice(-8) : '',
+    };
+  } catch (e) {
+    return { configured: false, parse_error: true };
+  }
+}
+
+function handlePdfMergeToken(body) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const mergeToken = props.getProperty('PDF_MERGE_TOKEN');
+    if (!mergeToken || body?.token !== mergeToken) {
+      return createResponse({ ok: false, error: { code: 'FORBIDDEN', message: 'Invalid token' } });
+    }
+
+    const raw = props.getProperty('GDRIVE_TOKEN_JSON');
+    if (!raw) {
+      return createResponse({ ok: false, error: { code: 'MISSING_TOKEN', message: 'GDRIVE_TOKEN_JSON is not configured' } });
+    }
+    parseMergeTokenJson(raw);
+    return createResponse({ ok: true, data: { token_json: raw } });
+  } catch (e) {
+    return createResponse({ ok: false, error: { code: 'TOKEN_READ_FAILED', message: String(e) } });
+  }
+}
+
+function handlePdfMergeTokenStatus() {
+  try {
+    return createResponse({ ok: true, data: getMergeTokenStatusData() });
+  } catch (e) {
+    return createResponse({ ok: false, error: { code: 'TOKEN_STATUS_FAILED', message: String(e) } });
+  }
+}
+
+function handlePdfMergeTokenRefresh() {
+  const result = refreshMergeTokenInternal();
+  if (!result.ok) {
+    return createResponse({
+      ok: false,
+      error: { code: result.code || 'TOKEN_REFRESH_FAILED', message: result.message || 'Token refresh failed' },
+    });
+  }
+  return createResponse({
+    ok: true,
+    data: {
+      refreshed: true,
+      expiry: result.expiry,
+      has_refresh_token: result.has_refresh_token,
+    }
+  });
+}
+
+function pdfMergeTokenMaintenanceTick() {
+  const result = refreshMergeTokenInternal();
+  if (!result.ok) {
+    Logger.log('pdfMergeTokenMaintenanceTick failed: ' + (result.message || result.code || 'unknown'));
+    return;
+  }
+  Logger.log('pdfMergeTokenMaintenanceTick success, expiry=' + String(result.expiry || ''));
+}
+
+function setupPdfMergeTokenMaintenanceTrigger() {
+  const triggers = ScriptApp.getProjectTriggers();
+  for (let i = 0; i < triggers.length; i++) {
+    const t = triggers[i];
+    if (t.getHandlerFunction && t.getHandlerFunction() === 'pdfMergeTokenMaintenanceTick') {
+      ScriptApp.deleteTrigger(t);
+    }
+  }
+  ScriptApp.newTrigger('pdfMergeTokenMaintenanceTick')
+    .timeBased()
+    .everyDays(1)
+    .atHour(6)
+    .create();
 }
 
 function handlePdfMergeComplete(body) {
@@ -929,8 +1099,11 @@ function handlePdfMergeTrigger(body) {
     }
 
     updateJobStatus(jobId, 'RUNNING', 10, undefined, undefined, '', 'Merge queued');
-    const triggerResult = triggerPdfMergeWorkflow(jobId, job.chunks_folder_id);
+    const triggerResult = triggerPdfMergeWorkflow(jobId, job.chunks_folder_id, false);
     if (!triggerResult.ok) {
+      const message = triggerResult.code === 'TOKEN_REFRESH_FAILED'
+        ? 'Google Drive token refresh failed. Please reconnect token.'
+        : `GitHub trigger failed (code ${triggerResult.code || 'n/a'})`;
       updateJobStatus(
         jobId,
         'DONE',
@@ -938,13 +1111,13 @@ function handlePdfMergeTrigger(body) {
         undefined,
         undefined,
         undefined,
-        `Merge trigger failed (code ${triggerResult.code || 'n/a'})`
+        message
       );
       return createResponse({
         ok: false,
         error: {
-          code: 'MERGE_TRIGGER_FAILED',
-          message: `GitHub trigger failed (code ${triggerResult.code || 'n/a'})`
+          code: triggerResult.code === 'TOKEN_REFRESH_FAILED' ? 'TOKEN_REFRESH_FAILED' : 'MERGE_TRIGGER_FAILED',
+          message
         }
       });
     }
@@ -1336,7 +1509,7 @@ function buildMergedPdf(pdfs) {
 /**
  * Send email notification when PDF is ready
  */
-function sendPdfReadyEmail(jobId, pdfUrl) {
+function sendPdfReadyEmail(jobId, pdfUrl, chunksFolderId) {
   try {
     const job = getJobStatus(jobId);
     if (!job || !job.created_by) return;
@@ -2144,7 +2317,8 @@ async function mergePdfFileIdsIncremental(fileIds, jobId, tempFolderId) {
   const BATCH_SIZE = 1; // number of additional files to merge per tick
   const nativeThresholdMb = parseInt(getConfigValue('pdf_native_threshold_mb') || '', 10);
   const NATIVE_THRESHOLD_BYTES = (nativeThresholdMb ? nativeThresholdMb : 20) * 1024 * 1024;
-  const mergeStrategy = (getConfigValue('pdf_merge_strategy') || 'native').toLowerCase();
+  // Prefer PDFApp by default; native merge is kept as fallback/override.
+  const mergeStrategy = (getConfigValue('pdf_merge_strategy') || 'pdfapp').toLowerCase();
   const mergeKey = 'PDF_MERGE_STATE_' + jobId;
   let mergeState = props.getProperty(mergeKey);
   let state = mergeState ? JSON.parse(mergeState) : null;
@@ -2294,7 +2468,20 @@ function getArticlesInRange(from, to) {
     return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
 
-  return articles;
+  // Defensive deduplication: some data sources can contain duplicate ACTIVE rows.
+  // Prefer stable ID when available, otherwise fall back to a content-based key.
+  const seen = {};
+  const unique = [];
+  for (const article of articles) {
+    const stableId = article.id !== undefined && article.id !== null && String(article.id).trim() !== ''
+      ? `id:${String(article.id).trim()}`
+      : `k:${String(article.date || '').trim()}|${String(article.image_file_id || '').trim()}|${String(article.texte || '').trim()}`;
+    if (seen[stableId]) continue;
+    seen[stableId] = true;
+    unique.push(article);
+  }
+
+  return unique;
 }
 
 function generatePdfHtml(articles, year, from, to, options = {}) {
@@ -2744,22 +2931,27 @@ function renderArticle(article) {
   // Get image as base64 and detect orientation
   let imageHtml = '';
   let isPortrait = false;
+  const articleImgMaxDim = parseInt(getConfigValue('pdf_article_image_max_dim') || '', 10) || 1400;
 
   if (article.image_file_id) {
     try {
       const file = DriveApp.getFileById(article.image_file_id);
-      const blob = file.getBlob();
+      const originalBlob = file.getBlob();
+      const resized = resizeImageBlob(originalBlob, articleImgMaxDim);
+      const blob = resized.blob;
       const base64 = Utilities.base64Encode(blob.getBytes());
       const mimeType = blob.getContentType();
-
-      // Try to get image dimensions to detect portrait orientation
-      const imageBytes = blob.getBytes();
-      const dimensions = getImageDimensions(imageBytes, mimeType);
-      if (dimensions && dimensions.height > dimensions.width) {
-        isPortrait = true;
-      }
-
       imageHtml = `<img src="data:${mimeType};base64,${base64}" alt="" />`;
+
+      // Try to detect orientation, but never drop image on orientation errors.
+      try {
+        const dimensions = resized.dimensions || getImageDimensions(blob.getBytes(), mimeType);
+        if (dimensions && dimensions.height > dimensions.width) {
+          isPortrait = true;
+        }
+      } catch (dimErr) {
+        // Keep default (landscape) layout when dimension probing fails.
+      }
     } catch (e) {
       // If image fails to load, skip it
       imageHtml = '';
@@ -2984,8 +3176,8 @@ function generateCoverMaskedMosaic(articles, from, to, maxPhotos, coverOptions =
     ? parseFloat(familyHeightRaw)
     : 3.5;
   const familyHeightCm = Math.min(6, Math.max(1.5, familyHeightCmParsed));
-  const pageWidthCm = 27.7;
-  const pageHeightCm = familyHeightCm;
+  const pageWidthCm = familyHeightCm;
+  const pageHeightCm = 27.7;
   const gap = 0.07;
   const targetCellCount = Math.max(images.length, 90);
   const tiledImages = images.length > 0 ? images.slice() : [];
@@ -3301,6 +3493,7 @@ function generateCoverMaskedTextHtml({
   const familyMaskHeightPx = Math.max(1, Math.round(familyFontCm * 100));
   const familyMaskBaselinePx = Math.max(1, Math.round(familyFontPx * 0.86));
   const familyOutlinePx = Math.min(2.2, Math.max(0.8, familyFontPx * 0.007));
+  const familyTextScaleTransform = `translate(0 ${familyMaskBaselinePx}) scale(${familyScaleX} ${familyScaleY}) translate(0 ${-familyMaskBaselinePx})`;
   const familyClipId = 'coverFamilyClip';
   const familyMaskSvg = familyMaskEnabled ? `
       <svg width="27.7cm" height="${familyFontCm}cm" viewBox="0 0 2770 ${familyMaskHeightPx}" xmlns="http://www.w3.org/2000/svg" style="display:block;">
@@ -3308,17 +3501,22 @@ function generateCoverMaskedTextHtml({
           <clipPath id="${familyClipId}">
             <text x="0" y="${familyMaskBaselinePx}" text-anchor="start" dominant-baseline="alphabetic"
                   font-family="${familyFontFamily}" font-weight="${familyFontWeight}" font-size="${familyFontPx}"
-                  letter-spacing="${familyLetterSpacing}em">
+                  letter-spacing="${familyLetterSpacing}em"
+                  transform="${familyTextScaleTransform}">
               ${renderSvgMultiline(familyMaskText, 0, familyMaskBaselinePx, familyFontPx)}
             </text>
           </clipPath>
         </defs>
         <g clip-path="url(#${familyClipId})">
-          <image x="0" y="0" width="2770" height="${familyMaskHeightPx}" href="${familyMaskImageDataUri}" preserveAspectRatio="xMidYMid slice" />
+          <image x="0" y="0" width="${familyMaskHeightPx}" height="2770"
+                 href="${familyMaskImageDataUri}"
+                 preserveAspectRatio="xMidYMid slice"
+                 transform="matrix(0 1 -1 0 2770 0)" />
         </g>
         <text x="0" y="${familyMaskBaselinePx}" text-anchor="start" dominant-baseline="alphabetic"
               font-family="${familyFontFamily}" font-weight="${familyFontWeight}" font-size="${familyFontPx}"
               letter-spacing="${familyLetterSpacing}em"
+              transform="${familyTextScaleTransform}"
               fill="none" stroke="rgba(0,0,0,0.28)" stroke-width="${familyOutlinePx}" stroke-linejoin="round" paint-order="stroke fill">
           ${renderSvgMultiline(familyMaskText, 0, familyMaskBaselinePx, familyFontPx)}
         </text>
@@ -3343,7 +3541,7 @@ function generateCoverMaskedTextHtml({
         ${renderMultiline(coverSubtitleValue)}
       </span>
     </div>
-    ${familyMaskEnabled ? `<div style="position:absolute; left:${familyXcm}cm; bottom:0.2cm; width:27.7cm; height:${familyFontCm}cm; white-space:nowrap; transform: rotate(-90deg) scaleX(${familyScaleX}) scaleY(${familyScaleY}); transform-origin: left bottom; overflow:hidden; z-index:20;">
+    ${familyMaskEnabled ? `<div style="position:absolute; left:${familyXcm}cm; bottom:0.2cm; width:27.7cm; height:${familyFontCm}cm; white-space:nowrap; transform: rotate(-90deg); transform-origin: left bottom; overflow:hidden; z-index:20;">
       ${familyMaskSvg}
     </div>` : ''}
   </div>

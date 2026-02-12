@@ -103,6 +103,15 @@ export function Settings() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [isCleaningProps, setIsCleaningProps] = useState(false)
   const [isBackfilling, setIsBackfilling] = useState(false)
+  const [isRefreshingMergeToken, setIsRefreshingMergeToken] = useState(false)
+  const [mergeTokenStatus, setMergeTokenStatus] = useState<{
+    configured: boolean
+    has_refresh_token?: boolean
+    has_access_token?: boolean
+    expiry?: string
+    client_id_suffix?: string
+    parse_error?: boolean
+  } | null>(null)
   const [usersLoading, setUsersLoading] = useState(false)
   const [users, setUsers] = useState<DeclaredUser[]>([])
   const isDirty = familyName.trim() !== initialFamilyName.trim()
@@ -137,6 +146,7 @@ export function Settings() {
     loadUsers()
     cleanupStaleCoverPreview()
     loadLinks()
+    loadMergeTokenStatus()
   }, [])
 
   async function loadLinks() {
@@ -610,6 +620,33 @@ export function Settings() {
       showToast('Failed to load users', 'error')
     } finally {
       setUsersLoading(false)
+    }
+  }
+
+  const loadMergeTokenStatus = async () => {
+    try {
+      const status = await pdfApi.mergeTokenStatus()
+      setMergeTokenStatus(status)
+    } catch (error) {
+      setMergeTokenStatus(null)
+    }
+  }
+
+  const handleRefreshMergeToken = async () => {
+    setIsRefreshingMergeToken(true)
+    try {
+      const result = await pdfApi.refreshMergeToken()
+      await loadMergeTokenStatus()
+      showToast(
+        result.expiry
+          ? `Merge token refreshed (expires ${new Date(result.expiry).toLocaleString('fr-FR')})`
+          : 'Merge token refreshed',
+        'success'
+      )
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to refresh merge token', 'error')
+    } finally {
+      setIsRefreshingMergeToken(false)
     }
   }
 
@@ -1650,6 +1687,24 @@ export function Settings() {
                     className="w-full sm:w-auto"
                   >
                     Backfill Famileo fingerprints
+                  </Button>
+                </div>
+                <div className="flex flex-col items-start gap-2 w-full">
+                  <p className="text-xs text-gray-500">
+                    Refresh Google Drive merge token stored in backend Script Properties.
+                  </p>
+                  <div className="text-xs text-gray-500">
+                    {mergeTokenStatus?.configured
+                      ? `Configured${mergeTokenStatus.expiry ? `, expires: ${new Date(mergeTokenStatus.expiry).toLocaleString('fr-FR')}` : ''}`
+                      : 'Not configured (set Script Property: GDRIVE_TOKEN_JSON)'}
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={handleRefreshMergeToken}
+                    disabled={isRefreshingMergeToken || !mergeTokenStatus?.configured}
+                    className="w-full sm:w-auto"
+                  >
+                    {isRefreshingMergeToken ? 'Refreshing merge token...' : 'Refresh merge token'}
                   </Button>
                 </div>
               </div>

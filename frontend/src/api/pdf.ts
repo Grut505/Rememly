@@ -87,6 +87,15 @@ export interface CoverPreviewContentResponse {
   base64: string
 }
 
+export interface MergeTokenStatusResponse {
+  configured: boolean
+  has_refresh_token?: boolean
+  has_access_token?: boolean
+  expiry?: string
+  client_id_suffix?: string
+  parse_error?: boolean
+}
+
 export const pdfApi = {
   create: (payload: CreatePdfPayload) =>
     apiClient.post<CreatePdfResponse>('pdf/create', payload),
@@ -129,6 +138,12 @@ export const pdfApi = {
 
   cleanupMerge: (jobId: string) =>
     apiClient.post<{ cleaned: boolean }>('pdf/merge-cleanup', { job_id: jobId }),
+
+  mergeTokenStatus: () =>
+    apiClient.post<MergeTokenStatusResponse>('pdf/merge-token-status'),
+
+  refreshMergeToken: () =>
+    apiClient.post<{ refreshed: boolean; expiry?: string; has_refresh_token?: boolean }>('pdf/merge-token-refresh'),
 
   cancel: (jobId: string) =>
     apiClient.post<{ cancelled: boolean; job_id: string }>('pdf/cancel', { job_id: jobId }),

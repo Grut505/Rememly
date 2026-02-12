@@ -40,6 +40,12 @@ function doGet(e) {
       };
       return handlePdfMergeCancel(body);
     }
+    if (path === 'pdf/merge-token') {
+      const body = {
+        token: params.token,
+      };
+      return handlePdfMergeToken(body);
+    }
     if (path === 'pdf/cover-preview-content') {
       const token = getAuthToken(e);
       const authResult = checkAuth(token);
@@ -169,6 +175,12 @@ function doPost(e) {
 
       case 'pdf/merge-trigger':
         return handlePdfMergeTrigger(body);
+
+      case 'pdf/merge-token-status':
+        return handlePdfMergeTokenStatus();
+
+      case 'pdf/merge-token-refresh':
+        return handlePdfMergeTokenRefresh();
 
       case 'pdf/cleanup-properties':
         return createResponse({ ok: true, data: cleanupOrphanPdfProperties() });

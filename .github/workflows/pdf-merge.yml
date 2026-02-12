@@ -56,21 +56,9 @@ jobs:
           echo "merge-token HTTP ${TOKEN_HTTP_CODE}"
           if [ "${TOKEN_HTTP_CODE}" -ge 200 ] && [ "${TOKEN_HTTP_CODE}" -lt 300 ]; then
             set +e
-            python - <<'PY'
-            import json, sys
-            with open('/tmp/merge_token_response.json', 'r', encoding='utf-8') as f:
-                payload = json.load(f)
-            if not payload.get('ok'):
-                raise SystemExit(1)
-            token_json_raw = (payload.get('data') or {}).get('token_json')
-            if not token_json_raw:
-                raise SystemExit(1)
-            token_obj = json.loads(token_json_raw)
-            if not token_obj.get('refresh_token'):
-                raise SystemExit(1)
-            with open('token.json', 'w', encoding='utf-8') as out:
-                json.dump(token_obj, out)
-            PY
+            python -c "import json,sys; p=json.load(open('/tmp/merge_token_response.json','r',encoding='utf-8')); d=(p.get('data') or {}); raw=d.get('token_json'); \
+if (not p.get('ok')) or (not raw): raise SystemExit(1); t=json.loads(raw); \
+if not t.get('refresh_token'): raise SystemExit(1); json.dump(t, open('token.json','w',encoding='utf-8'))"
             TOKEN_PARSE_STATUS=$?
             set -e
             if [ "${TOKEN_PARSE_STATUS}" -eq 0 ]; then
@@ -144,18 +132,8 @@ jobs:
             cat /tmp/merge_status_3.json || true
             exit 1
           fi
-          FILE_ID=$(python - <<'PY'
-          import json, os, sys
-          data=json.loads(os.environ['RESULT'])
-          print(data['file_id'])
-          PY
-          )
-          URL=$(python - <<'PY'
-          import json, os, sys
-          data=json.loads(os.environ['RESULT'])
-          print(data['url'])
-          PY
-          )
+          FILE_ID=$(python -c "import json,os; d=json.loads(os.environ['RESULT']); print(d['file_id'])")
+          URL=$(python -c "import json,os; d=json.loads(os.environ['RESULT']); print(d['url'])")
           STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_status_4.json -w "%{http_code}" \
             --data-urlencode "path=pdf/merge-status" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \

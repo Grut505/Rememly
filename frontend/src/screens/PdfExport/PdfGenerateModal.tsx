@@ -62,8 +62,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const [showSeasonalFruits, setShowSeasonalFruits] = useState(true)
   const [maxMosaicPhotos, setMaxMosaicPhotos] = useState<number>(0) // 0 = all photos
   const [coverStyle, setCoverStyle] = useState<'mosaic' | 'masked-title'>('masked-title')
-  const [autoMerge, setAutoMerge] = useState(false)
-  const [cleanChunksAfterMerge, setCleanChunksAfterMerge] = useState(false)
+  const [autoMerge, setAutoMerge] = useState(true)
+  const [cleanChunksAfterMerge, setCleanChunksAfterMerge] = useState(true)
   const [activePicker, setActivePicker] = useState<'start' | 'end'>('start')
   const [tempDate, setTempDate] = useState({ y: '', m: '', d: '' })
   const [isPwa, setIsPwa] = useState(false)
@@ -82,8 +82,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     setShowSeasonalFruits(true)
     setMaxMosaicPhotos(0)
     setCoverStyle('masked-title')
-    setAutoMerge(false)
-    setCleanChunksAfterMerge(false)
+    setAutoMerge(true)
+    setCleanChunksAfterMerge(true)
   }
 
   const handleClose = () => {
@@ -593,8 +593,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                   className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
                 <div>
-                  <span className="text-sm font-medium text-gray-700">Auto-merge via GitHub Action</span>
-                  <p className="text-xs text-gray-500">Triggers the merge workflow after chunks are generated</p>
+                  <span className="text-sm font-medium text-gray-700">Merge the chunks automatically</span>
+                  <p className="text-xs text-gray-500">Uncheck to generate only the chunks</p>
                 </div>
               </label>
 

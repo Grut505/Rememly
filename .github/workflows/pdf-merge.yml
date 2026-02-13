@@ -74,7 +74,7 @@ jobs:
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${{ inputs.job_id }}" \
             --data-urlencode "run_id=${{ github.run_id }}" \
-            --data-urlencode "progress=20" \
+            --data-urlencode "progress=84" \
             --data-urlencode "message=Downloading chunks" \
             "${CALLBACK_URL}")
           echo "merge-status(Downloading chunks) HTTP ${STATUS_CODE}"
@@ -92,7 +92,7 @@ jobs:
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${{ inputs.job_id }}" \
             --data-urlencode "run_id=${{ github.run_id }}" \
-            --data-urlencode "progress=60" \
+            --data-urlencode "progress=90" \
             --data-urlencode "message=Merging PDFs" \
             "${CALLBACK_URL}")
           echo "merge-status(Merging PDFs) HTTP ${STATUS_CODE}"
@@ -163,7 +163,7 @@ jobs:
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${JOB_ID}" \
             --data-urlencode "run_id=${{ github.run_id }}" \
-            --data-urlencode "progress=85" \
+            --data-urlencode "progress=96" \
             --data-urlencode "message=Uploading merged PDF" \
             "${CALLBACK_URL}")
           echo "merge-status(Uploading merged PDF) HTTP ${STATUS_CODE}"
@@ -176,7 +176,7 @@ jobs:
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${JOB_ID}" \
             --data-urlencode "run_id=${{ github.run_id }}" \
-            --data-urlencode "progress=92" \
+            --data-urlencode "progress=98" \
             --data-urlencode "message=Finalizing" \
             "${CALLBACK_URL}")
           echo "merge-status(Finalizing) HTTP ${STATUS_CODE}"

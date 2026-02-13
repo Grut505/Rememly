@@ -225,11 +225,11 @@ export function PdfExport() {
   }
 
   const getAuthorLabel = useCallback((email?: string, pseudo?: string) => {
-    if (pseudo) return pseudo
-    if (!email) return 'Unknown'
     if (user?.email && profile?.pseudo && email === user.email) {
       return profile.pseudo
     }
+    if (pseudo) return pseudo
+    if (!email) return 'Unknown'
     const fromList = pdfList.find(p => p.created_by === email)?.created_by_pseudo
     return fromList || email.split('@')[0]
   }, [pdfList, profile?.pseudo, user?.email])

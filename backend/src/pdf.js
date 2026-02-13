@@ -713,7 +713,7 @@ async function mergePdfChunksAndFinish(jobId) {
 function finalizePdfChunks(jobId) {
   const props = PropertiesService.getScriptProperties();
   try {
-    updateJobStatus(jobId, 'RUNNING', 92, undefined, undefined, undefined, 'Saving to Drive...');
+    updateJobStatus(jobId, 'RUNNING', 80, undefined, undefined, undefined, 'Finalizing chunks...');
     const stateJson = props.getProperty('PDF_BATCH_STATE_' + jobId);
     const state = stateJson ? JSON.parse(stateJson) : null;
     const job = getJobStatus(jobId);
@@ -734,11 +734,11 @@ function finalizePdfChunks(jobId) {
 
     const folder = DriveApp.getFolderById(state.tempFolderId);
     if (autoMerge) {
-      updateJobStatus(jobId, 'RUNNING', 10, undefined, undefined, undefined, 'Merge queued');
+      updateJobStatus(jobId, 'RUNNING', 82, undefined, undefined, undefined, 'Merge queued');
     } else {
       updateJobStatus(jobId, 'DONE', 100, undefined, undefined, undefined, 'Chunks ready (merge pending)');
+      sendPdfReadyEmail(jobId, folder.getUrl(), folder.getId());
     }
-    sendPdfReadyEmail(jobId, folder.getUrl(), folder.getId());
     if (autoMerge) {
       // Trigger merge workflow automatically
       const triggerResult = triggerPdfMergeWorkflow(jobId, folder.getId(), cleanChunks);
@@ -748,11 +748,11 @@ function finalizePdfChunks(jobId) {
           : `Merge trigger failed (code ${triggerResult.code || 'n/a'})`;
         updateJobStatus(
           jobId,
-          'DONE',
-          100,
+          'ERROR',
+          0,
           undefined,
           undefined,
-          undefined,
+          message,
           message
         );
       }

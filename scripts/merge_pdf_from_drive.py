@@ -161,6 +161,7 @@ def main():
     parser.add_argument("--no-browser", action="store_true", help="Use console OAuth flow (no local browser)")
     parser.add_argument("--auth-only", action="store_true", help="Only (re)authenticate and write token.json, then exit")
     parser.add_argument("--clean-chunks", action="store_true", help="Delete chunk PDFs after successful merge")
+    parser.add_argument("--skip-callback", action="store_true", help="Do not call Apps Script merge-complete callback")
     args = parser.parse_args()
 
     config = configparser.ConfigParser()
@@ -226,7 +227,6 @@ def main():
     print("Uploading merged PDF to Drive...")
     created = upload_file(service, folder_id, output_name, out_bytes.getvalue())
     result = {"file_id": created.get("id"), "url": created.get("webViewLink")}
-    print(json.dumps(result))
 
     if move_to_pdf_root:
         pdf_root_id = get_pdf_root_folder_id(service)
@@ -238,7 +238,7 @@ def main():
         print("Cleaning chunk PDFs in folder...")
         delete_chunks(service, folder_id, created["id"])
 
-    if apps_script_url and merge_token:
+    if (not args.skip_callback) and apps_script_url and merge_token:
         print("Updating jobs_pdf via Apps Script...")
         call_merge_complete(
             apps_script_url,
@@ -252,6 +252,9 @@ def main():
     if clean_chunks and delete_chunks_folder:
         print("Deleting chunks folder...")
         service.files().delete(fileId=folder_id).execute()
+
+    # Keep the machine-readable result as the final stdout line for CI consumers.
+    print(json.dumps(result))
 
 
 if __name__ == "__main__":

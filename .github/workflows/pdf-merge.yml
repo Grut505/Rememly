@@ -86,7 +86,7 @@ jobs:
       - name: Merge PDFs
         id: merge
         run: |
-          set -e
+          set -euo pipefail
           STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_status_2.json -w "%{http_code}" \
             --data-urlencode "path=pdf/merge-status" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
@@ -104,19 +104,60 @@ jobs:
           if [ "${{ inputs.clean_chunks }}" = "true" ]; then
             CLEAN_FLAG="--clean-chunks"
           fi
-          timeout 45m python -u scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --no-browser $CLEAN_FLAG \
+          timeout 45m python -u scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --no-browser --skip-callback $CLEAN_FLAG \
             1> /tmp/merge_out.txt 2> /tmp/merge_err.txt
           echo "---- merge stdout (tail) ----"
           tail -n 50 /tmp/merge_out.txt || true
           echo "---- merge stderr (tail) ----"
           tail -n 50 /tmp/merge_err.txt || true
-          RESULT=$(cat /tmp/merge_out.txt | tail -n 1)
+          RESULT=$(python - <<'PY'
+          import json
+          from pathlib import Path
+
+          lines = Path('/tmp/merge_out.txt').read_text(encoding='utf-8', errors='replace').splitlines()
+          result = ''
+          for line in reversed(lines):
+              s = line.strip()
+              if not (s.startswith('{') and s.endswith('}')):
+                  continue
+              try:
+                  payload = json.loads(s)
+              except Exception:
+                  continue
+              file_id = payload.get('file_id')
+              url = payload.get('url')
+              if file_id and url:
+                  result = json.dumps({'file_id': file_id, 'url': url})
+                  break
+
+          print(result)
+          PY
+          )
+          if [ -z "$RESULT" ]; then
+            echo "No valid merge result JSON found in /tmp/merge_out.txt"
+            exit 1
+          fi
+          FILE_ID=$(python3 -c 'import json,sys; p=json.loads(sys.stdin.read()); print(p.get("file_id",""))' <<< "$RESULT")
+          URL=$(python3 -c 'import json,sys; p=json.loads(sys.stdin.read()); print(p.get("url",""))' <<< "$RESULT")
+          if [ -z "$FILE_ID" ] || [ -z "$URL" ]; then
+            echo "Invalid merge result payload: missing file_id or url"
+            echo "$RESULT"
+            exit 1
+          fi
           echo "result=$RESULT" >> $GITHUB_OUTPUT
+          echo "file_id=$FILE_ID" >> $GITHUB_OUTPUT
+          echo "url=$URL" >> $GITHUB_OUTPUT
 
       - name: Notify backend
         run: |
+          set -euo pipefail
           JOB_ID="${{ inputs.job_id }}"
-          RESULT='${{ steps.merge.outputs.result }}'
+          FILE_ID="${{ steps.merge.outputs.file_id }}"
+          URL="${{ steps.merge.outputs.url }}"
+          if [ -z "${FILE_ID}" ] || [ -z "${URL}" ]; then
+            echo "Missing merge outputs: file_id='${FILE_ID}' url='${URL}'"
+            exit 1
+          fi
           STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_status_3.json -w "%{http_code}" \
             --data-urlencode "path=pdf/merge-status" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
@@ -130,8 +171,6 @@ jobs:
             cat /tmp/merge_status_3.json || true
             exit 1
           fi
-          FILE_ID=$(python -c "import json,os; d=json.loads(os.environ['RESULT']); print(d['file_id'])")
-          URL=$(python -c "import json,os; d=json.loads(os.environ['RESULT']); print(d['url'])")
           STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_status_4.json -w "%{http_code}" \
             --data-urlencode "path=pdf/merge-status" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
@@ -158,11 +197,9 @@ jobs:
             cat /tmp/merge_complete.json || true
             exit 1
           fi
-        env:
-          RESULT: ${{ steps.merge.outputs.result }}
 
       - name: Notify backend (merge failed)
-        if: ${{ failure() }}
+        if: ${{ failure() && steps.merge.outcome != 'success' }}
         run: |
           ERROR_MSG="$(tail -c 1500 /tmp/merge_err.txt 2>/dev/null || echo 'GitHub Action failed')"
           STATUS_CODE=$(curl -sS -L -G -o /tmp/merge_failed.json -w "%{http_code}" \

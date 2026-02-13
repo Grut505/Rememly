@@ -61,7 +61,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const [mosaicLayout, setMosaicLayout] = useState<'full' | 'centered'>('full')
   const [showSeasonalFruits, setShowSeasonalFruits] = useState(true)
   const [maxMosaicPhotos, setMaxMosaicPhotos] = useState<number>(0) // 0 = all photos
-  const [coverStyle, setCoverStyle] = useState<'mosaic' | 'masked-title'>('mosaic')
+  const [coverStyle, setCoverStyle] = useState<'mosaic' | 'masked-title'>('masked-title')
   const [autoMerge, setAutoMerge] = useState(false)
   const [cleanChunksAfterMerge, setCleanChunksAfterMerge] = useState(false)
   const [activePicker, setActivePicker] = useState<'start' | 'end'>('start')
@@ -81,7 +81,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     setMosaicLayout('full')
     setShowSeasonalFruits(true)
     setMaxMosaicPhotos(0)
-    setCoverStyle('mosaic')
+    setCoverStyle('masked-title')
     setAutoMerge(false)
     setCleanChunksAfterMerge(false)
   }
@@ -511,16 +511,6 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                   </label>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setCoverStyle('mosaic')}
-                      className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
-                        coverStyle === 'mosaic'
-                          ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
-                          : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      Mosaic
-                    </button>
-                    <button
                       onClick={() => setCoverStyle('masked-title')}
                       className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
                         coverStyle === 'masked-title'
@@ -529,6 +519,16 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                       }`}
                     >
                       Masked title
+                    </button>
+                    <button
+                      onClick={() => setCoverStyle('mosaic')}
+                      className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                        coverStyle === 'mosaic'
+                          ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                          : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      Mosaic
                     </button>
                   </div>
                 </div>

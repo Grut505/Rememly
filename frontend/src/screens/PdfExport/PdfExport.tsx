@@ -463,16 +463,6 @@ export function PdfExport() {
           )}
 
           <div className="flex items-center gap-4 ml-auto">
-            <button
-              onClick={() => setShowGenerateModal(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 transition-colors touch-manipulation"
-              title="New PDF"
-            >
-              <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                <path d="M12 4v16m8-8H4"></path>
-              </svg>
-              New PDF
-            </button>
             {selectionMode && (
               <button
                 onClick={selectAll}

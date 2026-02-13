@@ -17,6 +17,7 @@ export interface PdfOptions {
   cover_family_h_cm?: number
   cover_family_scale_x?: number
   cover_family_scale_y?: number
+  cover_family_outline_px?: number
   cover_title_font_family?: string
   cover_title_font_weight?: number
   cover_title_letter_spacing_em?: number

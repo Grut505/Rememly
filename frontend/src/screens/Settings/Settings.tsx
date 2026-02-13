@@ -52,6 +52,8 @@ export function Settings() {
   const [initialFamilyScaleX, setInitialFamilyScaleX] = useState(1)
   const [familyScaleY, setFamilyScaleY] = useState(1)
   const [initialFamilyScaleY, setInitialFamilyScaleY] = useState(1)
+  const [familyOutlinePx, setFamilyOutlinePx] = useState(2.2)
+  const [initialFamilyOutlinePx, setInitialFamilyOutlinePx] = useState(2.2)
   const [coverTitleXcm, setCoverTitleXcm] = useState(8.5)
   const [initialCoverTitleXcm, setInitialCoverTitleXcm] = useState(8.5)
   const [familyFontCm, setFamilyFontCm] = useState(3.5)
@@ -124,6 +126,7 @@ export function Settings() {
     || familyFontCm !== initialFamilyFontCm
     || familyScaleX !== initialFamilyScaleX
     || familyScaleY !== initialFamilyScaleY
+    || familyOutlinePx !== initialFamilyOutlinePx
     || coverTitleXcm !== initialCoverTitleXcm
     || coverTitleFontCm !== initialCoverTitleFontCm
     || coverTitleFontFamily !== initialCoverTitleFontFamily
@@ -171,6 +174,7 @@ export function Settings() {
         familyFontSizeResult,
         familyScaleXResult,
         familyScaleYResult,
+        familyOutlineResult,
         titleFontFamilyResult,
         titleFontWeightResult,
         titleLetterSpacingResult,
@@ -196,6 +200,7 @@ export function Settings() {
         configApi.get('pdf_cover_family_h_cm'),
         configApi.get('pdf_cover_family_scale_x'),
         configApi.get('pdf_cover_family_scale_y'),
+        configApi.get('pdf_cover_family_outline_px'),
         configApi.get('pdf_cover_title_font_family'),
         configApi.get('pdf_cover_title_font_weight'),
         configApi.get('pdf_cover_title_letter_spacing_em'),
@@ -221,6 +226,7 @@ export function Settings() {
       const familyFontSizeValue = familyFontSizeResult.value || '3.5'
       const familyScaleXValue = familyScaleXResult.value || '1'
       const familyScaleYValue = familyScaleYResult.value || '1'
+      const familyOutlineValue = familyOutlineResult.value || ''
       const titleFontFamilyValue = titleFontFamilyResult.value || 'palatino'
       const titleFontWeightValue = titleFontWeightResult.value || '700'
       const titleLetterSpacingValue = titleLetterSpacingResult.value || '0'
@@ -269,6 +275,11 @@ export function Settings() {
         : 1
       setFamilyScaleY(familyScaleYNum)
       setInitialFamilyScaleY(familyScaleYNum)
+      const familyOutlineNum = Number.isFinite(parseFloat(familyOutlineValue))
+        ? parseFloat(familyOutlineValue)
+        : Math.min(2.2, Math.max(0.8, familyFontSizeNum * 100 * 0.007))
+      setFamilyOutlinePx(familyOutlineNum)
+      setInitialFamilyOutlinePx(familyOutlineNum)
       setCoverTitleFontFamily(titleFontFamilyValue)
       setInitialCoverTitleFontFamily(titleFontFamilyValue)
       const titleWeightNum = Number.isFinite(parseFloat(titleFontWeightValue))
@@ -369,6 +380,7 @@ export function Settings() {
         configApi.set('pdf_cover_family_h_cm', String(familyFontCm)),
         configApi.set('pdf_cover_family_scale_x', String(familyScaleX)),
         configApi.set('pdf_cover_family_scale_y', String(familyScaleY)),
+        configApi.set('pdf_cover_family_outline_px', String(familyOutlinePx)),
         configApi.set('pdf_cover_title_font_family', coverTitleFontFamily),
         configApi.set('pdf_cover_title_font_weight', String(coverTitleFontWeight)),
         configApi.set('pdf_cover_title_letter_spacing_em', String(coverTitleLetterSpacingEm)),
@@ -397,6 +409,7 @@ export function Settings() {
       setInitialFamilyFontCm(familyFontCm)
       setInitialFamilyScaleX(familyScaleX)
       setInitialFamilyScaleY(familyScaleY)
+      setInitialFamilyOutlinePx(familyOutlinePx)
       setInitialCoverTitleXcm(coverTitleXcm)
       setInitialCoverTitleFontCm(coverTitleFontCm)
       setInitialCoverTitleFontFamily(coverTitleFontFamily)
@@ -440,6 +453,7 @@ export function Settings() {
           cover_family_h_cm: familyFontCm,
           cover_family_scale_x: familyScaleX,
           cover_family_scale_y: familyScaleY,
+          cover_family_outline_px: familyOutlinePx,
           cover_title_font_family: coverTitleFontFamily,
           cover_title_font_weight: coverTitleFontWeight,
           cover_title_letter_spacing_em: coverTitleLetterSpacingEm,
@@ -903,6 +917,40 @@ export function Settings() {
                           step={0.01}
                           value={Number.isFinite(familyScaleY) ? familyScaleY : 1}
                           onChange={(e) => setFamilyScaleY(Number(e.target.value))}
+                          className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-medium text-gray-500">
+                          Outline thickness ({familyOutlinePx.toFixed(1)}px)
+                        </label>
+                        <button
+                          onClick={() => setFamilyOutlinePx(initialFamilyOutlinePx)}
+                          disabled={familyOutlinePx === initialFamilyOutlinePx}
+                          className="text-xs text-gray-500 hover:text-gray-700 disabled:text-gray-300"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={0}
+                          max={20}
+                          step={0.1}
+                          value={familyOutlinePx}
+                          onChange={(e) => setFamilyOutlinePx(Number(e.target.value))}
+                          className="w-full"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          max={20}
+                          step={0.1}
+                          value={Number.isFinite(familyOutlinePx) ? familyOutlinePx : 2.2}
+                          onChange={(e) => setFamilyOutlinePx(Number(e.target.value))}
                           className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
                         />
                       </div>

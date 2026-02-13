@@ -134,6 +134,7 @@ function handlePdfCreate(body, user) {
     coverFamilyHcm: body.options?.cover_family_h_cm || undefined,
     coverFamilyScaleX: body.options?.cover_family_scale_x || undefined,
     coverFamilyScaleY: body.options?.cover_family_scale_y || undefined,
+    coverFamilyOutlinePx: body.options?.cover_family_outline_px !== undefined ? body.options.cover_family_outline_px : undefined,
     autoMerge: body.options?.auto_merge === true,
     cleanChunks: body.options?.clean_chunks === true
   }));
@@ -195,6 +196,7 @@ function handlePdfCoverPreview(body, user) {
       coverFamilyHcm: options.cover_family_h_cm,
       coverFamilyScaleX: options.cover_family_scale_x,
       coverFamilyScaleY: options.cover_family_scale_y,
+      coverFamilyOutlinePx: options.cover_family_outline_px,
       previewSolid: options.preview_solid === true,
     });
 
@@ -465,6 +467,7 @@ async function processNextPdfChunk(jobId) {
       coverFamilyFontWeight: undefined,
       coverFamilyLetterSpacingEm: undefined,
       coverFamilyHcm: undefined,
+      coverFamilyOutlinePx: undefined,
       coverTitleFontFamily: undefined,
       coverTitleFontWeight: undefined,
       coverTitleLetterSpacingEm: undefined,
@@ -1659,6 +1662,7 @@ function generateCoverOnlyHtml(articles, from, to, options = {}) {
     coverFamilyHcm,
     coverFamilyScaleX,
     coverFamilyScaleY,
+    coverFamilyOutlinePx,
     previewSolid,
   } = options || {};
   const style = coverStyle || 'mosaic';
@@ -1693,6 +1697,7 @@ function generateCoverOnlyHtml(articles, from, to, options = {}) {
         coverFamilyHcm,
         coverFamilyScaleX,
         coverFamilyScaleY,
+        coverFamilyOutlinePx,
       })
       : generateCoverMaskedMosaic(articles, from, to, maxMosaicPhotos, {
         familyName,
@@ -1723,6 +1728,7 @@ function generateCoverOnlyHtml(articles, from, to, options = {}) {
         coverFamilyHcm,
         coverFamilyScaleX,
         coverFamilyScaleY,
+        coverFamilyOutlinePx,
       }))
     : generateCoverMosaic(articles, from, to, maxMosaicPhotos, { familyName });
   return `
@@ -3152,7 +3158,7 @@ function generateCoverMosaic(articles, from, to, maxPhotos, coverOptions = {}) {
 function generateCoverMaskedMosaic(articles, from, to, maxPhotos, coverOptions = {}) {
   const images = [];
   const photoLimit = maxPhotos || articles.length;
-  const coverMaxDim = parseInt(getConfigValue('pdf_cover_mask_max_dim') || '', 10) || 420;
+  const coverMaxDim = parseInt(getConfigValue('pdf_cover_mask_max_dim') || '', 10) || 240;
 
   for (const article of articles) {
     if (article.image_file_id && images.length < photoLimit) {
@@ -3239,6 +3245,7 @@ function generateCoverMaskedMosaic(articles, from, to, maxPhotos, coverOptions =
     coverFamilyHcm: coverOptions.coverFamilyHcm,
     coverFamilyScaleX: coverOptions.coverFamilyScaleX,
     coverFamilyScaleY: coverOptions.coverFamilyScaleY,
+    coverFamilyOutlinePx: coverOptions.coverFamilyOutlinePx,
   });
 }
 
@@ -3276,6 +3283,7 @@ function generateCoverMaskedSolid(coverOptions = {}) {
     coverFamilyHcm: coverOptions.coverFamilyHcm,
     coverFamilyScaleX: coverOptions.coverFamilyScaleX,
     coverFamilyScaleY: coverOptions.coverFamilyScaleY,
+    coverFamilyOutlinePx: coverOptions.coverFamilyOutlinePx,
   });
 }
 
@@ -3298,6 +3306,7 @@ function generateCoverMaskedTextHtml({
   coverFamilyHcm,
   coverFamilyScaleX,
   coverFamilyScaleY,
+  coverFamilyOutlinePx,
   coverTitleXcm,
   coverTitleYcm,
   coverTitleHcm,
@@ -3501,7 +3510,13 @@ function generateCoverMaskedTextHtml({
   const familyMaskWidthCm = familyMaskWidthPx / 100;
   const familyMaskHeightCm = familyMaskHeightPx / 100;
   const familyMaskBaselinePx = Math.max(1, Math.round(familyFontPx * 0.86 * familyScaleY));
-  const familyOutlinePx = Math.min(2.2, Math.max(0.8, familyFontPx * 0.007));
+  const familyOutlineSource = usePreviewValues && coverFamilyOutlinePx !== undefined
+    ? String(coverFamilyOutlinePx)
+    : getConfigValue('pdf_cover_family_outline_px');
+  const parsedFamilyOutlinePx = Number.isFinite(parseFloat(familyOutlineSource)) ? parseFloat(familyOutlineSource) : null;
+  const familyOutlinePx = parsedFamilyOutlinePx === null
+    ? Math.min(2.2, Math.max(0.8, familyFontPx * 0.007))
+    : clamp(parsedFamilyOutlinePx, 0, 20);
   const familyTextScaleTransform = `translate(0 ${familyMaskBaselinePx}) scale(${familyScaleX} ${familyScaleY}) translate(0 ${-familyMaskBaselinePx})`;
   const familyClipId = 'coverFamilyClip';
   const familyMaskSvg = familyMaskEnabled ? `

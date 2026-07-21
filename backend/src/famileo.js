@@ -713,6 +713,20 @@ function handleFamileoTriggerRefresh(userEmail) {
       });
     } else {
       const responseText = response.getContentText();
+      let errorCode = 'GITHUB_ERROR';
+      let errorMessage = 'Famileo refresh could not be started due to a GitHub workflow error.';
+
+      if (responseCode === 401) {
+        errorCode = 'GITHUB_TOKEN_INVALID';
+        errorMessage = 'Famileo refresh is temporarily unavailable because the server GitHub token is expired, revoked, or invalid. Please contact an administrator.';
+      } else if (responseCode === 403) {
+        errorCode = 'GITHUB_TOKEN_FORBIDDEN';
+        errorMessage = 'Famileo refresh is temporarily unavailable because the server GitHub token does not have permission to run the workflow. Please contact an administrator.';
+      } else if (responseCode === 404) {
+        errorCode = 'GITHUB_WORKFLOW_NOT_FOUND';
+        errorMessage = 'Famileo refresh is temporarily unavailable because the GitHub workflow could not be found or accessed.';
+      }
+
       Logger.log('GitHub API error: ' + responseText);
       logFamileoEvent('error', 'Famileo refresh trigger failed', userEmail, {
         user_email: targetEmail,
@@ -723,8 +737,8 @@ function handleFamileoTriggerRefresh(userEmail) {
       return createResponse({
         ok: false,
         error: {
-          code: 'GITHUB_ERROR',
-          message: 'Failed to trigger workflow: HTTP ' + responseCode,
+          code: errorCode,
+          message: errorMessage,
           details: responseText
         }
       });

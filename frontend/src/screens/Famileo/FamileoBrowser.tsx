@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
+import { ApiError } from '../../api/client'
 import { AppHeader } from '../../ui/AppHeader'
 import { Modal } from '../../ui/Modal'
 import { famileoApi, FamileoPost, FamileoFamily } from '../../api/famileo'
@@ -141,6 +142,26 @@ export function FamileoBrowser() {
       return 'Session Famileo expirée. Rafraîchissement en cours...'
     }
     return message
+  }
+
+  const getRefreshErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof ApiError) {
+      if (error.code === 'GITHUB_TOKEN_INVALID') {
+        return 'Famileo refresh is temporarily unavailable because the server GitHub token is expired or invalid. Please contact an administrator.'
+      }
+      if (error.code === 'GITHUB_TOKEN_FORBIDDEN') {
+        return 'Famileo refresh is temporarily unavailable because the server GitHub token does not have permission to run the workflow. Please contact an administrator.'
+      }
+      if (error.code === 'GITHUB_WORKFLOW_NOT_FOUND') {
+        return 'Famileo refresh is temporarily unavailable because the GitHub workflow could not be found or accessed.'
+      }
+    }
+
+    if (error instanceof Error) {
+      return error.message
+    }
+
+    return fallback
   }
 
   const waitForSessionValid = async () => {
@@ -285,7 +306,7 @@ export function FamileoBrowser() {
             setError('Le rafraîchissement Famileo a expiré. Réessaie dans quelques minutes.')
           }
         } catch (refreshErr) {
-          const msg = refreshErr instanceof Error ? refreshErr.message : 'Failed to refresh session'
+          const msg = getRefreshErrorMessage(refreshErr, 'Failed to refresh session')
           setError(sanitizeSessionError(msg))
         } finally {
           setRefreshing(false)
@@ -447,7 +468,7 @@ export function FamileoBrowser() {
       const response = await famileoApi.triggerRefresh()
       setRefreshMessage(response.message)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to trigger refresh')
+      setError(getRefreshErrorMessage(err, 'Failed to trigger refresh'))
     } finally {
       setRefreshing(false)
     }

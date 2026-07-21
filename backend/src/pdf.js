@@ -3509,6 +3509,9 @@ function generateCoverMaskedTextHtml({
   const familyMaskHeightPx = Math.max(1, Math.round(familyFontPx * familyScaleY));
   const familyMaskWidthCm = familyMaskWidthPx / 100;
   const familyMaskHeightCm = familyMaskHeightPx / 100;
+  const familyMaskTrimPx = Math.min(8, Math.max(0, Math.round(familyMaskHeightPx * 0.015)));
+  const familyMaskViewBoxY = familyMaskTrimPx;
+  const familyMaskViewBoxHeightPx = Math.max(1, familyMaskHeightPx - (familyMaskTrimPx * 2));
   const familyMaskBaselinePx = Math.max(1, Math.round(familyFontPx * 0.86 * familyScaleY));
   const familyOutlineSource = usePreviewValues && coverFamilyOutlinePx !== undefined
     ? String(coverFamilyOutlinePx)
@@ -3520,7 +3523,7 @@ function generateCoverMaskedTextHtml({
   const familyTextScaleTransform = `translate(0 ${familyMaskBaselinePx}) scale(${familyScaleX} ${familyScaleY}) translate(0 ${-familyMaskBaselinePx})`;
   const familyClipId = 'coverFamilyClip';
   const familyMaskSvg = familyMaskEnabled ? `
-      <svg width="${familyMaskWidthCm}cm" height="${familyMaskHeightCm}cm" viewBox="0 0 ${familyMaskWidthPx} ${familyMaskHeightPx}" xmlns="http://www.w3.org/2000/svg" style="display:block;">
+      <svg width="${familyMaskWidthCm}cm" height="${familyMaskHeightCm}cm" viewBox="0 ${familyMaskViewBoxY} ${familyMaskWidthPx} ${familyMaskViewBoxHeightPx}" xmlns="http://www.w3.org/2000/svg" style="display:block;">
         <defs>
           <clipPath id="${familyClipId}">
             <text x="0" y="${familyMaskBaselinePx}" text-anchor="start" dominant-baseline="alphabetic"

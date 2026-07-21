@@ -2,6 +2,18 @@ import { ApiResponse } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_APPS_SCRIPT_URL
 
+export class ApiError extends Error {
+  code?: string
+  details?: string
+
+  constructor(message: string, options?: { code?: string; details?: string }) {
+    super(message)
+    this.name = 'ApiError'
+    this.code = options?.code
+    this.details = options?.details
+  }
+}
+
 class ApiClient {
   private getUserEmail(): string | null {
     const userJson = localStorage.getItem('user')
@@ -37,18 +49,23 @@ class ApiClient {
       const data: ApiResponse<T> = await response.json()
 
       if (!data.ok) {
+        const apiError = data.error
+
         // If authentication error, clear storage and redirect to login
-        if (data.error?.code === 'INVALID_TOKEN' || data.error?.code === 'AUTH_REQUIRED' || data.error?.code === 'FORBIDDEN') {
+        if (apiError?.code === 'INVALID_TOKEN' || apiError?.code === 'AUTH_REQUIRED' || apiError?.code === 'FORBIDDEN') {
           localStorage.removeItem('user')
 
           // Store error message for display on login page
-          const errorMessage = data.error?.message || 'Your account is not authorized to access this application.'
+          const errorMessage = apiError?.message || 'Your account is not authorized to access this application.'
           localStorage.setItem('auth_error', errorMessage)
 
           window.location.href = '/auth'
-          throw new Error(errorMessage)
+          throw new ApiError(errorMessage, { code: apiError?.code, details: apiError?.details })
         }
-        throw new Error(data.error?.message || 'An error occurred')
+        throw new ApiError(apiError?.message || 'An error occurred', {
+          code: apiError?.code,
+          details: apiError?.details,
+        })
       }
 
       return data.data as T

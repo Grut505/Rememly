@@ -1,0 +1,51 @@
+name = "rememly-api"
+main = "src/index.ts"
+compatibility_date = "2026-03-09"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rememly-db"
+database_id = "REPLACE_WITH_LOCAL_OR_DEV_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "rememly-files"
+
+[vars]
+APP_ENV = "local"
+
+[observability.logs]
+enabled = true
+
+[env.staging]
+name = "rememly-api-staging"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "rememly-db-staging"
+database_id = "REPLACE_WITH_STAGING_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[env.staging.r2_buckets]]
+binding = "FILES"
+bucket_name = "rememly-files-staging"
+
+[env.staging.vars]
+APP_ENV = "staging"
+
+[env.production]
+name = "rememly-api-production"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "rememly-db-production"
+database_id = "REPLACE_WITH_PRODUCTION_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[env.production.r2_buckets]]
+binding = "FILES"
+bucket_name = "rememly-files-production"
+
+[env.production.vars]
+APP_ENV = "production"

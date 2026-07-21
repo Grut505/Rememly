@@ -5,9 +5,17 @@
   "private": true,
   "scripts": {
     "install:all": "cd frontend && npm install",
+    "install:workers": "cd workers && npm install",
     "dev": "cd frontend && npm run dev",
     "build": "cd frontend && npm run build",
-    "preview": "cd frontend && npm run preview"
+    "preview": "cd frontend && npm run preview",
+    "workers:dev": "cd workers && npm run dev",
+    "workers:deploy": "cd workers && npm run deploy",
+    "workers:db:migrate:local": "cd workers && npm run db:migrate:local",
+    "migrate:d1:build": "node scripts/migrate/import-snapshots-to-d1.mjs",
+    "migrate:d1:local": "node scripts/migrate/import-snapshots-to-d1.mjs --execute local",
+    "migrate:compare": "node scripts/migrate/compare-google-vs-worker.mjs",
+    "workers:bootstrap:local": "node scripts/migrate/bootstrap-worker-local.mjs"
   },
   "keywords": [
     "pwa",

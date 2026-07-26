@@ -9,7 +9,10 @@ CREATE TABLE IF NOT EXISTS users (
   famileo_password_enc TEXT,
   is_declared_author INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  famileo_name TEXT,
+  avatar_url TEXT,
+  avatar_file_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_pseudo ON users(pseudo);
@@ -97,7 +100,7 @@ CREATE TABLE IF NOT EXISTS famileo_imports (
   FOREIGN KEY(article_id) REFERENCES articles(id)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_famileo_imports_post_id ON famileo_imports(post_id);
+CREATE INDEX IF NOT EXISTS idx_famileo_imports_post_id ON famileo_imports(post_id);
 CREATE INDEX IF NOT EXISTS idx_famileo_imports_fingerprint ON famileo_imports(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_famileo_imports_article_id ON famileo_imports(article_id);
 

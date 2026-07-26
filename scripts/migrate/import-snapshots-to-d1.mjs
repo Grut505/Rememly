@@ -53,15 +53,13 @@ const snapshotsDir = path.resolve(process.cwd(), getArg('--snapshots', 'scripts/
 const outputFile = path.resolve(process.cwd(), getArg('--out', 'scripts/migrate/generated/import_snapshot.sql'))
 const executeTarget = getArg('--execute', '')
 
-const statements = ['BEGIN;']
+const statements = []
 
 for (const tableName of TABLE_FILES) {
   const filePath = path.join(snapshotsDir, `${tableName}.json`)
   const rows = loadJsonIfExists(filePath)
   statements.push(...buildInsertStatements(tableName, rows))
 }
-
-statements.push('COMMIT;')
 
 fs.mkdirSync(path.dirname(outputFile), { recursive: true })
 fs.writeFileSync(outputFile, `${statements.join('\n')}\n`, 'utf8')

@@ -17,10 +17,10 @@ export const getConfigHandler: RouteHandler = async (request, context) => {
   }
 
   const row = await context.env.DB.prepare(
-    'select key, value, updated_at from config where key = ?1 limit 1'
+    'select key, value from config where key = ?1 limit 1'
   )
     .bind(key)
-    .first<{ key: string; value: string | null; updated_at: string }>()
+    .first<{ key: string; value: string | null }>()
 
   if (!row) {
     return fail('NOT_FOUND', 'Config key not found', 404)

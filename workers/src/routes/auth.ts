@@ -9,7 +9,10 @@ export const authCheckHandler: RouteHandler = async (request, context) => {
   }
 
   return ok({
-    user: auth.user,
+    user: {
+      email: auth.user.email,
+      name: auth.user.email.split('@')[0],
+    },
     timezone: 'Europe/Paris',
   })
 }

@@ -72,10 +72,15 @@ export const usersListHandler: RouteHandler = async (request, context) => {
             case when famileo_password_enc is not null and famileo_password_enc != '' then 1 else 0 end as famileo_password_set,
             avatar_url, avatar_file_id, status, created_at as date_created, updated_at as date_updated
        from users
-      order by lower(coalesce(pseudo, email)) asc`
+      order by created_at asc`
   ).all<Record<string, unknown>>()
 
-  return ok({ users: result.results || [] })
+  const users = (result.results || []).map((row) => ({
+    ...row,
+    famileo_password_set: !!row.famileo_password_set,
+  }))
+
+  return ok({ users })
 }
 
 export const profileGetHandler: RouteHandler = async (request, context) => {

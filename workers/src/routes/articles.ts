@@ -62,7 +62,7 @@ function buildArticlesQuery(url: URL) {
   const conditions: string[] = []
   const bindings: Array<string | number> = []
 
-  conditions.push(`status in (${statusFilter.map(() => '?').join(', ')})`)
+  conditions.push(`a.status in (${statusFilter.map(() => '?').join(', ')})`)
   bindings.push(...statusFilter)
 
   if (year) {
@@ -153,8 +153,15 @@ export const listArticlesHandler: RouteHandler = async (request, context) => {
   const total = Number(countRow?.count || 0)
   const nextOffset = cursor + limit
 
+  const items = (rows.results || []).map((row) => ({
+    ...row,
+    famileo_post_id: row.famileo_post_id ? Number(row.famileo_post_id) : '',
+    full_page: !!row.full_page,
+    is_duplicate: !!row.is_duplicate,
+  }))
+
   return ok({
-    items: rows.results || [],
+    items,
     next_cursor: nextOffset < total ? String(nextOffset) : null,
   })
 }

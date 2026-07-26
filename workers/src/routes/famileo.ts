@@ -57,9 +57,15 @@ export const familiesHandler: RouteHandler = async (request, context) => {
 
   const rows = await context.env.DB.prepare(
     'select id, name, famileo_id from families order by lower(name) asc'
-  ).all<Record<string, unknown>>()
+  ).all<{ id: string; name: string; famileo_id: string }>()
 
-  return ok({ families: rows.results || [] })
+  const families = (rows.results || []).map((row) => ({
+    id: Number(row.id),
+    name: row.name,
+    famileo_id: Number(row.famileo_id),
+  }))
+
+  return ok({ families })
 }
 
 export const importedIdsHandler: RouteHandler = async (request, context) => {

@@ -150,6 +150,11 @@ function normalizeWorkerRequest(request: Request) {
   return new Request(nextUrl.toString(), request)
 }
 
+function withCors(response: Response): Response {
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  return response
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const context: AppContext = {
@@ -158,10 +163,10 @@ export default {
     }
 
     try {
-      return await router.handle(normalizeWorkerRequest(request), context)
+      return withCors(await router.handle(normalizeWorkerRequest(request), context))
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown worker error'
-      return fail('INTERNAL_ERROR', message, 500)
+      return withCors(fail('INTERNAL_ERROR', message, 500))
     }
   },
 }

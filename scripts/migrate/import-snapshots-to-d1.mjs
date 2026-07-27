@@ -68,9 +68,10 @@ process.stdout.write(`Wrote SQL seed file: ${outputFile}\n`)
 
 if (executeTarget) {
   const workersDir = path.resolve(process.cwd(), 'workers')
-  const args = ['wrangler', 'd1', 'execute', 'rememly-db', '--file', outputFile]
+  const dbName = executeTarget === 'local' ? 'rememly-db' : `rememly-db-${executeTarget}`
+  const args = ['wrangler', 'd1', 'execute', dbName, '--file', outputFile]
   if (executeTarget !== 'local') {
-    args.push('--env', executeTarget)
+    args.push('--env', executeTarget, '--remote')
   } else {
     args.push('--local')
   }

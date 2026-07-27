@@ -1,6 +1,7 @@
 name = "rememly-api"
 main = "src/index.ts"
 compatibility_date = "2026-03-09"
+account_id = "7a95ce0c2fe7a8cf26355d693066329d"
 
 [[d1_databases]]
 binding = "DB"
@@ -24,7 +25,7 @@ name = "rememly-api-staging"
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "rememly-db-staging"
-database_id = "REPLACE_WITH_STAGING_DATABASE_ID"
+database_id = "e0a1839b-d9f6-42c0-8cc7-1bf3316adc3a"
 migrations_dir = "migrations"
 
 [[env.staging.r2_buckets]]

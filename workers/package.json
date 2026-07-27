@@ -7,8 +7,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply rememly-db --local",
-    "db:migrate:staging": "wrangler d1 migrations apply rememly-db --env staging",
-    "db:migrate:production": "wrangler d1 migrations apply rememly-db --env production"
+    "db:migrate:staging": "wrangler d1 migrations apply rememly-db-staging --env staging --remote",
+    "db:migrate:production": "wrangler d1 migrations apply rememly-db-production --env production --remote"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260303.0",

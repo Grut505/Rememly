@@ -297,7 +297,62 @@ const famileoPreparationOnlyHandler: RouteHandler = async (request, context) => 
   )
 }
 
-export const famileoImageHandler: RouteHandler = famileoPreparationOnlyHandler
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = ''
+  const bytes = new Uint8Array(buffer)
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  }
+  return btoa(binary)
+}
+
+export const famileoImageHandler: RouteHandler = async (request, context) => {
+  const auth = await requireAuth(request, context.env)
+  if (!auth.ok) {
+    return auth.response
+  }
+
+  const url = new URL(request.url)
+  const imageUrlParam = url.searchParams.get('url')
+  if (!imageUrlParam) {
+    return fail('MISSING_URL', 'Image URL required', 400)
+  }
+
+  const imageUrl = decodeURIComponent(imageUrlParam)
+  if (!imageUrl.includes('cloudfront.net') && !imageUrl.includes('famileo.com') && !imageUrl.includes('famileo.')) {
+    return fail('FAMILEO_ERROR', `Invalid Famileo image URL: ${imageUrl}`, 400)
+  }
+
+  try {
+    const famileoEmail = await resolveFamileoEmailForUser(context.env, auth.user.email)
+    const session = await getFamileoSession(context.env, famileoEmail)
+    if (!session) {
+      throw new Error('Famileo session not configured. Waiting for GitHub Actions to refresh cookies.')
+    }
+
+    const response = await fetch(imageUrl, {
+      method: 'GET',
+      headers: {
+        Cookie: formatFamileoCookies(session),
+        Referer: 'https://www.famileo.com/',
+      },
+    })
+
+    if (response.status !== 200) {
+      throw new Error(`Failed to fetch image: HTTP ${response.status}`)
+    }
+
+    const buffer = await response.arrayBuffer()
+    const mimeType = response.headers.get('content-type') || 'image/jpeg'
+
+    return ok({ base64: arrayBufferToBase64(buffer), mimeType })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown Famileo error'
+    return fail('FAMILEO_ERROR', message, 502)
+  }
+}
+
 export const famileoCreatePostHandler: RouteHandler = famileoPreparationOnlyHandler
 export const famileoPresignedImageHandler: RouteHandler = famileoPreparationOnlyHandler
 export const famileoUploadImageHandler: RouteHandler = famileoPreparationOnlyHandler

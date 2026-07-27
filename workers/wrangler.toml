@@ -41,7 +41,7 @@ name = "rememly-api-production"
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "rememly-db-production"
-database_id = "REPLACE_WITH_PRODUCTION_DATABASE_ID"
+database_id = "000153e3-0dec-4b88-bf39-2176c36c3544"
 migrations_dir = "migrations"
 
 [[env.production.r2_buckets]]

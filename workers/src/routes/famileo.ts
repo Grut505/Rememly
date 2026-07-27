@@ -122,36 +122,35 @@ export const famileoStatusHandler: RouteHandler = async (request, context) => {
   })
 }
 
-export const famileoTriggerRefreshHandler: RouteHandler = async (request, context) => {
-  const auth = await requireAuth(request, context.env)
-  if (!auth.ok) {
-    return auth.response
-  }
+type TriggerRefreshResult =
+  | { ok: true; message: string }
+  | { ok: false; code: string; message: string; details?: string }
 
-  const targetEmail = normalizeEmail(auth.user.email)
+async function triggerFamileoRefresh(env: Env, appEmail: string): Promise<TriggerRefreshResult> {
+  const targetEmail = normalizeEmail(appEmail)
   if (!targetEmail) {
-    return fail('INVALID_DATA', 'user_email is required', 400)
+    return { ok: false, code: 'INVALID_DATA', message: 'user_email is required' }
   }
 
-  const user = await context.env.DB.prepare(
+  const user = await env.DB.prepare(
     'select famileo_email, famileo_password_enc from users where lower(email) = ?1 limit 1'
   )
     .bind(targetEmail)
     .first<{ famileo_email: string | null; famileo_password_enc: string | null }>()
 
   if (!user || !user.famileo_password_enc) {
-    return fail('INVALID_DATA', 'Famileo password is missing for this user', 400)
+    return { ok: false, code: 'INVALID_DATA', message: 'Famileo password is missing for this user' }
   }
   if (!user.famileo_email) {
-    return fail('INVALID_DATA', 'Famileo email is missing for this user', 400)
+    return { ok: false, code: 'INVALID_DATA', message: 'Famileo email is missing for this user' }
   }
 
-  const githubToken = context.env.GITHUB_TOKEN
+  const githubToken = env.GITHUB_TOKEN
   if (!githubToken) {
-    return fail('NOT_CONFIGURED', 'GitHub token not configured', 400)
+    return { ok: false, code: 'NOT_CONFIGURED', message: 'GitHub token not configured' }
   }
 
-  const resolvedFamileoEmail = await resolveFamileoEmailForUser(context.env, targetEmail)
+  const resolvedFamileoEmail = await resolveFamileoEmailForUser(env, targetEmail)
 
   try {
     const response = await fetch(
@@ -174,7 +173,7 @@ export const famileoTriggerRefreshHandler: RouteHandler = async (request, contex
     )
 
     if (response.status === 204) {
-      return ok({ message: 'Workflow triggered successfully. Session will be refreshed in ~2 minutes.' })
+      return { ok: true, message: 'Workflow triggered successfully. Session will be refreshed in ~2 minutes.' }
     }
 
     const responseText = await response.text()
@@ -194,11 +193,35 @@ export const famileoTriggerRefreshHandler: RouteHandler = async (request, contex
       errorMessage = 'Famileo refresh is temporarily unavailable because the GitHub workflow could not be found or accessed.'
     }
 
-    return fail(errorCode, errorMessage, 502, responseText)
+    return { ok: false, code: errorCode, message: errorMessage, details: responseText }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown trigger error'
-    return fail('TRIGGER_ERROR', message, 500)
+    return { ok: false, code: 'TRIGGER_ERROR', message }
   }
+}
+
+function looksLikeSessionExpired(status: number, bodyText: string) {
+  const lower = bodyText.toLowerCase()
+  return (
+    status === 401 ||
+    lower.includes('session expired') ||
+    lower.includes('invalid session') ||
+    lower.includes('not configured')
+  )
+}
+
+export const famileoTriggerRefreshHandler: RouteHandler = async (request, context) => {
+  const auth = await requireAuth(request, context.env)
+  if (!auth.ok) {
+    return auth.response
+  }
+
+  const result = await triggerFamileoRefresh(context.env, auth.user.email)
+  if (!result.ok) {
+    return fail(result.code, result.message, result.code === 'INVALID_DATA' || result.code === 'NOT_CONFIGURED' ? 400 : 502, result.details)
+  }
+
+  return ok({ message: result.message })
 }
 
 export const famileoPostsHandler: RouteHandler = async (request, context) => {
@@ -284,19 +307,6 @@ export const famileoPostsHandler: RouteHandler = async (request, context) => {
   }
 }
 
-const famileoPreparationOnlyHandler: RouteHandler = async (request, context) => {
-  const auth = await requireAuth(request, context.env)
-  if (!auth.ok) {
-    return auth.response
-  }
-
-  return fail(
-    'PREPARATION_ONLY',
-    'This Famileo flow remains on the Google backend for now. Worker preparation mode does not support it yet.',
-    501
-  )
-}
-
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = ''
   const bytes = new Uint8Array(buffer)
@@ -353,9 +363,168 @@ export const famileoImageHandler: RouteHandler = async (request, context) => {
   }
 }
 
-export const famileoCreatePostHandler: RouteHandler = famileoPreparationOnlyHandler
-export const famileoPresignedImageHandler: RouteHandler = famileoPreparationOnlyHandler
-export const famileoUploadImageHandler: RouteHandler = famileoPreparationOnlyHandler
+function famileoBase64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes
+}
+
+export const famileoPresignedImageHandler: RouteHandler = async (request, context) => {
+  const auth = await requireAuth(request, context.env)
+  if (!auth.ok) return auth.response
+
+  const body = await readJson<{ author_email?: string }>(request)
+  const effectiveEmail = body.author_email || auth.user.email
+
+  try {
+    const famileoEmail = await resolveFamileoEmailForUser(context.env, effectiveEmail)
+    const session = await getFamileoSession(context.env, famileoEmail)
+    if (!session) {
+      await triggerFamileoRefresh(context.env, effectiveEmail).catch(() => null)
+      return fail('FAMILEO_SESSION', 'Session Famileo expirée. Rafraîchissement déclenché.', 502)
+    }
+
+    const response = await fetch('https://www.famileo.com/api/v1/presigned_urls', {
+      method: 'POST',
+      headers: {
+        Cookie: formatFamileoCookies(session),
+        Referer: 'https://www.famileo.com/',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ type: 'post.image' }),
+    })
+
+    const text = await response.text()
+    if (looksLikeSessionExpired(response.status, text)) {
+      await triggerFamileoRefresh(context.env, effectiveEmail).catch(() => null)
+      return fail('FAMILEO_SESSION', 'Session Famileo expirée. Rafraîchissement déclenché.', 502)
+    }
+    if (response.status < 200 || response.status >= 300) {
+      return fail('FAMILEO_ERROR', `Famileo presign failed (HTTP ${response.status})`, 502)
+    }
+
+    return ok({ raw: text })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown Famileo error'
+    return fail('FAMILEO_ERROR', message, 502)
+  }
+}
+
+export const famileoUploadImageHandler: RouteHandler = async (request, context) => {
+  const auth = await requireAuth(request, context.env)
+  if (!auth.ok) return auth.response
+
+  const body = await readJson<{
+    presign?: string | { form?: { inputs?: Record<string, string>; attributes?: { action?: string } } }
+    image_base64?: string
+    mime_type?: string
+    filename?: string
+    author_email?: string
+  }>(request)
+
+  const presign = typeof body.presign === 'string' ? JSON.parse(body.presign) : body.presign
+  const inputs = presign?.form?.inputs
+  const actionUrl = presign?.form?.attributes?.action
+  if (!inputs || !actionUrl) {
+    return fail('INVALID_DATA', 'Invalid presign payload', 400)
+  }
+  if (!body.image_base64) {
+    return fail('INVALID_DATA', 'Missing base64 image', 400)
+  }
+
+  const contentType = body.mime_type || 'image/jpeg'
+  const fileName = body.filename || inputs['X-Amz-Meta-Filename'] || 'Untitled.jpg'
+
+  try {
+    const bytes = famileoBase64ToUint8Array(body.image_base64)
+    const formData = new FormData()
+    formData.set('key', inputs.key)
+    formData.set('Content-Type', contentType)
+    formData.set('X-Amz-Meta-Filename', fileName)
+    formData.set('X-Amz-Credential', inputs['X-Amz-Credential'])
+    formData.set('X-Amz-Algorithm', inputs['X-Amz-Algorithm'])
+    formData.set('X-Amz-Date', inputs['X-Amz-Date'])
+    formData.set('Policy', inputs.Policy)
+    formData.set('X-Amz-Signature', inputs['X-Amz-Signature'])
+    formData.set('file', new Blob([bytes as unknown as BlobPart], { type: contentType }), fileName)
+
+    const response = await fetch(actionUrl, { method: 'POST', body: formData })
+    const text = await response.text()
+
+    if (response.status < 200 || response.status >= 300) {
+      return fail('FAMILEO_ERROR', `Famileo upload failed (HTTP ${response.status})`, 502)
+    }
+
+    return ok({ status: response.status, body: text, key: inputs.key })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown Famileo error'
+    return fail('FAMILEO_ERROR', message, 502)
+  }
+}
+
+export const famileoCreatePostHandler: RouteHandler = async (request, context) => {
+  const auth = await requireAuth(request, context.env)
+  if (!auth.ok) return auth.response
+
+  const body = await readJson<{
+    text?: string
+    published_at?: string
+    family_id?: string
+    image_key?: string
+    is_full_page?: boolean
+    author_email?: string
+  }>(request)
+
+  const effectiveEmail = body.author_email || auth.user.email
+
+  try {
+    const famileoEmail = await resolveFamileoEmailForUser(context.env, effectiveEmail)
+    const session = await getFamileoSession(context.env, famileoEmail)
+    if (!session) {
+      await triggerFamileoRefresh(context.env, effectiveEmail).catch(() => null)
+      return fail('FAMILEO_SESSION', 'Session Famileo expirée. Rafraîchissement déclenché.', 502)
+    }
+
+    const familyId = body.family_id || (await getConfigValue(context.env, 'famileo_family_id')) || '321238'
+    const payload = new URLSearchParams({
+      text: body.text || '',
+      is_private: '0',
+      is_full_page: body.is_full_page ? '1' : '0',
+      published_at: body.published_at || new Date().toISOString(),
+      duplicate_options: '[]',
+    })
+    if (body.image_key) {
+      payload.set('image', body.image_key)
+    }
+
+    const response = await fetch(`https://www.famileo.com/api/families/${familyId}/posts?return_validation_errors=1`, {
+      method: 'POST',
+      headers: {
+        Cookie: formatFamileoCookies(session),
+        Referer: 'https://www.famileo.com/',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: payload.toString(),
+    })
+
+    const text = await response.text()
+    if (looksLikeSessionExpired(response.status, text)) {
+      await triggerFamileoRefresh(context.env, effectiveEmail).catch(() => null)
+      return fail('FAMILEO_SESSION', 'Session Famileo expirée. Rafraîchissement déclenché.', 502)
+    }
+    if (response.status < 200 || response.status >= 300) {
+      return fail('FAMILEO_ERROR', `Famileo post failed (HTTP ${response.status})`, 502)
+    }
+
+    return ok({ status: response.status, body: text })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown Famileo error'
+    return fail('FAMILEO_ERROR', message, 502)
+  }
+}
 
 export const familiesHandler: RouteHandler = async (request, context) => {
   const auth = await requireAuth(request, context.env)

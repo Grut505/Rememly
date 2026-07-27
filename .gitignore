@@ -11,6 +11,13 @@ frontend/build/
 .env.local
 frontend/.env
 frontend/.env.local
+frontend/.env.local.*
+workers/.dev.vars
+workers/.dev.vars.*
+!workers/.dev.vars.example
+
+# Cloudflare Workers local state
+workers/.wrangler/
 
 # IDE
 .vscode/

@@ -6,6 +6,7 @@ export interface Env {
   FAMILEO_PW_KEY?: string
   GITHUB_TRIGGER_TOKEN?: string
   GITHUB_TOKEN?: string
+  PDF_MERGE_TOKEN?: string
 }
 
 export interface AppContext {

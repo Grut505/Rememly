@@ -2,3 +2,4 @@ AUTH_SECRET=replace_me
 FAMILEO_PW_KEY=replace_me
 GITHUB_TRIGGER_TOKEN=replace_me
 GITHUB_TOKEN=replace_me
+PDF_MERGE_TOKEN=replace_me

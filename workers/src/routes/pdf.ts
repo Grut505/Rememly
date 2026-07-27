@@ -165,8 +165,8 @@ export const pdfMergeTriggerHandler: RouteHandler = async (request, context) => 
 }
 
 export const pdfMergeTokenHandler: RouteHandler = async (request, context) => {
-  const body = await readJson<{ token?: string }>(request)
-  if (!context.env.GITHUB_TRIGGER_TOKEN || body.token !== context.env.GITHUB_TRIGGER_TOKEN) {
+  const token = new URL(request.url).searchParams.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
     return fail('FORBIDDEN', 'Invalid token', 403)
   }
 
@@ -196,15 +196,20 @@ export const pdfMergeTokenRefreshHandler: RouteHandler = async (request, context
 }
 
 export const pdfMergeStatusHandler: RouteHandler = async (request, context) => {
-  const body = await readJson<{ token?: string; job_id?: string; progress?: number; message?: string }>(request)
-  if (!context.env.GITHUB_TRIGGER_TOKEN || body.token !== context.env.GITHUB_TRIGGER_TOKEN) {
+  const params = new URL(request.url).searchParams
+  const token = params.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
     return fail('FORBIDDEN', 'Invalid token', 403)
   }
-  if (!body.job_id || body.progress === undefined || body.message === undefined) {
+
+  const jobId = params.get('job_id')
+  const progressRaw = params.get('progress')
+  const message = params.get('message')
+  if (!jobId || progressRaw === null || message === null) {
     return fail('INVALID_PARAMS', 'Missing params', 400)
   }
 
-  const job = await getPdfJob(context.env.DB, body.job_id)
+  const job = await getPdfJob(context.env.DB, jobId)
   if (!job) {
     return fail('NOT_FOUND', 'Job not found', 404)
   }
@@ -212,22 +217,27 @@ export const pdfMergeStatusHandler: RouteHandler = async (request, context) => {
   await context.env.DB.prepare(
     `update jobs_pdf set status = 'RUNNING', progress = ?2, progress_message = ?3 where job_id = ?1`
   )
-    .bind(body.job_id, body.progress, body.message)
+    .bind(jobId, Number(progressRaw), message)
     .run()
 
   return ok({ ok: true })
 }
 
 export const pdfMergeCompleteHandler: RouteHandler = async (request, context) => {
-  const body = await readJson<{ token?: string; job_id?: string; file_id?: string; url?: string }>(request)
-  if (!context.env.GITHUB_TRIGGER_TOKEN || body.token !== context.env.GITHUB_TRIGGER_TOKEN) {
+  const params = new URL(request.url).searchParams
+  const token = params.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
     return fail('FORBIDDEN', 'Invalid token', 403)
   }
-  if (!body.job_id || !body.file_id || !body.url) {
+
+  const jobId = params.get('job_id')
+  const fileId = params.get('file_id')
+  const pdfUrl = params.get('url')
+  if (!jobId || !fileId || !pdfUrl) {
     return fail('INVALID_PARAMS', 'Missing params', 400)
   }
 
-  const job = await getPdfJob(context.env.DB, body.job_id)
+  const job = await getPdfJob(context.env.DB, jobId)
   if (!job) {
     return fail('NOT_FOUND', 'Job not found', 404)
   }
@@ -237,25 +247,28 @@ export const pdfMergeCompleteHandler: RouteHandler = async (request, context) =>
         set status = 'DONE', progress = 100, progress_message = 'Merged', pdf_file_id = ?2, pdf_url = ?3, error_message = ''
       where job_id = ?1`
   )
-    .bind(body.job_id, body.file_id, body.url)
+    .bind(jobId, fileId, pdfUrl)
     .run()
 
   return ok({ ok: true })
 }
 
 export const pdfMergeFailedHandler: RouteHandler = async (request, context) => {
-  const body = await readJson<{ token?: string; job_id?: string; message?: string }>(request)
-  if (!context.env.GITHUB_TRIGGER_TOKEN || body.token !== context.env.GITHUB_TRIGGER_TOKEN) {
+  const params = new URL(request.url).searchParams
+  const token = params.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
     return fail('FORBIDDEN', 'Invalid token', 403)
   }
-  if (!body.job_id) {
+
+  const jobId = params.get('job_id')
+  if (!jobId) {
     return fail('INVALID_PARAMS', 'Missing job_id', 400)
   }
 
   await context.env.DB.prepare(
     `update jobs_pdf set status = 'ERROR', progress = 0, progress_message = 'Merge failed', error_message = ?2 where job_id = ?1`
   )
-    .bind(body.job_id, body.message || 'Merge failed')
+    .bind(jobId, params.get('message') || 'Merge failed')
     .run()
 
   return ok({ ok: true })

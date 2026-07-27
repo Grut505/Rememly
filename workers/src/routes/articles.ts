@@ -2,6 +2,13 @@ import { requireAuth } from '../lib/auth'
 import { readJson, normalizeEmail } from '../lib/request'
 import { fail, ok } from '../lib/response'
 import type { RouteHandler } from '../lib/router'
+import type { Env } from '../types'
+
+interface ArticleImagePayload {
+  base64: string
+  mimeType?: string
+  fileName?: string
+}
 
 interface ArticleBody {
   id?: string
@@ -10,10 +17,29 @@ interface ArticleBody {
   texte?: string
   image_url?: string
   image_file_id?: string
+  image?: ArticleImagePayload
   assembly_state?: unknown
   full_page?: boolean
   status?: string
   famileo_post_id?: string
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes
+}
+
+async function uploadArticleImageToR2(env: Env, articleId: string, image: ArticleImagePayload) {
+  const ext = (image.fileName || '').split('.').pop() || 'jpg'
+  const key = `articles/${articleId}/original/${Date.now()}.${ext}`
+  await env.FILES.put(key, base64ToUint8Array(image.base64), {
+    httpMetadata: { contentType: image.mimeType || 'image/jpeg' },
+  })
+  return { key, url: `r2:${key}` }
 }
 
 function normalizeFamileoText(value: string | null | undefined) {
@@ -246,6 +272,14 @@ export const articleCreateHandler: RouteHandler = async (request, context) => {
     ? await buildFamileoFingerprint(auteur, date, body.texte || '')
     : ''
 
+  let imageUrl = body.image_url || ''
+  let imageFileId = body.image_file_id || ''
+  if (body.image?.base64) {
+    const uploaded = await uploadArticleImageToR2(context.env, id, body.image)
+    imageUrl = uploaded.url
+    imageFileId = uploaded.key
+  }
+
   await context.env.DB.prepare(
     `insert into articles (
        id, date, auteur, author_pseudo, texte, image_url, image_file_id,
@@ -259,8 +293,8 @@ export const articleCreateHandler: RouteHandler = async (request, context) => {
       auteur,
       auth.user.name,
       body.texte || '',
-      body.image_url || '',
-      body.image_file_id || '',
+      imageUrl,
+      imageFileId,
       body.assembly_state ? JSON.stringify(body.assembly_state) : '',
       body.full_page ? 1 : 0,
       body.status || 'ACTIVE',
@@ -298,6 +332,14 @@ export const articleUpdateHandler: RouteHandler = async (request, context) => {
     ? await buildFamileoFingerprint(auteur, date, texte)
     : ''
 
+  let imageUrl = String(body.image_url ?? existing.image_url ?? '')
+  let imageFileId = String(body.image_file_id ?? existing.image_file_id ?? '')
+  if (body.image?.base64) {
+    const uploaded = await uploadArticleImageToR2(context.env, body.id, body.image)
+    imageUrl = uploaded.url
+    imageFileId = uploaded.key
+  }
+
   await context.env.DB.prepare(
     `update articles
         set date = ?2,
@@ -320,8 +362,8 @@ export const articleUpdateHandler: RouteHandler = async (request, context) => {
       auteur,
       auth.user.name,
       texte,
-      String(body.image_url ?? existing.image_url ?? ''),
-      String(body.image_file_id ?? existing.image_file_id ?? ''),
+      imageUrl,
+      imageFileId,
       body.assembly_state !== undefined ? JSON.stringify(body.assembly_state || '') : String(existing.assembly_state_json ?? ''),
       body.full_page !== undefined ? (body.full_page ? 1 : 0) : Number(existing.full_page || 0),
       String(body.status ?? existing.status ?? 'ACTIVE'),

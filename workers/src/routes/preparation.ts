@@ -41,6 +41,17 @@ export const imageFetchHandler: RouteHandler = async (request, context) => {
     return fail('INVALID_PARAMS', 'fileId is required', 400)
   }
 
+  if (fileId.includes('/')) {
+    // Images uploaded through the Worker are stored in R2 under a path-like key
+    // (e.g. articles/{id}/original/...), unlike opaque Google Drive file IDs.
+    const object = await context.env.FILES.get(fileId)
+    if (!object) {
+      return fail('NOT_FOUND', 'Image not found in R2', 404)
+    }
+    const buffer = await object.arrayBuffer()
+    return ok({ base64: arrayBufferToBase64(buffer) })
+  }
+
   try {
     const response = await fetch(`https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w2000`)
     if (response.status !== 200) {

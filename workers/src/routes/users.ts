@@ -116,7 +116,7 @@ export const profileSaveHandler: RouteHandler = async (request, context) => {
     `insert into users (
        id, email, pseudo, status, famileo_email, famileo_name, famileo_password_enc,
        avatar_url, avatar_file_id, created_at, updated_at
-     ) values (?1, ?2, ?3, 'ACTIVE', ?4, ?5, ?6, ?7, ?8, ?9, ?9)
+     ) values (?1, ?2, ?3, 'ACTIVE', ?4, ?5, ?6, ?7, ?8, ?9, ?10)
      on conflict(email) do update set
        pseudo = excluded.pseudo,
        status = 'ACTIVE',
@@ -127,7 +127,7 @@ export const profileSaveHandler: RouteHandler = async (request, context) => {
        avatar_file_id = excluded.avatar_file_id,
        updated_at = excluded.updated_at`
   )
-    .bind(existing?.email ? crypto.randomUUID() : crypto.randomUUID(), email, pseudo, famileoEmail, famileoName, famileoPasswordEnc, avatarUrl, avatarFileId, existing?.date_created || now)
+    .bind(crypto.randomUUID(), email, pseudo, famileoEmail, famileoName, famileoPasswordEnc, avatarUrl, avatarFileId, existing?.date_created || now, now)
     .run()
 
   const saved = await getUserByEmail(context.env.DB, email)

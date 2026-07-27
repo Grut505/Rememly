@@ -28,12 +28,13 @@ const showBlockingScreen = (message: string) => {
   `
 }
 
-const getSavedUserEmail = (): string | null => {
+const getSavedUser = (): { email: string; session_token?: string } | null => {
   const userJson = localStorage.getItem('user')
   if (!userJson) return null
   try {
     const user = JSON.parse(userJson)
-    return typeof user.email === 'string' ? user.email : null
+    if (typeof user.email !== 'string') return null
+    return { email: user.email, session_token: typeof user.session_token === 'string' ? user.session_token : undefined }
   } catch {
     return null
   }
@@ -45,8 +46,8 @@ const authCheck = async () => {
     return
   }
 
-  const email = getSavedUserEmail()
-  if (!email) {
+  const savedUser = getSavedUser()
+  if (!savedUser) {
     window.location.replace('/auth')
     return
   }
@@ -54,7 +55,8 @@ const authCheck = async () => {
   showBlockingScreen('Checking authentication...')
 
   const baseUrl = import.meta.env.VITE_APPS_SCRIPT_URL
-  const authParam = `&auth=${encodeURIComponent('Email ' + email)}`
+  const credential = savedUser.session_token ? `Session ${savedUser.session_token}` : `Email ${savedUser.email}`
+  const authParam = `&auth=${encodeURIComponent(credential)}`
   const response = await fetch(`${baseUrl}?path=auth/check${authParam}`, {
     method: 'POST',
   })
@@ -68,7 +70,13 @@ const authCheck = async () => {
     return
   }
 
-  localStorage.setItem('user', JSON.stringify(data.data?.user))
+  localStorage.setItem(
+    'user',
+    JSON.stringify({
+      ...data.data?.user,
+      session_token: data.data?.session_token || savedUser.session_token,
+    })
+  )
   renderApp()
 }
 

@@ -85,13 +85,14 @@ export const pdfCreateHandler: RouteHandler = async (request, context) => {
   }
 
   const jobId = crypto.randomUUID()
+  const optionsJson = JSON.stringify(body.options || {})
   await context.env.DB.prepare(
     `insert into jobs_pdf (
        job_id, status, progress, progress_message, created_at, created_by, created_by_pseudo,
-       date_from, date_to, error_message
-     ) values (?1, 'PENDING', 0, 'Pending...', ?2, ?3, ?4, ?5, ?6, '')`
+       date_from, date_to, error_message, options_json
+     ) values (?1, 'PENDING', 0, 'Pending...', ?2, ?3, ?4, ?5, ?6, '', ?7)`
   )
-    .bind(jobId, currentIso(), auth.user.email, auth.user.name, body.from, body.to)
+    .bind(jobId, currentIso(), auth.user.email, auth.user.name, body.from, body.to, optionsJson)
     .run()
 
   return ok({

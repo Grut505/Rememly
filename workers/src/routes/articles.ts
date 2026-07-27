@@ -341,16 +341,17 @@ export const articleDeleteHandler: RouteHandler = async (request, context) => {
     return auth.response
   }
 
-  const body = await readJson<{ id?: string }>(request)
-  if (!body.id) {
+  const url = new URL(request.url)
+  const id = url.searchParams.get('id')
+  if (!id) {
     return fail('INVALID_PARAMS', 'id is required', 400)
   }
 
   await context.env.DB.prepare('update articles set status = ?2, updated_at = ?3, deleted_at = ?3 where id = ?1')
-    .bind(body.id, 'DELETED', new Date().toISOString())
+    .bind(id, 'DELETED', new Date().toISOString())
     .run()
 
-  return ok({ id: body.id, deleted: true })
+  return ok({ id, deleted: true })
 }
 
 export const articlePermanentDeleteHandler: RouteHandler = async (request, context) => {
@@ -359,11 +360,12 @@ export const articlePermanentDeleteHandler: RouteHandler = async (request, conte
     return auth.response
   }
 
-  const body = await readJson<{ id?: string }>(request)
-  if (!body.id) {
+  const url = new URL(request.url)
+  const id = url.searchParams.get('id')
+  if (!id) {
     return fail('INVALID_PARAMS', 'id is required', 400)
   }
 
-  await context.env.DB.prepare('delete from articles where id = ?1').bind(body.id).run()
-  return ok({ id: body.id, deleted: true, permanent: true })
+  await context.env.DB.prepare('delete from articles where id = ?1').bind(id).run()
+  return ok({ id, deleted: true, permanent: true })
 }

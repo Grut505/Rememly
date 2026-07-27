@@ -3,3 +3,6 @@ FAMILEO_PW_KEY=replace_me
 GITHUB_TRIGGER_TOKEN=replace_me
 GITHUB_TOKEN=replace_me
 PDF_MERGE_TOKEN=replace_me
+GDRIVE_CLIENT_ID=replace_me
+GDRIVE_CLIENT_SECRET=replace_me
+GDRIVE_REFRESH_TOKEN=replace_me

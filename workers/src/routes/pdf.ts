@@ -2,6 +2,7 @@ import { requireAuth } from '../lib/auth'
 import { readJson } from '../lib/request'
 import { fail, ok } from '../lib/response'
 import type { RouteHandler } from '../lib/router'
+import type { Env } from '../types'
 
 interface PdfCreateBody {
   from?: string
@@ -15,6 +16,63 @@ async function getPdfJob(db: D1Database, jobId: string) {
 
 function currentIso() {
   return new Date().toISOString()
+}
+
+async function getGdriveTokenState(env: Env) {
+  const rows = await env.DB.prepare(
+    `select key, value from config where key in ('gdrive_access_token', 'gdrive_token_expiry')`
+  ).all<{ key: string; value: string | null }>()
+  const map = new Map((rows.results || []).map((row) => [row.key, row.value]))
+  return {
+    token: map.get('gdrive_access_token') || null,
+    expiry: map.get('gdrive_token_expiry') || null,
+  }
+}
+
+async function setGdriveTokenState(env: Env, token: string, expiry: string) {
+  const now = new Date().toISOString()
+  const entries: Array<[string, string]> = [
+    ['gdrive_access_token', token],
+    ['gdrive_token_expiry', expiry],
+  ]
+  for (const [key, value] of entries) {
+    await env.DB.prepare(
+      `insert into config (key, value, updated_at) values (?1, ?2, ?3)
+       on conflict(key) do update set value = excluded.value, updated_at = excluded.updated_at`
+    )
+      .bind(key, value, now)
+      .run()
+  }
+}
+
+type GdriveTokenResult = { ok: true; token: string; expiry: string } | { ok: false; code: string; message: string }
+
+async function refreshGdriveToken(env: Env): Promise<GdriveTokenResult> {
+  const { GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, GDRIVE_REFRESH_TOKEN } = env
+  if (!GDRIVE_CLIENT_ID || !GDRIVE_CLIENT_SECRET || !GDRIVE_REFRESH_TOKEN) {
+    return { ok: false, code: 'NOT_CONFIGURED', message: 'Google Drive OAuth credentials are not configured' }
+  }
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: GDRIVE_CLIENT_ID,
+      client_secret: GDRIVE_CLIENT_SECRET,
+      refresh_token: GDRIVE_REFRESH_TOKEN,
+      grant_type: 'refresh_token',
+    }),
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    return { ok: false, code: 'TOKEN_REFRESH_FAILED', message: `Google token refresh failed: HTTP ${response.status} ${text}` }
+  }
+
+  const data = await response.json<{ access_token: string; expires_in: number }>()
+  const expiry = new Date(Date.now() + data.expires_in * 1000).toISOString()
+  await setGdriveTokenState(env, data.access_token, expiry)
+  return { ok: true, token: data.access_token, expiry }
 }
 
 export const pdfCreateHandler: RouteHandler = async (request, context) => {
@@ -149,11 +207,73 @@ export const pdfMergeTriggerHandler: RouteHandler = async (request, context) => 
   const auth = await requireAuth(request, context.env)
   if (!auth.ok) return auth.response
 
-  const body = await readJson<{ job_id?: string }>(request)
+  const body = await readJson<{ job_id?: string; clean_chunks?: boolean }>(request)
   if (!body.job_id) return fail('INVALID_PARAMS', 'Missing job_id', 400)
 
   const job = await getPdfJob(context.env.DB, body.job_id)
   if (!job) return fail('NOT_FOUND', 'Job not found', 404)
+
+  const folderId = job.chunks_folder_id as string | null
+  if (!folderId) {
+    return fail('MISSING_CHUNKS_FOLDER', 'Job has no rendered chunks folder yet', 400)
+  }
+
+  const tokenResult = await refreshGdriveToken(context.env)
+  if (!tokenResult.ok) {
+    return fail(tokenResult.code, tokenResult.message, 502)
+  }
+
+  const githubToken = context.env.GITHUB_TOKEN
+  if (!githubToken) {
+    return fail('NOT_CONFIGURED', 'GitHub token not configured', 400)
+  }
+
+  try {
+    const response = await fetch(
+      'https://api.github.com/repos/Grut505/Rememly/actions/workflows/pdf-merge.yml/dispatches',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${githubToken}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'Rememly-Worker',
+        },
+        body: JSON.stringify({
+          ref: 'main',
+          inputs: {
+            job_id: body.job_id,
+            folder_id: folderId,
+            clean_chunks: body.clean_chunks === false ? 'false' : 'true',
+          },
+        }),
+      }
+    )
+
+    if (response.status !== 204) {
+      const responseText = await response.text()
+      let errorCode = 'GITHUB_ERROR'
+      let errorMessage = 'PDF merge could not be started due to a GitHub workflow error.'
+
+      if (response.status === 401) {
+        errorCode = 'GITHUB_TOKEN_INVALID'
+        errorMessage =
+          'PDF merge is temporarily unavailable because the server GitHub token is expired, revoked, or invalid. Please contact an administrator.'
+      } else if (response.status === 403) {
+        errorCode = 'GITHUB_TOKEN_FORBIDDEN'
+        errorMessage =
+          'PDF merge is temporarily unavailable because the server GitHub token does not have permission to run the workflow. Please contact an administrator.'
+      } else if (response.status === 404) {
+        errorCode = 'GITHUB_WORKFLOW_NOT_FOUND'
+        errorMessage = 'PDF merge is temporarily unavailable because the GitHub workflow could not be found or accessed.'
+      }
+
+      return fail(errorCode, errorMessage, 502, responseText)
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown trigger error'
+    return fail('TRIGGER_ERROR', message, 500)
+  }
 
   await context.env.DB.prepare(
     `update jobs_pdf set status = 'RUNNING', progress = 10, progress_message = 'Merge queued' where job_id = ?1`
@@ -161,7 +281,7 @@ export const pdfMergeTriggerHandler: RouteHandler = async (request, context) => 
     .bind(body.job_id)
     .run()
 
-  return ok({ queued: true, code: 'PREPARATION_ONLY' })
+  return ok({ queued: true })
 }
 
 export const pdfMergeTokenHandler: RouteHandler = async (request, context) => {
@@ -170,21 +290,42 @@ export const pdfMergeTokenHandler: RouteHandler = async (request, context) => {
     return fail('FORBIDDEN', 'Invalid token', 403)
   }
 
-  return fail('PREPARATION_ONLY', 'Google Drive merge token is not managed by Worker preparation mode yet', 501)
+  const { GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, GDRIVE_REFRESH_TOKEN } = context.env
+  if (!GDRIVE_CLIENT_ID || !GDRIVE_CLIENT_SECRET || !GDRIVE_REFRESH_TOKEN) {
+    return fail('NOT_CONFIGURED', 'Google Drive OAuth credentials are not configured', 400)
+  }
+
+  const state = await getGdriveTokenState(context.env)
+  const tokenJson = {
+    client_id: GDRIVE_CLIENT_ID,
+    client_secret: GDRIVE_CLIENT_SECRET,
+    refresh_token: GDRIVE_REFRESH_TOKEN,
+    token_uri: 'https://oauth2.googleapis.com/token',
+    scopes: ['https://www.googleapis.com/auth/drive'],
+    token: state.token,
+    expiry: state.expiry,
+  }
+
+  return ok({ token_json: JSON.stringify(tokenJson) })
 }
 
 export const pdfMergeTokenStatusHandler: RouteHandler = async (request, context) => {
   const auth = await requireAuth(request, context.env)
   if (!auth.ok) return auth.response
 
-  const configRow = await context.env.DB.prepare(
-    `select value from config where key = 'gdrive_token_expiry' limit 1`
-  ).first<{ value: string | null }>()
+  const { GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, GDRIVE_REFRESH_TOKEN } = context.env
+  const configured = !!(GDRIVE_CLIENT_ID && GDRIVE_CLIENT_SECRET && GDRIVE_REFRESH_TOKEN)
+  if (!configured) {
+    return ok({ configured: false })
+  }
 
+  const state = await getGdriveTokenState(context.env)
   return ok({
-    configured: !!context.env.GITHUB_TRIGGER_TOKEN,
-    expiry: configRow?.value || null,
-    source: 'worker-preparation',
+    configured: true,
+    has_refresh_token: !!GDRIVE_REFRESH_TOKEN,
+    has_access_token: !!state.token,
+    expiry: state.expiry || '',
+    client_id_suffix: GDRIVE_CLIENT_ID.slice(-8),
   })
 }
 
@@ -192,7 +333,16 @@ export const pdfMergeTokenRefreshHandler: RouteHandler = async (request, context
   const auth = await requireAuth(request, context.env)
   if (!auth.ok) return auth.response
 
-  return fail('TOKEN_REFRESH_NOT_IMPLEMENTED', 'Token refresh is not implemented in Worker preparation mode yet', 501)
+  const result = await refreshGdriveToken(context.env)
+  if (!result.ok) {
+    return fail(result.code, result.message, 502)
+  }
+
+  return ok({
+    refreshed: true,
+    expiry: result.expiry,
+    has_refresh_token: !!context.env.GDRIVE_REFRESH_TOKEN,
+  })
 }
 
 export const pdfMergeStatusHandler: RouteHandler = async (request, context) => {

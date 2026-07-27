@@ -1,18 +1,24 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+interface StoredUser {
+  email: string
+  name: string
+  session_token?: string
+}
+
 interface AuthContextType {
-  user: { email: string; name: string } | null
+  user: StoredUser | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (token: string, user: { email: string; name: string }) => void
+  login: (token: string, user: StoredUser) => void
   logout: () => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<{ email: string; name: string } | null>(null)
+  const [user, setUser] = useState<StoredUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const navigate = useNavigate()
 
@@ -30,8 +36,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false)
   }, [])
 
-  const login = (_token: string, userData: { email: string; name: string }) => {
-    // Token is no longer stored - we use email-based auth
+  const login = (_token: string, userData: StoredUser) => {
+    // The Google access token itself is not stored - the backend session
+    // (session_token, or the legacy bare email claim) is what authenticates
+    // subsequent API calls.
     localStorage.setItem('user', JSON.stringify(userData))
     setUser(userData)
     navigate('/')

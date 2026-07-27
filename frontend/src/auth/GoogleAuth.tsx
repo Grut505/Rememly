@@ -25,8 +25,11 @@ export function GoogleAuth() {
     if (!savedUser) return
 
     let email = ''
+    let sessionToken = ''
     try {
-      email = JSON.parse(savedUser)?.email || ''
+      const parsed = JSON.parse(savedUser)
+      email = parsed?.email || ''
+      sessionToken = parsed?.session_token || ''
     } catch {
       localStorage.removeItem('user')
       return
@@ -36,11 +39,18 @@ export function GoogleAuth() {
 
     setIsLoading(true)
     const baseUrl = import.meta.env.VITE_APPS_SCRIPT_URL
-    const authParam = `&auth=${encodeURIComponent('Email ' + email)}`
+    const credential = sessionToken ? `Session ${sessionToken}` : `Email ${email}`
+    const authParam = `&auth=${encodeURIComponent(credential)}`
     fetch(`${baseUrl}?path=auth/check${authParam}`, { method: 'POST' })
       .then((authRes) => authRes.json())
       .then((authData) => {
         if (authData?.ok) {
+          if (authData?.data?.session_token) {
+            localStorage.setItem(
+              'user',
+              JSON.stringify({ email, name: authData.data.user?.name || email, session_token: authData.data.session_token })
+            )
+          }
           navigate('/')
           return
         }
@@ -108,6 +118,7 @@ export function GoogleAuth() {
                   login(response.access_token, {
                     email: email,
                     name: name,
+                    session_token: authData?.data?.session_token,
                   })
                 })
                 .catch(() => {

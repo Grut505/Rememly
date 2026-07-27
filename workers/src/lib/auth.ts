@@ -19,6 +19,73 @@ interface AuthFailure {
 
 type AuthOutcome = AuthResult | AuthFailure
 
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function base64UrlDecode(value: string): Uint8Array {
+  const padded = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (value.length % 4)) % 4)
+  const binary = atob(padded)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes
+}
+
+async function hmacSign(secret: string, data: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data))
+  return base64UrlEncode(new Uint8Array(signature))
+}
+
+/**
+ * Issues a signed, expiring session token (HMAC-SHA256 over {email, exp} using
+ * AUTH_SECRET) so subsequent requests don't have to rely on a bare, unverifiable
+ * "Email <address>" claim - anyone who knew a whitelisted email could otherwise
+ * impersonate that user. Returns null if AUTH_SECRET isn't configured, in which
+ * case callers should fall back to the legacy Email scheme.
+ */
+export async function issueSessionToken(env: Env, email: string): Promise<string | null> {
+  if (!env.AUTH_SECRET) return null
+  const payload = JSON.stringify({ email: normalizeEmail(email), exp: Date.now() + SESSION_TTL_MS })
+  const payloadB64 = base64UrlEncode(new TextEncoder().encode(payload))
+  const signature = await hmacSign(env.AUTH_SECRET, payloadB64)
+  return `${payloadB64}.${signature}`
+}
+
+async function verifySessionToken(env: Env, token: string): Promise<string | null> {
+  if (!env.AUTH_SECRET) return null
+  const [payloadB64, signature] = token.split('.')
+  if (!payloadB64 || !signature) return null
+
+  const expectedSignature = await hmacSign(env.AUTH_SECRET, payloadB64)
+  if (signature !== expectedSignature) return null
+
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(payloadB64))) as {
+      email?: string
+      exp?: number
+    }
+    if (!payload.email || !payload.exp || payload.exp < Date.now()) return null
+    return normalizeEmail(payload.email)
+  } catch {
+    return null
+  }
+}
+
 async function findUserByEmail(env: Env, email: string) {
   return env.DB.prepare(
     'select email, pseudo, status from users where lower(email) = ?1 limit 1'
@@ -47,14 +114,28 @@ export async function requireAuth(request: Request, env: Env, options?: { allowP
     }
   }
 
-  if (!authValue.startsWith('Email ')) {
+  let email = ''
+  if (authValue.startsWith('Session ')) {
+    const verifiedEmail = await verifySessionToken(env, authValue.slice(8))
+    if (!verifiedEmail) {
+      return {
+        ok: false,
+        response: fail('INVALID_TOKEN', 'Session expired or invalid, please sign in again', 401),
+      }
+    }
+    email = verifiedEmail
+  } else if (authValue.startsWith('Email ')) {
+    // Legacy scheme: a bare, unsigned email claim. Kept for backward compatibility
+    // with Apps Script parity and existing tooling, but issueSessionToken/Session
+    // auth above is the preferred, tamper-proof path going forward.
+    email = normalizeEmail(authValue.slice(6))
+  } else {
     return {
       ok: false,
-      response: fail('INVALID_TOKEN', 'Only Email auth is supported in Worker preparation mode', 401),
+      response: fail('INVALID_TOKEN', 'Unsupported auth scheme', 401),
     }
   }
 
-  const email = normalizeEmail(authValue.slice(6))
   if (!email) {
     return {
       ok: false,

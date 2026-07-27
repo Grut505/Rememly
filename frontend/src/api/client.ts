@@ -26,19 +26,34 @@ class ApiClient {
     }
   }
 
+  // Prefer the signed session token (Worker backend) over the bare email claim
+  // (Apps Script backend, or before the Worker has issued a session yet) - the
+  // bare claim can't be verified server-side, the session token can.
+  private getAuthCredential(): string | null {
+    const userJson = localStorage.getItem('user')
+    if (!userJson) return null
+    try {
+      const user = JSON.parse(userJson)
+      if (user.session_token) return `Session ${user.session_token}`
+      if (user.email) return `Email ${user.email}`
+      return null
+    } catch {
+      return null
+    }
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const email = this.getUserEmail()
+    const credential = this.getAuthCredential()
 
     // Don't set Content-Type header to avoid CORS preflight
     const headers: HeadersInit = {
       ...(options.headers || {}),
     }
 
-    // Add email as URL parameter for Apps Script (email-based auth)
-    const authParam = email ? `&auth=${encodeURIComponent('Email ' + email)}` : ''
+    const authParam = credential ? `&auth=${encodeURIComponent(credential)}` : ''
 
     try {
       const response = await fetch(`${API_BASE_URL}?path=${endpoint}${authParam}`, {

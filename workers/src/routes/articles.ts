@@ -411,3 +411,32 @@ export const articlePermanentDeleteHandler: RouteHandler = async (request, conte
   await context.env.DB.prepare('delete from articles where id = ?1').bind(id).run()
   return ok({ id, deleted: true, permanent: true })
 }
+
+export const backfillFamileoFingerprintsHandler: RouteHandler = async (request, context) => {
+  const auth = await requireAuth(request, context.env)
+  if (!auth.ok) {
+    return auth.response
+  }
+
+  const totalRow = await context.env.DB.prepare('select count(*) as count from articles').first<{ count: number }>()
+  const total = Number(totalRow?.count || 0)
+
+  const rows = await context.env.DB.prepare(
+    `select id, auteur, date, texte from articles where coalesce(famileo_fingerprint, '') = ''`
+  ).all<{ id: string; auteur: string | null; date: string; texte: string | null }>()
+
+  const missing = rows.results || []
+  if (missing.length === 0) {
+    return ok({ updated: 0, total })
+  }
+
+  const statements = await Promise.all(
+    missing.map(async (row) => {
+      const fingerprint = await buildFamileoFingerprint(row.auteur || '', row.date, row.texte || '')
+      return context.env.DB.prepare('update articles set famileo_fingerprint = ?2 where id = ?1').bind(row.id, fingerprint)
+    })
+  )
+  await context.env.DB.batch(statements)
+
+  return ok({ updated: missing.length, total })
+}

@@ -10,6 +10,7 @@ import {
   articlePermanentDeleteHandler,
   articlesAuthorsHandler,
   articleUpdateHandler,
+  backfillFamileoFingerprintsHandler,
   listArticlesHandler,
 } from './routes/articles'
 import {
@@ -88,7 +89,7 @@ register('POST', '/articles/create', articleCreateHandler)
 register('POST', '/articles/update', articleUpdateHandler)
 register('POST', '/articles/delete', articleDeleteHandler)
 register('POST', '/articles/permanent-delete', articlePermanentDeleteHandler)
-register('POST', '/articles/backfill-famileo-fingerprints', preparationOnlyHandler)
+register('POST', '/articles/backfill-famileo-fingerprints', backfillFamileoFingerprintsHandler)
 register('GET', '/image/fetch', imageFetchHandler)
 register('POST', '/image/fetch', imageFetchHandler)
 register('GET', '/famileo/families', familiesHandler)

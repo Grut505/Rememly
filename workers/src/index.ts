@@ -21,6 +21,7 @@ import {
   famileoStatusHandler,
   famileoTriggerRefreshHandler,
   famileoUpdateSessionHandler,
+  famileoUserCredentialsHandler,
   famileoUploadImageHandler,
   importedFingerprintsHandler,
   importedIdsHandler,
@@ -93,6 +94,7 @@ register('POST', '/famileo/posts', famileoPostsHandler)
 register('GET', '/famileo/image', famileoImageHandler)
 register('POST', '/famileo/image', famileoImageHandler)
 register('POST', '/famileo/update-session', famileoUpdateSessionHandler)
+register('POST', '/famileo/user-credentials', famileoUserCredentialsHandler)
 register('GET', '/famileo/trigger-refresh', famileoTriggerRefreshHandler)
 register('POST', '/famileo/trigger-refresh', famileoTriggerRefreshHandler)
 register('POST', '/famileo/create-post', famileoCreatePostHandler)

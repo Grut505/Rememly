@@ -602,3 +602,41 @@ export const famileoUpdateSessionHandler: RouteHandler = async (request, context
     famileo_email: body.famileo_email || '',
   })
 }
+
+export const famileoUserCredentialsHandler: RouteHandler = async (request, context) => {
+  const body = await readJson<{
+    token?: string
+    famileo_email?: string
+    famileoEmail?: string
+    user_email?: string
+    userEmail?: string
+  }>(request)
+
+  if (!context.env.GITHUB_TRIGGER_TOKEN || body.token !== context.env.GITHUB_TRIGGER_TOKEN) {
+    return fail('UNAUTHORIZED', 'Invalid token', 401)
+  }
+
+  const targetEmail = normalizeEmail(body.famileo_email || body.famileoEmail || body.user_email || body.userEmail || '')
+  if (!targetEmail) {
+    return fail('INVALID_DATA', 'Missing famileo_email', 400)
+  }
+
+  const byUserEmail = !!(body.user_email || body.userEmail)
+  const user = await context.env.DB.prepare(
+    byUserEmail
+      ? 'select email, famileo_email, famileo_password_enc from users where lower(email) = ?1 limit 1'
+      : 'select email, famileo_email, famileo_password_enc from users where lower(famileo_email) = ?1 limit 1'
+  )
+    .bind(targetEmail)
+    .first<{ email: string; famileo_email: string | null; famileo_password_enc: string | null }>()
+
+  if (!user || !user.famileo_password_enc) {
+    return fail('NOT_FOUND', 'No password configured for this user', 404)
+  }
+
+  return ok({
+    user_email: user.email || '',
+    famileo_email: user.famileo_email || targetEmail,
+    password_enc: user.famileo_password_enc,
+  })
+}

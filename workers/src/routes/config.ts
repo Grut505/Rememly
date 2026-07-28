@@ -50,16 +50,3 @@ export const setConfigHandler: RouteHandler = async (request, context) => {
 
   return ok({ key: body.key, value: body.value || '' })
 }
-
-export const configLinksHandler: RouteHandler = async (request, context) => {
-  const auth = await requireAuth(request, context.env)
-  if (!auth.ok) {
-    return auth.response
-  }
-
-  return ok({
-    frontend: 'preparation-only',
-    backend: 'worker-preparation',
-    docs: 'docs/MIGRATION_EXECUTION_PLAN.md',
-  })
-}

@@ -620,13 +620,6 @@ export const pdfMergeFailedHandler: RouteHandler = async (request, context) => {
   return ok({ ok: true })
 }
 
-export const pdfMergeCleanupHandler: RouteHandler = async (request, context) => {
-  const auth = await requireAuth(request, context.env)
-  if (!auth.ok) return auth.response
-
-  return ok({ cleaned: false, message: 'No Worker properties to clean in preparation mode.' })
-}
-
 async function driveFindFolder(accessToken: string, name: string, parentId: string | null): Promise<string | null> {
   const parentClause = parentId ? `'${parentId}' in parents and ` : ''
   const q = `${parentClause}name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`

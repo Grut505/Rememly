@@ -2,7 +2,7 @@ import { Router } from './lib/router'
 import { fail } from './lib/response'
 import { authCheckHandler } from './routes/auth'
 import { healthHandler } from './routes/health'
-import { configLinksHandler, getConfigHandler, setConfigHandler } from './routes/config'
+import { getConfigHandler, setConfigHandler } from './routes/config'
 import {
   articleCreateHandler,
   articleDeleteHandler,
@@ -36,7 +36,6 @@ import {
   pdfCreateHandler,
   pdfDeleteHandler,
   pdfListHandler,
-  pdfMergeCleanupHandler,
   pdfMergeCleanupJobHandler,
   pdfMergeCompleteHandler,
   pdfMergeFailedHandler,
@@ -72,8 +71,6 @@ register('POST', '/auth/check', authCheckHandler)
 register('GET', '/config/get', getConfigHandler)
 register('POST', '/config/get', getConfigHandler)
 register('POST', '/config/set', setConfigHandler)
-register('GET', '/config/links', configLinksHandler)
-register('POST', '/config/links', configLinksHandler)
 register('GET', '/users/list', usersListHandler)
 register('POST', '/users/list', usersListHandler)
 register('GET', '/profile/get', profileGetHandler)
@@ -141,7 +138,6 @@ register('POST', '/pdf/render-complete', pdfRenderCompleteHandler)
 register('GET', '/pdf/render-failed', pdfRenderFailedHandler)
 register('POST', '/pdf/render-failed', pdfRenderFailedHandler)
 register('POST', '/pdf/merge-cancel', preparationOnlyHandler)
-register('POST', '/pdf/cleanup-properties', pdfMergeCleanupHandler)
 register('POST', '/pdf/merge-cleanup', pdfMergeCleanupJobHandler)
 register('POST', '/pdf/cover-preview', pdfCoverPreviewHandler)
 register('GET', '/pdf/cover-preview', pdfCoverPreviewHandler)

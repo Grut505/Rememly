@@ -32,7 +32,6 @@ const fontWeightOptions = [
 export function Settings() {
   const { showToast, setUnsavedChanges } = useUiStore()
   const backendUrl = import.meta.env.VITE_APPS_SCRIPT_URL || ''
-  const [sheetUrl, setSheetUrl] = useState('')
 
   const [familyName, setFamilyName] = useState('')
   const [initialFamilyName, setInitialFamilyName] = useState('')
@@ -103,7 +102,6 @@ export function Settings() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewFileId, setPreviewFileId] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
-  const [isCleaningProps, setIsCleaningProps] = useState(false)
   const [isBackfilling, setIsBackfilling] = useState(false)
   const [isRefreshingMergeToken, setIsRefreshingMergeToken] = useState(false)
   const [mergeTokenStatus, setMergeTokenStatus] = useState<{
@@ -148,18 +146,8 @@ export function Settings() {
     loadFamileoLogsRange()
     loadUsers()
     cleanupStaleCoverPreview()
-    loadLinks()
     loadMergeTokenStatus()
   }, [])
-
-  async function loadLinks() {
-    try {
-      const links = await configApi.links()
-      setSheetUrl(links.spreadsheet_url || '')
-    } catch (error) {
-      console.warn('Failed to load config links', error)
-    }
-  }
 
   const loadConfig = async () => {
     try {
@@ -598,18 +586,6 @@ export function Settings() {
         setIsClearingFamileoLogs(false)
         setFamileoClearProgress(0)
       }, 300)
-    }
-  }
-
-  const handleCleanupProperties = async () => {
-    setIsCleaningProps(true)
-    try {
-      const result = await logsApi.cleanupPdfProperties()
-      showToast(`Properties cleaned: ${result.deleted}, queue removed: ${result.queueRemoved}`, 'success')
-    } catch (error) {
-      showToast('Failed to cleanup properties', 'error')
-    } finally {
-      setIsCleaningProps(false)
     }
   }
 
@@ -1709,21 +1685,10 @@ export function Settings() {
               )}
             </div>
 
-            {/* Cleanup properties */}
+            {/* Maintenance */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Maintenance</h3>
-              <p className="text-xs text-gray-500 mb-3">
-                Remove orphan PDF properties when jobs were deleted manually.
-              </p>
               <div className="flex flex-col items-start gap-4">
-                <Button
-                  variant="secondary"
-                  onClick={handleCleanupProperties}
-                  disabled={isCleaningProps}
-                  className="w-full sm:w-auto"
-                >
-                  Clean PDF properties
-                </Button>
                 <div className="flex flex-col items-start gap-2 w-full">
                   <p className="text-xs text-gray-500">
                     Rebuilds Famileo fingerprints for existing articles to improve duplicate detection.
@@ -1757,30 +1722,18 @@ export function Settings() {
                 </div>
               </div>
             </div>
-            {(backendUrl || sheetUrl) && (
+            {backendUrl && (
               <div className="bg-white rounded-lg border border-gray-200 p-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">Links</h3>
                 <div className="flex flex-col gap-2 text-sm">
-                  {backendUrl && (
-                    <a
-                      href={backendUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary-600 hover:text-primary-700"
-                    >
-                      Open Backend URL
-                    </a>
-                  )}
-                  {sheetUrl && (
-                    <a
-                      href={sheetUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary-600 hover:text-primary-700"
-                    >
-                      Open Spreadsheet
-                    </a>
-                  )}
+                  <a
+                    href={backendUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary-600 hover:text-primary-700"
+                  >
+                    Open Backend URL
+                  </a>
                 </div>
               </div>
             )}
@@ -1844,14 +1797,6 @@ export function Settings() {
         </div>
       )}
 
-      {isCleaningProps && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl px-6 py-5 flex flex-col items-center">
-            <Spinner size="md" />
-            <p className="mt-3 text-sm text-gray-700">Cleaning properties...</p>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

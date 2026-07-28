@@ -91,6 +91,14 @@ export function PdfExport() {
     loadPdfList()
   }, [loadPdfList])
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
   // Track previous statuses to detect completion (ref, not state - this is
   // pure bookkeeping for the effect below and must not trigger a re-render,
   // otherwise the effect re-runs forever comparing against its own update)

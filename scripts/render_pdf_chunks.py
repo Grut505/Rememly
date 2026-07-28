@@ -73,8 +73,16 @@ def esc(value) -> str:
     )
 
 
-def render_multiline(value) -> str:
+def normalize_multiline(value) -> str:
     text = '' if value is None else str(value)
+    # Config/job values may contain literal "\n"/"\r\n" escape sequences (two
+    # or four characters) rather than real newlines, e.g. when round-tripped
+    # through JSON/Sheets as plain text - normalize both to a real newline.
+    return text.replace('\\r\\n', '\n').replace('\\n', '\n')
+
+
+def render_multiline(value) -> str:
+    text = normalize_multiline(value)
     lines = text.replace('\r\n', '\n').split('\n')
     if len(lines) <= 1:
         return esc(text)
@@ -82,7 +90,7 @@ def render_multiline(value) -> str:
 
 
 def render_svg_multiline(value, x: float, line_height_px: float) -> str:
-    text = '' if value is None else str(value)
+    text = normalize_multiline(value)
     lines = text.replace('\r\n', '\n').split('\n')
     parts = []
     for index, line in enumerate(lines):
@@ -325,8 +333,8 @@ def generate_seasonal_fruits(month_index: int) -> str:
 # ---------------------------------------------------------------------------
 
 def generate_cover_mosaic(articles: list, date_from: str, date_to: str, max_photos: Optional[int], options: dict,
-                          callback_url: str, callback_token: str) -> str:
-    family_name = options.get('family_name')
+                          config: dict, callback_url: str, callback_token: str) -> str:
+    family_name = options.get('family_name') or config.get('family_name')
     title_text = f"Livre de souvenir des {esc(family_name)}" if family_name else 'Livre de Souvenirs'
 
     images = []
@@ -365,28 +373,43 @@ def generate_cover_mosaic(articles: list, date_from: str, date_to: str, max_phot
   </div>'''
 
 
-def generate_cover_masked_text_html(options: dict) -> str:
-    def resolve_number(key, fallback):
+def generate_cover_masked_text_html(options: dict, config: dict) -> str:
+    # 3-tier resolution, matching the pre-migration Apps Script behavior:
+    # per-job option -> D1 config value (tuned once, applies to every job) -> hardcoded fallback.
+    def resolve_number(key, fallback, config_key=None):
         raw = options.get(key)
+        if raw is None:
+            raw = config.get(config_key or f'pdf_{key}')
         try:
             return float(raw) if raw is not None else fallback
         except (TypeError, ValueError):
             return fallback
 
-    def resolve_font_family(key, fallback):
+    def resolve_font_family(key, fallback, config_key=None):
         raw = options.get(key)
+        if not raw:
+            raw = config.get(config_key or f'pdf_{key}')
         return FONT_FAMILIES.get(raw, fallback) if raw else fallback
 
-    def resolve_font_weight(key, fallback):
-        return clamp(resolve_number(key, fallback), 100, 900)
+    def resolve_font_weight(key, fallback, config_key=None):
+        return clamp(resolve_number(key, fallback, config_key), 100, 900)
 
     family_mask_image_data_uri = options.get('_family_mask_image_data_uri', '')
     family_mask_enabled = bool(family_mask_image_data_uri)
 
-    cover_title = options.get('cover_title') or 'test H1'
-    cover_subtitle = options.get('cover_subtitle') or 'test H2'
+    cover_title = options.get('cover_title') or config.get('pdf_cover_title') or 'test H1'
+    cover_subtitle = options.get('cover_subtitle') or config.get('pdf_cover_subtitle') or 'test H2'
 
-    family_letter_spacing = clamp(resolve_number('cover_family_letter_spacing_em', resolve_number('cover_vertical_letter_spacing_em', 0)), -0.2, 0.2)
+    family_letter_spacing_raw = (
+        options.get('cover_family_letter_spacing_em')
+        or options.get('cover_vertical_letter_spacing_em')
+        or config.get('pdf_cover_vertical_letter_spacing')
+    )
+    try:
+        family_letter_spacing_val = float(family_letter_spacing_raw) if family_letter_spacing_raw is not None else 0
+    except (TypeError, ValueError):
+        family_letter_spacing_val = 0
+    family_letter_spacing = clamp(family_letter_spacing_val, -0.2, 0.2)
     title_letter_spacing = clamp(resolve_number('cover_title_letter_spacing_em', 0), -0.2, 0.2)
     subtitle_letter_spacing = clamp(resolve_number('cover_subtitle_letter_spacing_em', 0), -0.2, 0.2)
 
@@ -407,7 +430,7 @@ def generate_cover_masked_text_html(options: dict) -> str:
     family_font_px = family_font_cm * 100
     family_font_family = resolve_font_family('cover_family_font_family', "'Garamond', 'EB Garamond', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif")
     family_font_weight = resolve_font_weight('cover_family_font_weight', 700)
-    family_mask_text = options.get('family_name') or 'Souvenirs de famille'
+    family_mask_text = options.get('family_name') or config.get('family_name') or 'Souvenirs de famille'
 
     family_scale_x = clamp(resolve_number('cover_family_scale_x', 1), 0.6, 3)
     family_scale_y = clamp(resolve_number('cover_family_scale_y', 1), 0.6, 3)
@@ -502,7 +525,7 @@ def generate_cover_masked_text_html(options: dict) -> str:
   </div>'''
 
 
-def generate_cover_masked_mosaic(articles: list, max_photos: Optional[int], options: dict,
+def generate_cover_masked_mosaic(articles: list, max_photos: Optional[int], options: dict, config: dict,
                                  callback_url: str, callback_token: str) -> str:
     images = []
     photo_limit = max_photos or len(articles)
@@ -517,7 +540,8 @@ def generate_cover_masked_mosaic(articles: list, max_photos: Optional[int], opti
             b64, mime, aspect = resized
             images.append({'base64': b64, 'mimeType': mime, 'aspectRatio': aspect})
 
-    family_height_cm = clamp(float(options.get('cover_family_h_cm') or 3.5), 1.5, 6)
+    family_height_raw = options.get('cover_family_h_cm') or config.get('pdf_cover_family_h_cm')
+    family_height_cm = clamp(float(family_height_raw) if family_height_raw is not None else 3.5, 1.5, 6)
     page_width_cm = family_height_cm
     page_height_cm = 27.7
     gap = 0.07
@@ -545,17 +569,17 @@ def generate_cover_masked_mosaic(articles: list, max_photos: Optional[int], opti
         mask_uri = 'data:image/svg+xml;charset=utf-8,' + urllib.parse.quote(svg_doc)
 
     merged_options = {**options, '_family_mask_image_data_uri': mask_uri}
-    return generate_cover_masked_text_html(merged_options)
+    return generate_cover_masked_text_html(merged_options, config)
 
 
-def generate_cover_html(articles: list, date_from: str, date_to: str, options: dict,
+def generate_cover_html(articles: list, date_from: str, date_to: str, options: dict, config: dict,
                         callback_url: str, callback_token: str) -> str:
     max_photos = options.get('max_mosaic_photos')
     style = options.get('cover_style') or 'mosaic'
     if style == 'masked-title':
-        cover_html = generate_cover_masked_mosaic(articles, max_photos, options, callback_url, callback_token)
+        cover_html = generate_cover_masked_mosaic(articles, max_photos, options, config, callback_url, callback_token)
     else:
-        cover_html = generate_cover_mosaic(articles, date_from, date_to, max_photos, options, callback_url, callback_token)
+        cover_html = generate_cover_mosaic(articles, date_from, date_to, max_photos, options, config, callback_url, callback_token)
 
     return f'''<!doctype html>
 <html>
@@ -796,7 +820,7 @@ def api_call(callback_url: str, path: str, params: dict, method: str = "GET"):
 
 def fetch_job(callback_url: str, token: str, job_id: str):
     data = api_call(callback_url, "pdf/render-job", {"token": token, "job_id": job_id})
-    return data["job"], data.get("articles", [])
+    return data["job"], data.get("articles", []), data.get("config", {})
 
 
 def report_status(callback_url: str, token: str, job_id: str, progress: int, message: str):
@@ -881,7 +905,7 @@ def main():
     parser.add_argument("--callback-token", required=True)
     args = parser.parse_args()
 
-    job, articles = fetch_job(args.callback_url, args.callback_token, args.job_id)
+    job, articles, config = fetch_job(args.callback_url, args.callback_token, args.job_id)
     options = json.loads(job.get('options_json') or '{}')
 
     try:
@@ -904,7 +928,7 @@ def main():
             browser = p.chromium.launch()
 
             cover_html = generate_cover_html(articles, job.get('date_from', ''), job.get('date_to', ''),
-                                             options, args.callback_url, args.callback_token)
+                                             options, config, args.callback_url, args.callback_token)
             cover_pdf = render_html_to_pdf(browser, cover_html)
             upload_pdf(service, folder_id, "chunk_000_cover.pdf", cover_pdf)
             report_status(args.callback_url, args.callback_token, args.job_id,

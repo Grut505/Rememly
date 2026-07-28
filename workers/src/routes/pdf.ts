@@ -212,7 +212,10 @@ export const pdfRenderJobHandler: RouteHandler = async (request, context) => {
     .bind(job.date_from, job.date_to)
     .all<Record<string, unknown>>()
 
-  return ok({ job, articles: articles.results || [] })
+  const configRows = await context.env.DB.prepare('select key, value from config').all<{ key: string; value: string | null }>()
+  const config = Object.fromEntries((configRows.results || []).map((row) => [row.key, row.value]))
+
+  return ok({ job, articles: articles.results || [], config })
 }
 
 export const pdfRenderImageHandler: RouteHandler = async (request, context) => {

@@ -1,4 +1,5 @@
 import { requireAuth } from '../lib/auth'
+import { logEvent } from '../lib/logs'
 import { readJson, normalizeEmail } from '../lib/request'
 import { fail, ok } from '../lib/response'
 import type { RouteHandler } from '../lib/router'
@@ -173,6 +174,7 @@ async function triggerFamileoRefresh(env: Env, appEmail: string): Promise<Trigge
     )
 
     if (response.status === 204) {
+      await logEvent(env, 'famileo', 'INFO', 'Refresh trigger: queued', { user: targetEmail })
       return { ok: true, message: 'Workflow triggered successfully. Session will be refreshed in ~2 minutes.' }
     }
 
@@ -193,9 +195,11 @@ async function triggerFamileoRefresh(env: Env, appEmail: string): Promise<Trigge
       errorMessage = 'Famileo refresh is temporarily unavailable because the GitHub workflow could not be found or accessed.'
     }
 
+    await logEvent(env, 'famileo', 'ERROR', 'Refresh trigger failed', { user: targetEmail, code: errorCode, message: errorMessage })
     return { ok: false, code: errorCode, message: errorMessage, details: responseText }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown trigger error'
+    await logEvent(env, 'famileo', 'ERROR', 'Refresh trigger error', { user: targetEmail, message })
     return { ok: false, code: 'TRIGGER_ERROR', message }
   }
 }
@@ -485,6 +489,7 @@ export const famileoCreatePostHandler: RouteHandler = async (request, context) =
     const session = await getFamileoSession(context.env, famileoEmail)
     if (!session) {
       await triggerFamileoRefresh(context.env, effectiveEmail).catch(() => null)
+      await logEvent(context.env, 'famileo', 'ERROR', 'Create post failed: no session', { user: effectiveEmail })
       return fail('FAMILEO_SESSION', 'Session Famileo expirée. Rafraîchissement déclenché.', 502)
     }
 
@@ -513,15 +518,23 @@ export const famileoCreatePostHandler: RouteHandler = async (request, context) =
     const text = await response.text()
     if (looksLikeSessionExpired(response.status, text)) {
       await triggerFamileoRefresh(context.env, effectiveEmail).catch(() => null)
+      await logEvent(context.env, 'famileo', 'ERROR', 'Create post failed: session expired', { user: effectiveEmail })
       return fail('FAMILEO_SESSION', 'Session Famileo expirée. Rafraîchissement déclenché.', 502)
     }
     if (response.status < 200 || response.status >= 300) {
+      await logEvent(context.env, 'famileo', 'ERROR', 'Create post failed', {
+        user: effectiveEmail,
+        status: response.status,
+      })
       return fail('FAMILEO_ERROR', `Famileo post failed (HTTP ${response.status})`, 502)
     }
+
+    await logEvent(context.env, 'famileo', 'INFO', 'Create post: success', { user: effectiveEmail, status: response.status })
 
     return ok({ status: response.status, body: text })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown Famileo error'
+    await logEvent(context.env, 'famileo', 'ERROR', 'Create post error', { user: effectiveEmail, error: message })
     return fail('FAMILEO_ERROR', message, 502)
   }
 }
@@ -596,6 +609,8 @@ export const famileoUpdateSessionHandler: RouteHandler = async (request, context
   )
     .bind(body.famileo_email || '', body.phpsessid, body.rememberme, new Date().toISOString())
     .run()
+
+  await logEvent(context.env, 'famileo', 'INFO', 'Session updated via API', { famileo_email: body.famileo_email || '' })
 
   return ok({
     message: 'Session updated successfully',

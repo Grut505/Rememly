@@ -1,4 +1,5 @@
 import { requireAuth } from '../lib/auth'
+import { logEvent } from '../lib/logs'
 import { readJson } from '../lib/request'
 import { fail, ok } from '../lib/response'
 import type { RouteHandler } from '../lib/router'
@@ -95,6 +96,13 @@ export const pdfCreateHandler: RouteHandler = async (request, context) => {
     .bind(jobId, currentIso(), auth.user.email, auth.user.name, body.from, body.to, optionsJson)
     .run()
 
+  await logEvent(context.env, 'pdf', 'INFO', 'Job created', {
+    job_id: jobId,
+    created_by: auth.user.email,
+    date_from: body.from,
+    date_to: body.to,
+  })
+
   return ok({
     job_id: jobId,
     status: 'PENDING',
@@ -178,6 +186,11 @@ export const pdfProcessHandler: RouteHandler = async (request, context) => {
 
   const dispatchResult = await dispatchGithubWorkflow(context.env, 'pdf-render.yml', { job_id: jobId })
   if (!dispatchResult.ok) {
+    await logEvent(context.env, 'pdf', 'ERROR', 'Render workflow dispatch failed', {
+      job_id: jobId,
+      code: dispatchResult.code,
+      message: dispatchResult.message,
+    })
     return fail(dispatchResult.code, dispatchResult.message, 502, dispatchResult.detail)
   }
 
@@ -186,6 +199,8 @@ export const pdfProcessHandler: RouteHandler = async (request, context) => {
   )
     .bind(jobId)
     .run()
+
+  await logEvent(context.env, 'pdf', 'INFO', 'Render workflow dispatched', { job_id: jobId })
 
   return ok({ queued: true, job_id: jobId, status: 'RUNNING', progress: 5, progress_message: 'Preparation queued' })
 }
@@ -357,11 +372,14 @@ export const pdfRenderFailedHandler: RouteHandler = async (request, context) => 
     return fail('INVALID_PARAMS', 'Missing job_id', 400)
   }
 
+  const message = params.get('message') || 'Preparation failed'
   await context.env.DB.prepare(
     `update jobs_pdf set status = 'ERROR', progress = 0, progress_message = 'Preparation failed', error_message = ?2 where job_id = ?1`
   )
-    .bind(jobId, params.get('message') || 'Preparation failed')
+    .bind(jobId, message)
     .run()
+
+  await logEvent(context.env, 'pdf', 'ERROR', 'Render failed', { job_id: jobId, message })
 
   return ok({ ok: true })
 }
@@ -468,6 +486,11 @@ export const pdfMergeTriggerHandler: RouteHandler = async (request, context) => 
 
   const dispatchResult = await triggerPdfMerge(context.env, body.job_id, folderId, body.clean_chunks !== false)
   if (!dispatchResult.ok) {
+    await logEvent(context.env, 'pdf', 'ERROR', 'Merge workflow dispatch failed', {
+      job_id: body.job_id,
+      code: dispatchResult.code,
+      message: dispatchResult.message,
+    })
     return fail(dispatchResult.code, dispatchResult.message, 502, dispatchResult.detail)
   }
 
@@ -476,6 +499,8 @@ export const pdfMergeTriggerHandler: RouteHandler = async (request, context) => 
   )
     .bind(body.job_id)
     .run()
+
+  await logEvent(context.env, 'pdf', 'INFO', 'Merge workflow dispatched', { job_id: body.job_id })
 
   return ok({ queued: true })
 }
@@ -596,6 +621,8 @@ export const pdfMergeCompleteHandler: RouteHandler = async (request, context) =>
     .bind(jobId, fileId, pdfUrl)
     .run()
 
+  await logEvent(context.env, 'pdf', 'INFO', 'Merge complete', { job_id: jobId, file_id: fileId, url: pdfUrl })
+
   return ok({ ok: true })
 }
 
@@ -611,11 +638,14 @@ export const pdfMergeFailedHandler: RouteHandler = async (request, context) => {
     return fail('INVALID_PARAMS', 'Missing job_id', 400)
   }
 
+  const message = params.get('message') || 'Merge failed'
   await context.env.DB.prepare(
     `update jobs_pdf set status = 'ERROR', progress = 0, progress_message = 'Merge failed', error_message = ?2 where job_id = ?1`
   )
-    .bind(jobId, params.get('message') || 'Merge failed')
+    .bind(jobId, message)
     .run()
+
+  await logEvent(context.env, 'pdf', 'ERROR', 'Merge failed', { job_id: jobId, message })
 
   return ok({ ok: true })
 }

@@ -104,6 +104,67 @@ export const pdfCreateHandler: RouteHandler = async (request, context) => {
   })
 }
 
+async function dispatchGithubWorkflow(
+  env: Env,
+  workflowFile: string,
+  inputs: Record<string, string>
+): Promise<{ ok: true } | { ok: false; code: string; message: string; detail?: string }> {
+  const githubToken = env.GITHUB_TOKEN
+  if (!githubToken) {
+    return { ok: false, code: 'NOT_CONFIGURED', message: 'GitHub token not configured' }
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/Grut505/Rememly/actions/workflows/${workflowFile}/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${githubToken}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'Rememly-Worker',
+        },
+        body: JSON.stringify({ ref: 'main', inputs }),
+      }
+    )
+
+    if (response.status !== 204) {
+      const responseText = await response.text()
+      let errorCode = 'GITHUB_ERROR'
+      let errorMessage = `The ${workflowFile} workflow could not be started due to a GitHub error.`
+
+      if (response.status === 401) {
+        errorCode = 'GITHUB_TOKEN_INVALID'
+        errorMessage =
+          'PDF generation is temporarily unavailable because the server GitHub token is expired, revoked, or invalid. Please contact an administrator.'
+      } else if (response.status === 403) {
+        errorCode = 'GITHUB_TOKEN_FORBIDDEN'
+        errorMessage =
+          'PDF generation is temporarily unavailable because the server GitHub token does not have permission to run the workflow. Please contact an administrator.'
+      } else if (response.status === 404) {
+        errorCode = 'GITHUB_WORKFLOW_NOT_FOUND'
+        errorMessage = `PDF generation is temporarily unavailable because the ${workflowFile} workflow could not be found or accessed.`
+      }
+
+      return { ok: false, code: errorCode, message: errorMessage, detail: responseText }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown trigger error'
+    return { ok: false, code: 'TRIGGER_ERROR', message }
+  }
+
+  return { ok: true }
+}
+
+async function triggerPdfMerge(env: Env, jobId: string, folderId: string, cleanChunks: boolean) {
+  return dispatchGithubWorkflow(env, 'pdf-merge.yml', {
+    job_id: jobId,
+    folder_id: folderId,
+    clean_chunks: cleanChunks === false ? 'false' : 'true',
+  })
+}
+
 export const pdfProcessHandler: RouteHandler = async (request, context) => {
   const auth = await requireAuth(request, context.env)
   if (!auth.ok) return auth.response
@@ -115,6 +176,11 @@ export const pdfProcessHandler: RouteHandler = async (request, context) => {
   const job = await getPdfJob(context.env.DB, jobId)
   if (!job) return fail('NOT_FOUND', 'Job not found', 404)
 
+  const dispatchResult = await dispatchGithubWorkflow(context.env, 'pdf-render.yml', { job_id: jobId })
+  if (!dispatchResult.ok) {
+    return fail(dispatchResult.code, dispatchResult.message, 502, dispatchResult.detail)
+  }
+
   await context.env.DB.prepare(
     `update jobs_pdf set status = 'RUNNING', progress = 5, progress_message = 'Preparation queued' where job_id = ?1`
   )
@@ -122,6 +188,147 @@ export const pdfProcessHandler: RouteHandler = async (request, context) => {
     .run()
 
   return ok({ queued: true, job_id: jobId, status: 'RUNNING', progress: 5, progress_message: 'Preparation queued' })
+}
+
+export const pdfRenderJobHandler: RouteHandler = async (request, context) => {
+  const params = new URL(request.url).searchParams
+  const token = params.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
+    return fail('FORBIDDEN', 'Invalid token', 403)
+  }
+
+  const jobId = params.get('job_id')
+  if (!jobId) return fail('INVALID_PARAMS', 'job_id is required', 400)
+
+  const job = await getPdfJob(context.env.DB, jobId)
+  if (!job) return fail('NOT_FOUND', 'Job not found', 404)
+
+  const articles = await context.env.DB.prepare(
+    `select id, date, auteur, author_pseudo, texte, image_url, image_file_id
+       from articles
+      where status = 'ACTIVE' and deleted_at is null and date >= ?1 and date <= ?2
+      order by date asc`
+  )
+    .bind(job.date_from, job.date_to)
+    .all<Record<string, unknown>>()
+
+  return ok({ job, articles: articles.results || [] })
+}
+
+export const pdfRenderStatusHandler: RouteHandler = async (request, context) => {
+  const params = new URL(request.url).searchParams
+  const token = params.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
+    return fail('FORBIDDEN', 'Invalid token', 403)
+  }
+
+  const jobId = params.get('job_id')
+  const progressRaw = params.get('progress')
+  const message = params.get('message')
+  if (!jobId || progressRaw === null || message === null) {
+    return fail('INVALID_PARAMS', 'Missing params', 400)
+  }
+
+  const job = await getPdfJob(context.env.DB, jobId)
+  if (!job) return fail('NOT_FOUND', 'Job not found', 404)
+
+  await context.env.DB.prepare(
+    `update jobs_pdf set status = 'RUNNING', progress = ?2, progress_message = ?3 where job_id = ?1`
+  )
+    .bind(jobId, Number(progressRaw), message)
+    .run()
+
+  return ok({ ok: true })
+}
+
+export const pdfRenderCompleteHandler: RouteHandler = async (request, context) => {
+  const params = new URL(request.url).searchParams
+  const token = params.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
+    return fail('FORBIDDEN', 'Invalid token', 403)
+  }
+
+  const jobId = params.get('job_id')
+  const folderId = params.get('folder_id')
+  const folderUrl = params.get('folder_url')
+  if (!jobId || !folderId) {
+    return fail('INVALID_PARAMS', 'Missing params', 400)
+  }
+
+  const job = await getPdfJob(context.env.DB, jobId)
+  if (!job) return fail('NOT_FOUND', 'Job not found', 404)
+
+  await context.env.DB.prepare(
+    `update jobs_pdf set chunks_folder_id = ?2, chunks_folder_url = ?3 where job_id = ?1`
+  )
+    .bind(jobId, folderId, folderUrl || '')
+    .run()
+
+  let options: Record<string, unknown> = {}
+  try {
+    options = JSON.parse((job.options_json as string) || '{}')
+  } catch {
+    options = {}
+  }
+
+  if (options.auto_merge) {
+    const tokenResult = await refreshGdriveToken(context.env)
+    if (!tokenResult.ok) {
+      await context.env.DB.prepare(
+        `update jobs_pdf set status = 'ERROR', progress_message = 'Merge trigger failed', error_message = ?2 where job_id = ?1`
+      )
+        .bind(jobId, tokenResult.message)
+        .run()
+      return fail(tokenResult.code, tokenResult.message, 502)
+    }
+
+    const mergeResult = await triggerPdfMerge(context.env, jobId, folderId, options.clean_chunks !== false)
+    if (!mergeResult.ok) {
+      await context.env.DB.prepare(
+        `update jobs_pdf set status = 'ERROR', progress_message = 'Merge trigger failed', error_message = ?2 where job_id = ?1`
+      )
+        .bind(jobId, mergeResult.message)
+        .run()
+      return fail(mergeResult.code, mergeResult.message, 502, mergeResult.detail)
+    }
+
+    await context.env.DB.prepare(
+      `update jobs_pdf set status = 'RUNNING', progress = 10, progress_message = 'Merge queued' where job_id = ?1`
+    )
+      .bind(jobId)
+      .run()
+
+    return ok({ ok: true, merge_queued: true })
+  }
+
+  await context.env.DB.prepare(
+    `update jobs_pdf set status = 'DONE', progress = 100, progress_message = 'Chunks ready (merge pending)' where job_id = ?1`
+  )
+    .bind(jobId)
+    .run()
+
+  return ok({ ok: true, merge_queued: false })
+}
+
+export const pdfRenderFailedHandler: RouteHandler = async (request, context) => {
+  const params = new URL(request.url).searchParams
+  const token = params.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
+    return fail('FORBIDDEN', 'Invalid token', 403)
+  }
+
+  const jobId = params.get('job_id')
+  if (!jobId) {
+    return fail('INVALID_PARAMS', 'Missing job_id', 400)
+  }
+
+  await context.env.DB.prepare(
+    `update jobs_pdf set status = 'ERROR', progress = 0, progress_message = 'Preparation failed', error_message = ?2 where job_id = ?1`
+  )
+    .bind(jobId, params.get('message') || 'Preparation failed')
+    .run()
+
+  return ok({ ok: true })
 }
 
 export const pdfStatusHandler: RouteHandler = async (request, context) => {
@@ -224,56 +431,9 @@ export const pdfMergeTriggerHandler: RouteHandler = async (request, context) => 
     return fail(tokenResult.code, tokenResult.message, 502)
   }
 
-  const githubToken = context.env.GITHUB_TOKEN
-  if (!githubToken) {
-    return fail('NOT_CONFIGURED', 'GitHub token not configured', 400)
-  }
-
-  try {
-    const response = await fetch(
-      'https://api.github.com/repos/Grut505/Rememly/actions/workflows/pdf-merge.yml/dispatches',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${githubToken}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          'User-Agent': 'Rememly-Worker',
-        },
-        body: JSON.stringify({
-          ref: 'main',
-          inputs: {
-            job_id: body.job_id,
-            folder_id: folderId,
-            clean_chunks: body.clean_chunks === false ? 'false' : 'true',
-          },
-        }),
-      }
-    )
-
-    if (response.status !== 204) {
-      const responseText = await response.text()
-      let errorCode = 'GITHUB_ERROR'
-      let errorMessage = 'PDF merge could not be started due to a GitHub workflow error.'
-
-      if (response.status === 401) {
-        errorCode = 'GITHUB_TOKEN_INVALID'
-        errorMessage =
-          'PDF merge is temporarily unavailable because the server GitHub token is expired, revoked, or invalid. Please contact an administrator.'
-      } else if (response.status === 403) {
-        errorCode = 'GITHUB_TOKEN_FORBIDDEN'
-        errorMessage =
-          'PDF merge is temporarily unavailable because the server GitHub token does not have permission to run the workflow. Please contact an administrator.'
-      } else if (response.status === 404) {
-        errorCode = 'GITHUB_WORKFLOW_NOT_FOUND'
-        errorMessage = 'PDF merge is temporarily unavailable because the GitHub workflow could not be found or accessed.'
-      }
-
-      return fail(errorCode, errorMessage, 502, responseText)
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown trigger error'
-    return fail('TRIGGER_ERROR', message, 500)
+  const dispatchResult = await triggerPdfMerge(context.env, body.job_id, folderId, body.clean_chunks !== false)
+  if (!dispatchResult.ok) {
+    return fail(dispatchResult.code, dispatchResult.message, 502, dispatchResult.detail)
   }
 
   await context.env.DB.prepare(

@@ -1,0 +1,93 @@
+name: PDF Render
+
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "PDF job id"
+        required: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CALLBACK_URL: ${{ secrets.BACKEND_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate callback URL
+        run: |
+          if [ -z "$CALLBACK_URL" ]; then
+            echo "Missing CALLBACK_URL (set BACKEND_URL)"
+            exit 1
+          fi
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/render_pdf_chunks.requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Write Drive credentials
+        run: |
+          echo "${{ secrets.GDRIVE_CREDENTIALS_JSON }}" | base64 -d > credentials.json
+          TOKEN_HTTP_CODE=$(curl -sS -L -G -o /tmp/render_token_response.json -w "%{http_code}" \
+            --data-urlencode "path=pdf/merge-token" \
+            --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
+            "${CALLBACK_URL}")
+          echo "merge-token HTTP ${TOKEN_HTTP_CODE}"
+          if [ "${TOKEN_HTTP_CODE}" -ge 200 ] && [ "${TOKEN_HTTP_CODE}" -lt 300 ]; then
+            set +e
+            python -c "import json,sys; p=json.load(open('/tmp/render_token_response.json','r',encoding='utf-8')); d=(p.get('data') or {}); raw=d.get('token_json'); assert p.get('ok') and raw; t=json.loads(raw); assert t.get('refresh_token'); json.dump(t, open('token.json','w',encoding='utf-8'))"
+            TOKEN_PARSE_STATUS=$?
+            set -e
+            if [ "${TOKEN_PARSE_STATUS}" -eq 0 ]; then
+              echo "Using merge token from backend Script Properties."
+            else
+              echo "Backend merge token invalid, falling back to GitHub secret GDRIVE_TOKEN_JSON."
+              echo "${{ secrets.GDRIVE_TOKEN_JSON }}" | base64 -d > token.json
+            fi
+          else
+            echo "Backend merge token unavailable, falling back to GitHub secret GDRIVE_TOKEN_JSON."
+            echo "${{ secrets.GDRIVE_TOKEN_JSON }}" | base64 -d > token.json
+          fi
+
+      - name: Render chunks
+        id: render
+        run: |
+          set -euo pipefail
+          timeout 45m python -u scripts/render_pdf_chunks.py \
+            --job-id "${{ inputs.job_id }}" \
+            --credentials credentials.json \
+            --token token.json \
+            --no-browser \
+            --callback-url "${CALLBACK_URL}" \
+            --callback-token "${{ secrets.PDF_MERGE_TOKEN }}" \
+            1> /tmp/render_out.txt 2> /tmp/render_err.txt
+          echo "---- render stdout (tail) ----"
+          tail -n 50 /tmp/render_out.txt || true
+          echo "---- render stderr (tail) ----"
+          tail -n 50 /tmp/render_err.txt || true
+
+      - name: Notify backend (render failed)
+        if: ${{ failure() && steps.render.outcome != 'success' }}
+        run: |
+          ERROR_MSG="$(tail -c 1500 /tmp/render_err.txt 2>/dev/null || echo 'GitHub Action failed')"
+          STATUS_CODE=$(curl -sS -L -G -o /tmp/render_failed.json -w "%{http_code}" \
+            --data-urlencode "path=pdf/render-failed" \
+            --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
+            --data-urlencode "job_id=${{ inputs.job_id }}" \
+            --data-urlencode "message=${ERROR_MSG}" \
+            "${CALLBACK_URL}")
+          echo "render-failed HTTP ${STATUS_CODE}"
+          if [ "${STATUS_CODE}" -ge 400 ]; then
+            cat /tmp/render_failed.json || true
+          fi

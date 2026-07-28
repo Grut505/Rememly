@@ -44,6 +44,10 @@ import {
   pdfMergeTokenStatusHandler,
   pdfMergeTriggerHandler,
   pdfProcessHandler,
+  pdfRenderCompleteHandler,
+  pdfRenderFailedHandler,
+  pdfRenderJobHandler,
+  pdfRenderStatusHandler,
   pdfStatusHandler,
 } from './routes/pdf'
 import { logsClearHandler, logsRangeHandler } from './routes/logs'
@@ -124,6 +128,14 @@ register('GET', '/pdf/merge-complete', pdfMergeCompleteHandler)
 register('POST', '/pdf/merge-complete', pdfMergeCompleteHandler)
 register('GET', '/pdf/merge-failed', pdfMergeFailedHandler)
 register('POST', '/pdf/merge-failed', pdfMergeFailedHandler)
+register('GET', '/pdf/render-job', pdfRenderJobHandler)
+register('POST', '/pdf/render-job', pdfRenderJobHandler)
+register('GET', '/pdf/render-status', pdfRenderStatusHandler)
+register('POST', '/pdf/render-status', pdfRenderStatusHandler)
+register('GET', '/pdf/render-complete', pdfRenderCompleteHandler)
+register('POST', '/pdf/render-complete', pdfRenderCompleteHandler)
+register('GET', '/pdf/render-failed', pdfRenderFailedHandler)
+register('POST', '/pdf/render-failed', pdfRenderFailedHandler)
 register('POST', '/pdf/merge-cancel', preparationOnlyHandler)
 register('POST', '/pdf/cleanup-properties', pdfMergeCleanupHandler)
 register('POST', '/pdf/cover-preview', pdfCoverPreviewHandler)

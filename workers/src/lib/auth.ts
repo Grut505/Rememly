@@ -105,7 +105,11 @@ async function createPendingUser(env: Env, email: string) {
     .run()
 }
 
-export async function requireAuth(request: Request, env: Env, options?: { allowPendingCreate?: boolean }): Promise<AuthOutcome> {
+export async function requireAuth(
+  request: Request,
+  env: Env,
+  options?: { allowPendingCreate?: boolean; allowBareEmail?: boolean }
+): Promise<AuthOutcome> {
   const authValue = getAuthValue(request)
   if (!authValue) {
     return {
@@ -124,11 +128,16 @@ export async function requireAuth(request: Request, env: Env, options?: { allowP
       }
     }
     email = verifiedEmail
-  } else if (authValue.startsWith('Email ')) {
-    // Legacy scheme: a bare, unsigned email claim. Kept for backward compatibility
-    // with Apps Script parity and existing tooling, but issueSessionToken/Session
-    // auth above is the preferred, tamper-proof path going forward.
+  } else if (authValue.startsWith('Email ') && options?.allowBareEmail) {
+    // Bare, unsigned email claim - only trusted as a one-time bootstrap credential
+    // (auth/check) to obtain a signed session token. Every other route requires
+    // "Session <token>"; a bare Email claim there is rejected below.
     email = normalizeEmail(authValue.slice(6))
+  } else if (authValue.startsWith('Email ')) {
+    return {
+      ok: false,
+      response: fail('INVALID_TOKEN', 'Bare email auth is no longer accepted - sign in again to obtain a session', 401),
+    }
   } else {
     return {
       ok: false,

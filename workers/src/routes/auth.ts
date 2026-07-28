@@ -3,7 +3,7 @@ import { ok } from '../lib/response'
 import type { RouteHandler } from '../lib/router'
 
 export const authCheckHandler: RouteHandler = async (request, context) => {
-  const auth = await requireAuth(request, context.env, { allowPendingCreate: true })
+  const auth = await requireAuth(request, context.env, { allowPendingCreate: true, allowBareEmail: true })
   if (!auth.ok) {
     return auth.response
   }

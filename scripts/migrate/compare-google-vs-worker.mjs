@@ -86,11 +86,11 @@ function buildGoogleUrl(baseUrl, path, auth, params = {}) {
   return url.toString()
 }
 
-function buildWorkerUrl(baseUrl, path, auth, params = {}) {
+function buildWorkerUrl(baseUrl, path, authHeaderValue, params = {}) {
   const url = new URL(baseUrl)
   url.searchParams.set('path', path)
-  if (auth) {
-    url.searchParams.set('auth', `Email ${auth}`)
+  if (authHeaderValue) {
+    url.searchParams.set('auth', authHeaderValue)
   }
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && value !== '') {
@@ -98,6 +98,12 @@ function buildWorkerUrl(baseUrl, path, auth, params = {}) {
     }
   }
   return url.toString()
+}
+
+async function fetchWorkerSessionToken(baseUrl, authEmail) {
+  const url = buildWorkerUrl(baseUrl, 'auth/check', `Email ${authEmail}`)
+  const result = await postJson(url, {})
+  return result.body?.data?.session_token || null
 }
 
 const googleBaseUrl = normalizeBaseUrl(getArg('--google', process.env.GOOGLE_BACKEND_URL))
@@ -136,11 +142,19 @@ const scenarios = [
   { name: 'famileo/status', path: 'famileo/status' },
 ]
 
+const workerSessionToken = await fetchWorkerSessionToken(workerBaseUrl, authEmail)
+const workerAuthHeader = workerSessionToken ? `Session ${workerSessionToken}` : `Email ${authEmail}`
+if (!workerSessionToken) {
+  process.stdout.write(
+    '\nWarning: could not obtain a Worker session token (AUTH_SECRET not configured on the target?) - falling back to bare Email auth, which the Worker now rejects on every route except auth/check.\n'
+  )
+}
+
 let failures = 0
 
 for (const scenario of scenarios) {
   const googleUrl = buildGoogleUrl(googleBaseUrl, scenario.path, authEmail, scenario.params)
-  const workerUrl = buildWorkerUrl(workerBaseUrl, scenario.path, authEmail, scenario.params)
+  const workerUrl = buildWorkerUrl(workerBaseUrl, scenario.path, workerAuthHeader, scenario.params)
 
   const [googleResult, workerResult] = await Promise.all([
     postJson(googleUrl, scenario.body || {}),

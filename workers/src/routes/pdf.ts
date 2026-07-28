@@ -321,8 +321,11 @@ export const pdfRenderCompleteHandler: RouteHandler = async (request, context) =
       return fail(mergeResult.code, mergeResult.message, 502, mergeResult.detail)
     }
 
+    // Continue from wherever rendering left off (capped below 80) instead of
+    // resetting to a low number - pdf-merge.yml's own status updates start
+    // around 84, so this keeps progress monotonic through the handoff.
     await context.env.DB.prepare(
-      `update jobs_pdf set status = 'RUNNING', progress = 10, progress_message = 'Merge queued' where job_id = ?1`
+      `update jobs_pdf set status = 'RUNNING', progress = max(progress, 80), progress_message = 'Merge queued' where job_id = ?1`
     )
       .bind(jobId)
       .run()

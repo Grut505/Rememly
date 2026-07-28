@@ -261,7 +261,9 @@ def main():
                     build_month_html(month_label(key), by_month[key], args.callback_url, args.callback_token),
                 )
                 upload_pdf(service, folder_id, f"chunk_{idx:03d}_{key}.pdf", chunk_pdf)
-                progress = 10 + int(80 * idx / max(len(months), 1))
+                # Cap below 80 so an auto-chained merge (which starts its own
+                # status updates around 84) never makes progress jump backward.
+                progress = 10 + int(65 * idx / max(len(months), 1))
                 report_status(args.callback_url, args.callback_token, args.job_id,
                               progress, f"Rendered {month_label(key)} ({idx + 1}/{total_chunks})")
 

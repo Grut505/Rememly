@@ -442,12 +442,22 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
 
     family_mask_width_px = max(1, round(2770 * family_scale_x))
     family_mask_height_px = max(1, round(family_font_px * family_scale_y))
+    family_mask_baseline_px = max(1, round(family_font_px * 0.86 * family_scale_y))
+    # Safety margin: the exact ascent/descent proportions of whatever font
+    # ends up rendering (bundled substitute or a future font swap) rarely
+    # match the "0.86" baseline calibration above pixel-for-pixel, which can
+    # leave a sliver of the glyph outside the box (visible as a small gap in
+    # the masked-title cover). Padding both sides equally - and shifting the
+    # baseline down by the same amount to keep it centered in the new room -
+    # gives headroom without depending on a specific font's exact metrics.
+    family_mask_safety_margin_px = round(family_mask_height_px * 0.2)
+    family_mask_height_px += family_mask_safety_margin_px * 2
+    family_mask_baseline_px += family_mask_safety_margin_px
     family_mask_width_cm = family_mask_width_px / 100
     family_mask_height_cm = family_mask_height_px / 100
     family_mask_trim_px = min(8, max(0, round(family_mask_height_px * 0.015)))
     family_mask_view_box_y = family_mask_trim_px
     family_mask_view_box_height_px = max(1, family_mask_height_px - family_mask_trim_px * 2)
-    family_mask_baseline_px = max(1, round(family_font_px * 0.86 * family_scale_y))
 
     family_outline_raw = options.get('cover_family_outline_px')
     try:

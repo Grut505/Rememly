@@ -52,10 +52,17 @@ def get_drive_service(credentials_path: str, token_path: str, use_console: bool)
     return build("drive", "v3", credentials=creds)
 
 
+API_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+}
+
+
 def api_call(callback_url: str, path: str, params: dict, method: str = "GET"):
     qs = urllib.parse.urlencode({"path": path, **params})
     url = f"{callback_url}?{qs}"
-    req = urllib.request.Request(url, method=method)
+    req = urllib.request.Request(url, method=method, headers=API_HEADERS)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             payload = json.loads(resp.read().decode("utf-8"))

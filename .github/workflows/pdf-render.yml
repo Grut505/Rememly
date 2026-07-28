@@ -40,6 +40,7 @@ jobs:
         run: |
           echo "${{ secrets.GDRIVE_CREDENTIALS_JSON }}" | base64 -d > credentials.json
           TOKEN_HTTP_CODE=$(curl -sS -L -G -o /tmp/render_token_response.json -w "%{http_code}" \
+            -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" \
             --data-urlencode "path=pdf/merge-token" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             "${CALLBACK_URL}")
@@ -82,6 +83,7 @@ jobs:
         run: |
           ERROR_MSG="$(tail -c 1500 /tmp/render_err.txt 2>/dev/null || echo 'GitHub Action failed')"
           STATUS_CODE=$(curl -sS -L -G -o /tmp/render_failed.json -w "%{http_code}" \
+            -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" \
             --data-urlencode "path=pdf/render-failed" \
             --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
             --data-urlencode "job_id=${{ inputs.job_id }}" \

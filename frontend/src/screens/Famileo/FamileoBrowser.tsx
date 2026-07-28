@@ -24,6 +24,7 @@ export function FamileoBrowser() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const [showFilters, setShowFilters] = useState(true)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState(() => {
     const today = new Date()
@@ -505,32 +506,41 @@ export function FamileoBrowser() {
   const visibleSelectedCount = visiblePosts.filter(post => selectedIds.has(post.id)).length
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-gray-50">
       <AppHeader />
-      <div
-        ref={pageRef}
-        className={`flex-1 overflow-y-auto overflow-x-hidden ${!loading && posts.length === 0 ? 'overflow-hidden' : ''}`}
-      >
 
-      {/* Title - sticky under main header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-20">
+      {/* Title - fixed, does not scroll */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3 z-20">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">Famileo Extractor</h2>
-          <button
-            onClick={handleRefreshSession}
-            disabled={refreshing || bulkCreating}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation disabled:opacity-50"
-            title="Refresh Famileo session"
-          >
-            <svg className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-            </svg>
-            <span>{refreshing ? 'Refreshing...' : 'Refresh Session'}</span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation"
+              title={showFilters ? 'Hide filters' : 'Show filters'}
+            >
+              <svg className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M19 9l-7 7-7-7"></path>
+              </svg>
+              <span>Filters</span>
+            </button>
+            <button
+              onClick={handleRefreshSession}
+              disabled={refreshing || bulkCreating}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation disabled:opacity-50"
+              title="Refresh Famileo session"
+            >
+              <svg className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg>
+              <span>{refreshing ? 'Refreshing...' : 'Refresh Session'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Filters */}
+      {showFilters && (
       <div className="bg-white border-b border-gray-200 px-4 py-4">
         <div className="flex flex-col gap-4">
           {/* Family selector */}
@@ -624,6 +634,7 @@ export function FamileoBrowser() {
           </button>
         </div>
       </div>
+      )}
 
       {/* Refresh success message */}
       {refreshMessage && (
@@ -638,6 +649,12 @@ export function FamileoBrowser() {
           {error}
         </div>
       )}
+
+      {/* Scrollable posts area only */}
+      <div
+        ref={pageRef}
+        className={`flex-1 overflow-y-auto overflow-x-hidden ${!loading && posts.length === 0 ? 'overflow-hidden' : ''}`}
+      >
 
       {/* Loading indicator */}
       {loading && (

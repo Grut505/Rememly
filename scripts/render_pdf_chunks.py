@@ -35,6 +35,7 @@ from playwright.sync_api import sync_playwright
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SEASONAL_IMAGES_DIR = REPO_ROOT / "tools" / "images"
+FONTS_DIR = REPO_ROOT / "tools" / "fonts"
 
 MONTHS_FR = [
     'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
@@ -707,10 +708,43 @@ def generate_month_chunk_html(month_articles: list, month_year_label: str, month
 
 
 # ---------------------------------------------------------------------------
+# Cover fonts (bundled substitutes, see tools/fonts/README.md)
+#
+# The GitHub Actions runner has none of Garamond/Palatino/Didot installed, so
+# Chromium fell back to a generic serif with different glyph metrics than the
+# baseline/scale math below was tuned for - visible as a gap in the
+# masked-title cover's vertical text. These free, metric/style-compatible
+# fonts are aliased under the exact family names already used in the CSS
+# below, so no other code needs to change.
+# ---------------------------------------------------------------------------
+
+def _font_face_css() -> str:
+    faces = [
+        ("EB Garamond", "EBGaramond-Regular.ttf", "truetype", "400 800"),
+        ("Palatino Linotype", "TeXGyrePagella-Regular.otf", "opentype", "400"),
+        ("Palatino Linotype", "TeXGyrePagella-Bold.otf", "opentype", "700 900"),
+        ("Didot", "GFSDidot-Regular.ttf", "truetype", "400 900"),
+    ]
+    blocks = []
+    for family, filename, fmt, weight_range in faces:
+        path = FONTS_DIR / filename
+        if not path.is_file():
+            continue
+        data = base64.b64encode(path.read_bytes()).decode('ascii')
+        mime = 'font/ttf' if fmt == 'truetype' else 'font/otf'
+        blocks.append(
+            f"@font-face {{ font-family: '{family}'; "
+            f"src: url(data:{mime};base64,{data}) format('{fmt}'); "
+            f"font-weight: {weight_range}; font-display: swap; }}"
+        )
+    return '\n'.join(blocks)
+
+
+# ---------------------------------------------------------------------------
 # CSS (ported verbatim from backend/src/pdf.js getPdfStyles())
 # ---------------------------------------------------------------------------
 
-PAGE_CSS = """
+PAGE_CSS = _font_face_css() + """
 @page { size: A4; margin: 1cm; }
 * { box-sizing: border-box; }
 body { font-family: Arial, sans-serif; margin: 0; padding: 0; }

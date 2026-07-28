@@ -448,7 +448,7 @@ export function PdfExport() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-gray-50">
       <AppHeader />
 
       {/* Header bar */}

@@ -206,7 +206,7 @@ export const pdfRenderJobHandler: RouteHandler = async (request, context) => {
   const articles = await context.env.DB.prepare(
     `select id, date, auteur, author_pseudo, texte, image_url, image_file_id
        from articles
-      where status = 'ACTIVE' and deleted_at is null and date >= ?1 and date <= ?2
+      where status = 'ACTIVE' and (deleted_at is null or deleted_at = '') and date >= ?1 and date <= ?2
       order by date asc`
   )
     .bind(job.date_from, job.date_to)

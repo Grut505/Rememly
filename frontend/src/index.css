@@ -9,10 +9,12 @@
 
   html {
     @apply min-h-screen;
+    overscroll-behavior-y: none;
   }
 
   body {
     @apply min-h-screen m-0 p-0 bg-primary-600 text-gray-900 font-sans antialiased;
+    overscroll-behavior-y: none;
   }
 
   #root {

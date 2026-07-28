@@ -45,7 +45,6 @@ export function ArticleEditor() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showFamileoPoster, setShowFamileoPoster] = useState(false)
   const [articleStatus, setArticleStatus] = useState<ArticleStatus>('DRAFT')
-  const contentRef = useRef<HTMLDivElement>(null)
 
   const isEditMode = !!id
   const isDeleted = articleStatus === 'DELETED'
@@ -99,22 +98,11 @@ export function ArticleEditor() {
   }, [isEditMode, photoFile, loadedImageSrc])
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-    const previousHeight = document.body.style.height
-    document.body.style.overflow = 'hidden'
-    document.body.style.height = '100%'
-    return () => {
-      document.body.style.overflow = previousOverflow
-      document.body.style.height = previousHeight
-    }
-  }, [])
-
-  useEffect(() => {
     if (isLoading) return
     requestAnimationFrame(() => {
-      contentRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
       requestAnimationFrame(() => {
-        contentRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
       })
     })
   }, [id, isLoading, location.key])
@@ -277,8 +265,8 @@ export function ArticleEditor() {
         </button>
       </header>
 
-      {/* Content - scrollable */}
-      <div ref={contentRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-6 pb-28 overscroll-contain">
+      {/* Content */}
+      <div className="flex-1 p-4 space-y-6 pb-28">
         <DateTimeInput value={dateModification} onChange={setDateModification} />
 
         <div className="flex items-center justify-between">

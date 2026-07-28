@@ -7,6 +7,8 @@ import { Switch } from '../../ui/Switch'
 import { pdfApi, PdfListItem } from '../../api/pdf'
 import { PdfGenerateModal } from './PdfGenerateModal'
 import { FloatingActionButton } from '../../ui/FloatingActionButton'
+import { PullToRefreshIndicator } from '../../ui/PullToRefreshIndicator'
+import { usePullToRefresh } from '../../hooks/usePullToRefresh'
 import { usePdfGenerationStore } from '../../stores/pdfGenerationStore'
 import { useAuth } from '../../hooks/useAuth'
 import { useProfile } from '../../contexts/ProfileContext'
@@ -22,13 +24,6 @@ export function PdfExport() {
   const [pdfList, setPdfList] = useState<PdfListItem[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [pullDistance, setPullDistance] = useState(0)
-  const [isPulling, setIsPulling] = useState(false)
-  const touchStartYRef = useRef<number | null>(null)
-  const listRef = useRef<HTMLDivElement | null>(null)
-  const pullThreshold = 70
-  const pullStartThreshold = 14
-  const pullMax = 120
   const [error, setError] = useState<string | null>(null)
 
   // Filters
@@ -87,17 +82,15 @@ export function PdfExport() {
     }
   }, [fetchPdfList, loadingList, isRefreshing])
 
+  const pullToRefresh = usePullToRefresh({
+    onRefresh: refreshPdfList,
+    isRefreshing,
+    disabled: loadingList,
+  })
+
   useEffect(() => {
     loadPdfList()
   }, [loadPdfList])
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previousOverflow
-    }
-  }, [])
 
   // Track previous statuses to detect completion (ref, not state - this is
   // pure bookkeeping for the effect below and must not trigger a re-render,
@@ -414,49 +407,13 @@ export function PdfExport() {
     setCleanupJobId(null)
   }
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const scrollTop = listRef.current?.scrollTop ?? 0
-    if (scrollTop <= 0 && !isRefreshing && !loadingList) {
-      touchStartYRef.current = e.touches[0].clientY
-      setIsPulling(false)
-    }
-  }
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (isRefreshing || loadingList) return
-    const scrollTop = listRef.current?.scrollTop ?? 0
-    if (scrollTop > 0) {
-      setPullDistance(0)
-      setIsPulling(false)
-      touchStartYRef.current = null
-      return
-    }
-    if (touchStartYRef.current === null) {
-      touchStartYRef.current = e.touches[0].clientY
-    }
-    const delta = e.touches[0].clientY - touchStartYRef.current
-    if (delta <= pullStartThreshold) {
-      setPullDistance(0)
-      setIsPulling(false)
-      return
-    }
-    const adjusted = delta - pullStartThreshold
-    const rubberBand = (pullMax * adjusted) / (adjusted + pullMax)
-    setPullDistance(Math.min(pullStartThreshold + rubberBand, pullMax))
-    setIsPulling(true)
-  }
-
-  const handleTouchEnd = () => {
-    if (pullDistance >= pullThreshold && !isRefreshing && !loadingList) {
-      refreshPdfList()
-    }
-    setPullDistance(0)
-    setIsPulling(false)
-    touchStartYRef.current = null
-  }
-
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div
+      className="min-h-screen flex flex-col bg-gray-50"
+      onTouchStart={pullToRefresh.onTouchStart}
+      onTouchMove={pullToRefresh.onTouchMove}
+      onTouchEnd={pullToRefresh.onTouchEnd}
+    >
       <AppHeader />
 
       {/* Header bar */}
@@ -624,72 +581,13 @@ export function PdfExport() {
       )}
 
       {/* List content */}
-      <div
-        ref={listRef}
-        className="flex-1 overflow-y-auto overscroll-contain"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        <div className="relative p-4 pb-24">
-        {(pullDistance > 0 || isRefreshing) && (
-          <div
-            className="absolute left-0 right-0 flex items-center justify-center pointer-events-none"
-            style={{
-              top: 0,
-              transform: `translateY(${Math.min(pullDistance, 80)}px)`,
-              transition: isPulling ? 'none' : 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 200ms ease',
-              opacity: Math.min(1, pullDistance / 40),
-              zIndex: 5,
-            }}
-          >
-            <div className="flex items-center gap-3 bg-white px-3 py-2 rounded-full shadow-sm border border-gray-200">
-              <div className="relative w-6 h-6">
-                <svg className="absolute inset-0 w-6 h-6 text-gray-200" viewBox="0 0 36 36">
-                  <path
-                    d="M18 2.0845
-                       a 15.9155 15.9155 0 0 1 0 31.831
-                       a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                  />
-                </svg>
-                <svg
-                  className={`absolute inset-0 w-6 h-6 ${isRefreshing ? 'animate-spin text-primary-600' : 'text-primary-600'}`}
-                  viewBox="0 0 36 36"
-                  style={{
-                    transform: `rotate(-90deg)`,
-                    transformOrigin: '50% 50%',
-                    strokeDasharray: `${Math.min(100, (pullDistance / pullThreshold) * 100)}, 100`,
-                    transition: 'stroke-dasharray 120ms ease',
-                  }}
-                >
-                  <path
-                    d="M18 2.0845
-                       a 15.9155 15.9155 0 0 1 0 31.831
-                       a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <div className={`absolute inset-0 flex items-center justify-center transition-transform ${pullDistance >= pullThreshold ? 'rotate-180' : ''}`}>
-                  <svg className={`w-3.5 h-3.5 ${isRefreshing ? 'hidden' : 'block'} text-primary-700`} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                    <path d="M12 5v14m0 0l-5-5m5 5l5-5"></path>
-                  </svg>
-                  <svg className={`w-3.5 h-3.5 ${isRefreshing ? 'block' : 'hidden'} text-primary-700`} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                    <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                  </svg>
-                </div>
-              </div>
-              <span className="text-xs text-gray-600">
-                {isRefreshing ? 'Refreshing...' : (pullDistance >= pullThreshold ? 'Release to refresh' : 'Pull to refresh')}
-              </span>
-            </div>
-          </div>
-        )}
+      <div className="relative p-4 pb-24">
+        <PullToRefreshIndicator
+          pullDistance={pullToRefresh.pullDistance}
+          isPulling={pullToRefresh.isPulling}
+          isRefreshing={isRefreshing}
+          pullThreshold={pullToRefresh.pullThreshold}
+        />
         {loadingList ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center">
@@ -964,7 +862,6 @@ export function PdfExport() {
             )}
           </>
         )}
-        </div>
       </div>
 
       {/* Selection Mode Action Bar */}

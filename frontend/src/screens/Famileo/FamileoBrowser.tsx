@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { AppHeader } from '../../ui/AppHeader'
+import { PullToRefreshIndicator } from '../../ui/PullToRefreshIndicator'
+import { usePullToRefresh } from '../../hooks/usePullToRefresh'
 import { Modal } from '../../ui/Modal'
 import { famileoApi, FamileoPost, FamileoFamily } from '../../api/famileo'
 import { usersApi, DeclaredUser } from '../../api/users'
@@ -75,7 +77,6 @@ export function FamileoBrowser() {
   const [postFingerprints, setPostFingerprints] = useState<Record<number, string>>({})
   const [hashingPosts, setHashingPosts] = useState(false)
 
-  const pageRef = useRef<HTMLDivElement>(null)
   const [hideImported, setHideImported] = useState(false)
 
   // Load families and imported IDs on mount
@@ -105,18 +106,10 @@ export function FamileoBrowser() {
   }, [])
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previousOverflow
-    }
-  }, [])
-
-  useEffect(() => {
     requestAnimationFrame(() => {
-      pageRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
       requestAnimationFrame(() => {
-        pageRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
       })
     })
   }, [location.key])
@@ -321,6 +314,12 @@ export function FamileoBrowser() {
     }
   }
 
+  const pullToRefresh = usePullToRefresh({
+    onRefresh: handleGetPosts,
+    isRefreshing: loading,
+    disabled: loadingFamilies || bulkCreating,
+  })
+
   const handleCancelGetPosts = () => {
     if (abortRef.current) {
       abortRef.current.abort()
@@ -506,11 +505,17 @@ export function FamileoBrowser() {
   const visibleSelectedCount = visiblePosts.filter(post => selectedIds.has(post.id)).length
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div
+      className="min-h-screen flex flex-col bg-gray-50"
+      onTouchStart={pullToRefresh.onTouchStart}
+      onTouchMove={pullToRefresh.onTouchMove}
+      onTouchEnd={pullToRefresh.onTouchEnd}
+    >
       <AppHeader />
 
-      {/* Title - fixed, does not scroll */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 z-20">
+      {/* Title + filters - sticky as one unit, stays visible while posts scroll */}
+      <div className="sticky app-safe-top-14 z-20 bg-white">
+      <div className="border-b border-gray-200 px-4 py-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">Famileo Extractor</h2>
           <div className="flex items-center gap-1">
@@ -635,6 +640,7 @@ export function FamileoBrowser() {
         </div>
       </div>
       )}
+      </div>
 
       {/* Refresh success message */}
       {refreshMessage && (
@@ -650,11 +656,14 @@ export function FamileoBrowser() {
         </div>
       )}
 
-      {/* Scrollable posts area only */}
-      <div
-        ref={pageRef}
-        className={`flex-1 overflow-y-auto overflow-x-hidden ${!loading && posts.length === 0 ? 'overflow-hidden' : ''}`}
-      >
+      {/* Posts area */}
+      <div className="flex-1 relative">
+        <PullToRefreshIndicator
+          pullDistance={pullToRefresh.pullDistance}
+          isPulling={pullToRefresh.isPulling}
+          isRefreshing={loading}
+          pullThreshold={pullToRefresh.pullThreshold}
+        />
 
       {/* Loading indicator */}
       {loading && (

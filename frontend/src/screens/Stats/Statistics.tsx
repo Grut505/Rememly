@@ -7,6 +7,8 @@ import { ErrorMessage } from '../../ui/ErrorMessage'
 import { MONTHS_EN } from '../../utils/constants'
 import { getCurrentYear } from '../../utils/date'
 import { AppHeader } from '../../ui/AppHeader'
+import { PullToRefreshIndicator } from '../../ui/PullToRefreshIndicator'
+import { usePullToRefresh } from '../../hooks/usePullToRefresh'
 import { useArticlesStore } from '../../state/articlesStore'
 
 interface MonthStats {
@@ -33,6 +35,7 @@ export function Statistics() {
   const navigate = useNavigate()
   const setFilters = useArticlesStore((state) => state.setFilters)
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [years, setYears] = useState<YearStats[]>([])
   const [selectedYear, setSelectedYear] = useState<number | null>(getCurrentYear())
@@ -41,8 +44,12 @@ export function Statistics() {
     loadStats()
   }, [])
 
-  const loadStats = async () => {
-    setIsLoading(true)
+  const loadStats = async (silent = false) => {
+    if (silent) {
+      setIsRefreshing(true)
+    } else {
+      setIsLoading(true)
+    }
     setError(null)
 
     try {
@@ -127,8 +134,15 @@ export function Statistics() {
       setError(err instanceof Error ? err.message : 'Failed to load statistics')
     } finally {
       setIsLoading(false)
+      setIsRefreshing(false)
     }
   }
+
+  const pullToRefresh = usePullToRefresh({
+    onRefresh: () => loadStats(true),
+    isRefreshing,
+    disabled: isLoading,
+  })
 
   const openYear = (year: number, statusFilter: 'active' | 'draft' | 'deleted' | 'all' = 'active') => {
     setFilters({
@@ -163,11 +177,22 @@ export function Statistics() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div
+      className="min-h-screen flex flex-col bg-gray-50"
+      onTouchStart={pullToRefresh.onTouchStart}
+      onTouchMove={pullToRefresh.onTouchMove}
+      onTouchEnd={pullToRefresh.onTouchEnd}
+    >
       <AppHeader />
 
       {/* Content */}
-      <div className="flex-1 p-4 pb-24">
+      <div className="flex-1 relative p-4 pb-24">
+        <PullToRefreshIndicator
+          pullDistance={pullToRefresh.pullDistance}
+          isPulling={pullToRefresh.isPulling}
+          isRefreshing={isRefreshing}
+          pullThreshold={pullToRefresh.pullThreshold}
+        />
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center">

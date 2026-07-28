@@ -154,6 +154,22 @@ def resize_image_bytes(data: bytes, max_dim: int):
         return None
 
 
+def looks_like_screenshot(data: bytes) -> bool:
+    """Heuristic: app/UI screenshots (e.g. a Famileo post screenshot mixed in
+    among real photos) tend to have a much larger near-white area than real
+    family photos - even bright snow/beach shots. Used to keep such images
+    out of the cover mosaic, where a repeated mostly-white tile reads as a
+    gap in the masked-title text."""
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            thumb = im.convert('RGB').resize((32, 32))
+            pixels = thumb.getdata()
+            near_white = sum(1 for r, g, b in pixels if r > 245 and g > 245 and b > 245)
+            return (near_white / len(pixels)) > 0.55
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Smart mosaic layout (justified rows) - ported from generateSmartMosaicLayout
 # ---------------------------------------------------------------------------
@@ -344,7 +360,7 @@ def generate_cover_mosaic(articles: list, date_from: str, date_to: str, max_phot
         if len(images) >= photo_limit:
             break
         data = fetch_image_bytes(article, callback_url, callback_token)
-        if not data:
+        if not data or looks_like_screenshot(data):
             continue
         resized = resize_image_bytes(data, COVER_MAX_DIM)
         if resized:
@@ -534,7 +550,7 @@ def generate_cover_masked_mosaic(articles: list, max_photos: Optional[int], opti
         if len(images) >= photo_limit:
             break
         data = fetch_image_bytes(article, callback_url, callback_token)
-        if not data:
+        if not data or looks_like_screenshot(data):
             continue
         resized = resize_image_bytes(data, COVER_MASK_MAX_DIM)
         if resized:
@@ -605,7 +621,7 @@ def generate_month_divider(month_articles: list, month_year_label: str, month_in
         if len(images) >= 12:
             break
         data = fetch_image_bytes(article, callback_url, callback_token)
-        if not data:
+        if not data or looks_like_screenshot(data):
             continue
         resized = resize_image_bytes(data, COVER_MAX_DIM)
         if resized:

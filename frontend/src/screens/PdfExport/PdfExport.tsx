@@ -91,8 +91,10 @@ export function PdfExport() {
     loadPdfList()
   }, [loadPdfList])
 
-  // Track previous statuses to detect completion
-  const [previousStatuses, setPreviousStatuses] = useState<Map<string, string>>(new Map())
+  // Track previous statuses to detect completion (ref, not state - this is
+  // pure bookkeeping for the effect below and must not trigger a re-render,
+  // otherwise the effect re-runs forever comparing against its own update)
+  const previousStatusesRef = useRef<Map<string, string>>(new Map())
   const { setLastCompletedJob } = usePdfGenerationStore()
 
   // Separate in-progress and completed jobs
@@ -144,7 +146,7 @@ export function PdfExport() {
     const newStatuses = new Map(pdfList.map(p => [p.job_id, p.status]))
 
     // Check if any job just completed
-    for (const [jobId, oldStatus] of previousStatuses) {
+    for (const [jobId, oldStatus] of previousStatusesRef.current) {
       const newStatus = newStatuses.get(jobId)
       if ((oldStatus === 'PENDING' || oldStatus === 'RUNNING') && newStatus === 'DONE') {
         // Job just completed successfully
@@ -155,8 +157,8 @@ export function PdfExport() {
       }
     }
 
-    setPreviousStatuses(newStatuses)
-  }, [pdfList, previousStatuses, setLastCompletedJob])
+    previousStatusesRef.current = newStatuses
+  }, [pdfList, setLastCompletedJob])
 
   // No full refresh on completion; list is updated locally.
 

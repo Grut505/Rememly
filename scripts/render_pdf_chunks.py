@@ -912,6 +912,13 @@ def render_html_to_pdf(browser, html_content: str) -> bytes:
     page = browser.new_page()
     try:
         page.set_content(html_content, wait_until="load", timeout=60000)
+        # @font-face fonts load asynchronously and don't block the "load"
+        # event (especially with font-display: swap) - without this, the PDF
+        # can be captured mid-swap, using fallback-font metrics instead of
+        # the bundled fonts, which showed up as an inconsistent gap in the
+        # masked-title cover's vertical text between renders.
+        page.evaluate("document.fonts.ready")
+        page.wait_for_function("document.fonts.status === 'loaded'", timeout=15000)
         return page.pdf(print_background=True)
     finally:
         page.close()

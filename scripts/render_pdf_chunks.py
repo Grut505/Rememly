@@ -118,21 +118,34 @@ def format_datetime_fr(date_str: str) -> str:
 # Image fetching / resizing (mirrors Apps Script's resizeImageBlob)
 # ---------------------------------------------------------------------------
 
+PLACEHOLDER_MIN_BYTES = 10_000
+
+
 def fetch_image_bytes(article: dict, callback_url: str, callback_token: str) -> Optional[bytes]:
     file_id = article.get('image_file_id')
     if not file_id:
         return None
-    if '/' in file_id:
+    is_drive_thumbnail = '/' not in file_id
+    if is_drive_thumbnail:
+        url = f"https://drive.google.com/thumbnail?id={urllib.parse.quote(file_id)}&sz=w2000"
+    else:
         qs = urllib.parse.urlencode({'path': 'pdf/render-image', 'token': callback_token, 'file_id': file_id})
         url = f"{callback_url}?{qs}"
-    else:
-        url = f"https://drive.google.com/thumbnail?id={urllib.parse.quote(file_id)}&sz=w2000"
     try:
         req = urllib.request.Request(url, headers=API_HEADERS)
         with urllib.request.urlopen(req, timeout=30) as resp:
-            return resp.read()
+            data = resp.read()
     except Exception:
         return None
+    # Drive's public thumbnail endpoint doesn't error on a missing/inaccessible
+    # file - it silently serves a small generic "no preview" icon (HTTP 200).
+    # Real photos requested at sz=w2000 are never this small, so treat an
+    # implausibly tiny response as a failed fetch rather than real content
+    # (a real placeholder icon repeating through the mosaic looked like a
+    # gap in the masked-title cover text).
+    if is_drive_thumbnail and len(data) < PLACEHOLDER_MIN_BYTES:
+        return None
+    return data
 
 
 def resize_image_bytes(data: bytes, max_dim: int):

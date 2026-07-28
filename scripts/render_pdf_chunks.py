@@ -156,16 +156,24 @@ def resize_image_bytes(data: bytes, max_dim: int):
 
 def looks_like_screenshot(data: bytes) -> bool:
     """Heuristic: app/UI screenshots (e.g. a Famileo post screenshot mixed in
-    among real photos) tend to have a much larger near-white area than real
-    family photos - even bright snow/beach shots. Used to keep such images
-    out of the cover mosaic, where a repeated mostly-white tile reads as a
-    gap in the masked-title text."""
+    among real photos) tend to have either a large light/white background or
+    one flat dominant color covering most of the image - real family photos
+    rarely do, even bright snow/beach shots (natural light still has some
+    gradient/texture). Used to keep such images out of the cover mosaic,
+    where a repeated flat-background tile reads as a gap in the masked-title
+    text."""
     try:
         with Image.open(io.BytesIO(data)) as im:
             thumb = im.convert('RGB').resize((32, 32))
-            pixels = thumb.getdata()
-            near_white = sum(1 for r, g, b in pixels if r > 245 and g > 245 and b > 245)
-            return (near_white / len(pixels)) > 0.55
+            pixels = list(thumb.getdata())
+            total = len(pixels)
+            near_light = sum(1 for r, g, b in pixels if r > 230 and g > 230 and b > 230)
+            quantized = {}
+            for r, g, b in pixels:
+                key = (r // 16, g // 16, b // 16)
+                quantized[key] = quantized.get(key, 0) + 1
+            dominant_fraction = max(quantized.values()) / total
+            return (near_light / total) > 0.4 or dominant_fraction > 0.5
     except Exception:
         return False
 

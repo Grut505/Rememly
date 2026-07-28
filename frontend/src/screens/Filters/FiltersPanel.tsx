@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
+import { DatePicker } from '../../ui/DatePicker'
 import { MONTHS_EN, isStandalonePWA } from '../../utils/constants'
 import { getCurrentYear } from '../../utils/date'
 import { articlesApi } from '../../api/articles'
@@ -185,35 +186,29 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
         {/* Date Range */}
         <div className="flex gap-2 w-full">
           <div className="min-w-0 flex-1">
-            <Input
-              type="date"
+            <DatePicker
               label="From"
               value={dateFrom}
-              onChange={(e) => {
-                const next = e.target.value
+              onChange={(next) => {
                 setDateFrom(next)
                 if (dateTo && next && dateTo < next) {
                   setDateTo(next)
                 }
               }}
               max={dateTo || undefined}
-              className="min-w-0"
             />
           </div>
           <div className="min-w-0 flex-1">
-            <Input
-              type="date"
+            <DatePicker
               label="To"
               value={dateTo}
-              onChange={(e) => {
-                const next = e.target.value
+              onChange={(next) => {
                 setDateTo(next)
                 if (dateFrom && next && next < dateFrom) {
                   setDateFrom(next)
                 }
               }}
               min={dateFrom || undefined}
-              className="min-w-0"
             />
           </div>
         </div>

@@ -6,6 +6,7 @@ import { storageService } from '../../services/storage.service'
 import { articlesApi } from '../../api/articles'
 import { useArticlesStore } from '../../state/articlesStore'
 import { useUiStore } from '../../state/uiStore'
+import { configApi } from '../../api/config'
 import { Button } from '../../ui/Button'
 import { LoadingScreen, Spinner } from '../../ui/Spinner'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
@@ -45,6 +46,7 @@ export function ArticleEditor() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showFamileoPoster, setShowFamileoPoster] = useState(false)
   const [articleStatus, setArticleStatus] = useState<ArticleStatus>('DRAFT')
+  const [autoDateFromPhoto, setAutoDateFromPhoto] = useState(true)
 
   const isEditMode = !!id
   const isDeleted = articleStatus === 'DELETED'
@@ -90,6 +92,12 @@ export function ArticleEditor() {
       loadArticle()
     }
   }, [id])
+
+  useEffect(() => {
+    configApi.get('auto_date_from_photo')
+      .then((result) => setAutoDateFromPhoto(result.value !== 'false'))
+      .catch(() => setAutoDateFromPhoto(true))
+  }, [])
 
   useEffect(() => {
     if (isEditMode && !photoFile && loadedImageSrc) {
@@ -142,7 +150,7 @@ export function ArticleEditor() {
     setPreviewUrl(url)
 
     // If EXIF date was extracted and we're creating a new article, use it
-    if (exifDate && !isEditMode) {
+    if (exifDate && !isEditMode && autoDateFromPhoto) {
       setDateModification(exifDate.toISOString())
     }
   }

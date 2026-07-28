@@ -58,6 +58,7 @@ export function Timeline() {
   const cursorRef = useRef<string | null>(null)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [applyNonce, setApplyNonce] = useState(0)
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -179,6 +180,11 @@ export function Timeline() {
         statusFilter: filterValues.statusFilter,
         sourceFilter: filterValues.sourceFilter,
       })
+    // Filter values may be identical to what's already applied (e.g. Apply
+    // clicked with no changes) - the effect below is keyed on those scalar
+    // values, so it wouldn't re-fire and articles would stay cleared. This
+    // nonce guarantees a reload happens every time Apply is clicked.
+    setApplyNonce((n) => n + 1)
   }
 
   const handleArticleDeleted = (id: string) => {
@@ -387,6 +393,7 @@ export function Timeline() {
     filters.duplicatesOnly,
     filters.statusFilter,
     filters.sourceFilter,
+    applyNonce,
   ])
 
   const headerDisabled = isLoading
@@ -466,11 +473,6 @@ export function Timeline() {
                 <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                   <path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
                 </svg>
-                {hasActiveFilters && (
-                  <span className="ml-1 bg-white text-primary-600 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                    !
-                  </span>
-                )}
               </button>
             </>
           )}

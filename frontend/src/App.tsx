@@ -21,6 +21,7 @@ import { UpdatePrompt } from './components/UpdatePrompt'
 import { PdfGenerationNotification } from './components/PdfGenerationNotification'
 import { UnsavedChangesGuard } from './components/UnsavedChangesGuard'
 import { BottomNav } from './ui/BottomNav'
+import { Toast } from './ui/Toast'
 
 function App() {
   const [landscapeBlocked, setLandscapeBlocked] = useState(false)
@@ -110,6 +111,7 @@ function App() {
         <UpdatePrompt />
         <PdfGenerationNotification />
         <UnsavedChangesGuard />
+        <Toast />
         {landscapeBlocked ? (
           <div className="min-h-screen bg-white flex items-center justify-center text-center px-6">
             <div className="max-w-md">

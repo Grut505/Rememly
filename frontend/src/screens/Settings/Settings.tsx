@@ -33,6 +33,8 @@ export function Settings() {
   const { showToast, setUnsavedChanges } = useUiStore()
   const backendUrl = import.meta.env.VITE_APPS_SCRIPT_URL || ''
 
+  const [autoDateFromPhoto, setAutoDateFromPhoto] = useState(true)
+  const [initialAutoDateFromPhoto, setInitialAutoDateFromPhoto] = useState(true)
   const [familyName, setFamilyName] = useState('')
   const [initialFamilyName, setInitialFamilyName] = useState('')
   const [coverTitle, setCoverTitle] = useState('')
@@ -114,7 +116,8 @@ export function Settings() {
   } | null>(null)
   const [usersLoading, setUsersLoading] = useState(false)
   const [users, setUsers] = useState<DeclaredUser[]>([])
-  const isDirty = familyName.trim() !== initialFamilyName.trim()
+  const isDirty = autoDateFromPhoto !== initialAutoDateFromPhoto
+    || familyName.trim() !== initialFamilyName.trim()
     || coverTitle.trim() !== initialCoverTitle.trim()
     || coverSubtitle.trim() !== initialCoverSubtitle.trim()
     || familyLetterSpacingEm !== initialFamilyLetterSpacingEm
@@ -142,12 +145,24 @@ export function Settings() {
 
   useEffect(() => {
     loadConfig()
+    loadAutoDateSetting()
     loadLogsRange()
     loadFamileoLogsRange()
     loadUsers()
     cleanupStaleCoverPreview()
     loadMergeTokenStatus()
   }, [])
+
+  const loadAutoDateSetting = async () => {
+    try {
+      const result = await configApi.get('auto_date_from_photo')
+      const value = result.value !== 'false'
+      setAutoDateFromPhoto(value)
+      setInitialAutoDateFromPhoto(value)
+    } catch {
+      // keep default (enabled)
+    }
+  }
 
   const loadConfig = async () => {
     try {
@@ -358,6 +373,7 @@ export function Settings() {
       const nextTitle = coverTitle.trim()
       const nextSubtitle = coverSubtitle.trim()
       await Promise.all([
+        configApi.set('auto_date_from_photo', String(autoDateFromPhoto)),
         configApi.set('family_name', nextValue),
         configApi.set('pdf_cover_title', nextTitle),
         configApi.set('pdf_cover_subtitle', nextSubtitle),
@@ -384,6 +400,7 @@ export function Settings() {
         configApi.set('pdf_cover_subtitle_x_cm', String(coverSubtitleXcm)),
         configApi.set('pdf_cover_subtitle_h_cm', String(coverSubtitleFontCm)),
       ])
+      setInitialAutoDateFromPhoto(autoDateFromPhoto)
       setFamilyName(nextValue)
       setInitialFamilyName(nextValue)
       setCoverTitle(nextTitle)
@@ -782,6 +799,23 @@ export function Settings() {
                   </table>
                 </div>
               )}
+            </div>
+
+            {/* Article editor */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Article editor</h3>
+              <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={autoDateFromPhoto}
+                  onChange={(e) => setAutoDateFromPhoto(e.target.checked)}
+                  className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Auto-set date from photo</span>
+                  <p className="text-xs text-gray-500">When creating a new article, use the selected photo's date instead of today's date</p>
+                </div>
+              </label>
             </div>
 
             {/* Family Name */}

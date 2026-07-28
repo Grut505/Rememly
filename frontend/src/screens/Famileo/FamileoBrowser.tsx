@@ -11,6 +11,8 @@ import { usersApi, DeclaredUser } from '../../api/users'
 import { FamileoPostCard } from './FamileoPostCard'
 import { articlesService } from '../../services/articles.service'
 import { useAuth } from '../../auth/AuthContext'
+import { isStandalonePWA } from '../../utils/constants'
+import { DatePicker } from '../../ui/DatePicker'
 
 interface ImageCache {
   [postId: number]: { base64: string; mimeType: string }
@@ -26,6 +28,7 @@ export function FamileoBrowser() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const isStandalone = isStandalonePWA()
   const [showFilters, setShowFilters] = useState(true)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState(() => {
@@ -516,29 +519,32 @@ export function FamileoBrowser() {
       {/* Title + filters - sticky as one unit, stays visible while posts scroll */}
       <div className="sticky app-safe-top-14 z-20 bg-white">
       <div className="border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Famileo Extractor</h2>
-          <div className="flex items-center gap-1">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-gray-900 truncate min-w-0 flex-1">Famileo Extractor</h2>
+          <div className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={() => setShowFilters(!showFilters)}
               className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation"
               title={showFilters ? 'Hide filters' : 'Show filters'}
+              aria-expanded={showFilters}
+              aria-label={showFilters ? 'Hide filters' : 'Show filters'}
             >
               <svg className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                 <path d="M19 9l-7 7-7-7"></path>
               </svg>
-              <span>Filters</span>
+              <span className="hidden sm:inline">Filters</span>
             </button>
             <button
               onClick={handleRefreshSession}
               disabled={refreshing || bulkCreating}
               className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors touch-manipulation disabled:opacity-50"
               title="Refresh Famileo session"
+              aria-label={refreshing ? 'Refreshing session' : 'Refresh Famileo session'}
             >
               <svg className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                 <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
               </svg>
-              <span>{refreshing ? 'Refreshing...' : 'Refresh Session'}</span>
+              <span className="hidden sm:inline">{refreshing ? 'Refreshing...' : 'Refresh Session'}</span>
             </button>
           </div>
         </div>
@@ -581,28 +587,10 @@ export function FamileoBrowser() {
           {/* Date filters */}
           <div className="flex gap-2">
             <div className="flex-1 min-w-0">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Start Date
-              </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                disabled={loading || bulkCreating}
-                className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 text-gray-900 bg-white appearance-none"
-              />
+              <DatePicker label="Start Date" value={startDate} onChange={setStartDate} max={endDate || undefined} />
             </div>
             <div className="flex-1 min-w-0">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                End Date
-              </label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                disabled={loading || bulkCreating}
-                className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 text-gray-900 bg-white appearance-none"
-              />
+              <DatePicker label="End Date" value={endDate} onChange={setEndDate} min={startDate || undefined} />
             </div>
           </div>
           {/* Author filter */}
@@ -684,26 +672,26 @@ export function FamileoBrowser() {
         <div className="flex-1 py-4 pb-24">
           {/* Selection controls */}
           <div className="px-4 mb-3 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-500">
-                {posts.length} post{posts.length > 1 ? 's' : ''} found
-                {selectedCount > 0 && (
-                  <span className="ml-2 text-primary-600 font-medium">
-                    ({selectedCount} selected)
-                  </span>
-                )}
-                {hashingPosts && (
-                  <span className="ml-2 text-gray-400">
-                    • hashing…
-                  </span>
-                )}
-                {authorCounts && (
-                  <span className="ml-2 text-gray-400">
-                    • {authorCounts.declared} declared / {authorCounts.others} others
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
+            <div className="text-sm text-gray-500">
+              {posts.length} post{posts.length > 1 ? 's' : ''} found
+              {selectedCount > 0 && (
+                <span className="ml-2 text-primary-600 font-medium">
+                  ({selectedCount} selected)
+                </span>
+              )}
+              {hashingPosts && (
+                <span className="ml-2 text-gray-400">
+                  • hashing…
+                </span>
+              )}
+              {authorCounts && (
+                <span className="ml-2 text-gray-400">
+                  • {authorCounts.declared} declared / {authorCounts.others} others
+                </span>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
                 <select
                   value={viewMode}
                   onChange={(e) => setViewMode(e.target.value as 'card' | 'list' | 'mosaic')}
@@ -726,14 +714,14 @@ export function FamileoBrowser() {
                     <option value={4}>4 cols</option>
                   </select>
                 )}
-                <button
-                  onClick={handleSelectAll}
-                  disabled={bulkCreating}
-                  className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-                >
-                  {visibleSelectedCount === visiblePosts.length ? 'Deselect All' : 'Select All'}
-                </button>
               </div>
+              <button
+                onClick={handleSelectAll}
+                disabled={bulkCreating}
+                className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+              >
+                {visibleSelectedCount === visiblePosts.length ? 'Deselect All' : 'Select All'}
+              </button>
             </div>
           {/* Hide imported toggle */}
           <div className="flex items-center gap-2">
@@ -811,7 +799,7 @@ export function FamileoBrowser() {
 
       {/* Bulk create button - fixed at bottom */}
       {!loading && posts.length > 0 && (
-        <div className={`fixed bottom-16 left-0 right-0 bg-white border-t border-gray-200 p-4 z-40 ${bulkCreating ? 'pointer-events-none' : ''}`}>
+        <div className={`fixed left-0 right-0 bg-white border-t border-gray-200 p-4 z-40 ${isStandalone ? 'bottom-20' : 'bottom-16'} ${bulkCreating ? 'pointer-events-none' : ''}`}>
           <div className="max-w-content mx-auto">
             <button
               onClick={handleBulkCreate}

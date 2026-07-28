@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from '../../ui/Button'
+import { DatePicker } from '../../ui/DatePicker'
 import { articlesApi } from '../../api/articles'
 import { Article } from '../../api/types'
 import { getMonthYear } from '../../utils/date'
@@ -22,24 +23,6 @@ interface MonthCount {
 }
 
 type Step = 'dates' | 'preview' | 'options'
-
-const parseDateParts = (value: string) => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  if (!match) return { y: '', m: '', d: '' }
-  return { y: match[1], m: match[2], d: match[3] }
-}
-
-const buildDateString = (y: string, m: string, d: string) => {
-  if (!y || !m || !d) return ''
-  return `${y}-${m}-${d}`
-}
-
-const getDaysInMonth = (year: string, month: string) => {
-  const y = Number(year)
-  const m = Number(month)
-  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return 31
-  return new Date(y, m, 0).getDate()
-}
 
 export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateModalProps) {
   const { startGeneration, isGenerating } = usePdfGenerationStore()
@@ -64,12 +47,6 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const [coverStyle, setCoverStyle] = useState<'mosaic' | 'masked-title'>('masked-title')
   const [autoMerge, setAutoMerge] = useState(true)
   const [cleanChunksAfterMerge, setCleanChunksAfterMerge] = useState(true)
-  const [activePicker, setActivePicker] = useState<'start' | 'end'>('start')
-  const [tempDate, setTempDate] = useState({ y: '', m: '', d: '' })
-  const [isPwa, setIsPwa] = useState(false)
-
-  const currentYear = new Date().getFullYear()
-  const yearOptions = Array.from({ length: 26 }, (_, i) => String(currentYear - 10 + i))
 
   const reset = () => {
     setStep('dates')
@@ -200,34 +177,6 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   }
 
 
-  const openDatePicker = (which: 'start' | 'end') => {
-    const source = which === 'start' ? startDate : endDate
-    const parts = parseDateParts(source)
-    if (!parts.y || !parts.m || !parts.d) {
-      const today = new Date()
-      parts.y = String(today.getFullYear())
-      parts.m = String(today.getMonth() + 1).padStart(2, '0')
-      parts.d = String(today.getDate()).padStart(2, '0')
-    }
-    setTempDate(parts)
-    setActivePicker(which)
-  }
-
-  // preview moved to Settings
-
-  const applyTempDate = (next: string) => {
-    if (!next) return
-    if (activePicker === 'start') {
-      setStartDate(next)
-      if (endDate && next > endDate) setEndDate(next)
-    } else {
-      setEndDate(next)
-      if (startDate && next < startDate) setStartDate(next)
-    }
-    if (error) setError(null)
-  }
-
-
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
@@ -242,8 +191,6 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     document.body.style.position = 'fixed'
     document.body.style.top = `-${scrollY}px`
     document.body.style.width = '100%'
-    const standalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as { standalone?: boolean }).standalone === true
-    setIsPwa(standalone)
     return () => {
       cancelled = true
       document.body.style.overflow = previous.overflow
@@ -267,18 +214,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
 
 
       {/* Modal */}
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col mx-2 pdf-generate-modal">
-        <style>
-          {`
-            .pdf-generate-modal input[type="date"] {
-              width: 100% !important;
-              max-width: 100% !important;
-              min-width: 0 !important;
-              box-sizing: border-box !important;
-              display: block;
-            }
-          `}
-        </style>
+      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col mx-2">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">
@@ -310,125 +246,26 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
           {/* Step: Dates */}
           {step === 'dates' && (
             <div className="space-y-4">
-              <div className="min-w-0">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Start date
-                </label>
-                {isPwa ? (
-                  <button
-                    type="button"
-                    onClick={() => openDatePicker('start')}
-                    disabled={loading}
-                    className={`w-full px-3 py-2 border rounded-lg text-left text-sm bg-white ${
-                      activePicker === 'start' ? 'border-primary-500 ring-1 ring-primary-200' : 'border-gray-300'
-                    }`}
-                  >
-                    {startDate || 'Select date'}
-                  </button>
-                ) : (
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => {
-                      const next = e.target.value
-                      setStartDate(next)
-                      if (endDate && next && endDate < next) setEndDate(next)
-                      if (error) setError(null)
-                    }}
-                    disabled={loading}
-                    max={endDate || undefined}
-                    className="block w-full min-w-0 max-w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
-                    style={{ maxWidth: '100%', width: '100%' }}
-                  />
-                )}
-              </div>
-              <div className="min-w-0">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  End date
-                </label>
-                {isPwa ? (
-                  <button
-                    type="button"
-                    onClick={() => openDatePicker('end')}
-                    disabled={loading}
-                    className={`w-full px-3 py-2 border rounded-lg text-left text-sm bg-white ${
-                      activePicker === 'end' ? 'border-primary-500 ring-1 ring-primary-200' : 'border-gray-300'
-                    }`}
-                  >
-                    {endDate || 'Select date'}
-                  </button>
-                ) : (
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => {
-                      const next = e.target.value
-                      setEndDate(next)
-                      if (startDate && next && next < startDate) setStartDate(next)
-                      if (error) setError(null)
-                    }}
-                    disabled={loading}
-                    min={startDate || undefined}
-                    className="block w-full min-w-0 max-w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
-                    style={{ maxWidth: '100%', width: '100%' }}
-                  />
-                )}
-              </div>
-              {isPwa && (
-                <div className="mt-2 border border-gray-200 rounded-lg bg-gray-50 p-3">
-                  <div className="text-xs text-gray-500 mb-2">Select date (wheel)</div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(() => {
-                      const days = getDaysInMonth(tempDate.y, tempDate.m)
-                      const lists = [
-                        { key: 'y', values: yearOptions },
-                        { key: 'm', values: Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')) },
-                        { key: 'd', values: Array.from({ length: days }, (_, i) => String(i + 1).padStart(2, '0')) },
-                      ] as const
-                      const itemHeight = 32
-                      return lists.map((list) => (
-                        <div
-                          key={list.key}
-                          className="h-40 overflow-y-auto snap-y snap-mandatory bg-white border border-gray-200 rounded-lg"
-                          onScroll={(e) => {
-                            const el = e.currentTarget
-                            const index = Math.round(el.scrollTop / itemHeight)
-                            const value = list.values[Math.max(0, Math.min(list.values.length - 1, index))] || ''
-                            setTempDate((prev) => {
-                              const next = { ...prev, [list.key]: value }
-                              if (list.key === 'm') {
-                                const maxDays = getDaysInMonth(next.y, value)
-                                if (next.d && Number(next.d) > maxDays) {
-                                  next.d = String(maxDays).padStart(2, '0')
-                                }
-                              }
-                              const nextStr = buildDateString(next.y, next.m, next.d)
-                              applyTempDate(nextStr)
-                              return next
-                            })
-                          }}
-                        >
-                          <div style={{ height: itemHeight }} />
-                          {list.values.map((val) => {
-                            const selected = tempDate[list.key as 'y' | 'm' | 'd'] === val
-                            return (
-                              <div
-                                key={val}
-                                className={`h-8 flex items-center justify-center snap-center text-sm ${
-                                  selected ? 'text-primary-700 font-semibold' : 'text-gray-600'
-                                }`}
-                              >
-                                {val}
-                              </div>
-                            )
-                          })}
-                          <div style={{ height: itemHeight }} />
-                        </div>
-                      ))
-                    })()}
-                  </div>
-                </div>
-              )}
+              <DatePicker
+                label="Start date"
+                value={startDate}
+                onChange={(next) => {
+                  setStartDate(next)
+                  if (endDate && next && endDate < next) setEndDate(next)
+                  if (error) setError(null)
+                }}
+                max={endDate || undefined}
+              />
+              <DatePicker
+                label="End date"
+                value={endDate}
+                onChange={(next) => {
+                  setEndDate(next)
+                  if (startDate && next && next < startDate) setStartDate(next)
+                  if (error) setError(null)
+                }}
+                min={startDate || undefined}
+              />
             </div>
           )}
 

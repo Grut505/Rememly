@@ -158,12 +158,8 @@ export function AssemblyCanvas({
       const zoneWidth = (zone.width / 100) * width
       const zoneHeight = (zone.height / 100) * height
 
-      ctx.fillStyle = index === selectedZoneIndex ? 'rgba(37, 99, 235, 0.08)' : 'rgba(255, 255, 255, 0.6)'
+      ctx.fillStyle = index === selectedZoneIndex ? 'rgba(37, 99, 235, 0.18)' : 'rgba(255, 255, 255, 0.6)'
       ctx.fillRect(zoneX, zoneY, zoneWidth, zoneHeight)
-
-      ctx.strokeStyle = index === selectedZoneIndex ? '#2563eb' : '#ffffff'
-      ctx.lineWidth = index === selectedZoneIndex ? Math.max(2, separatorWidth + 1) : Math.max(1, separatorWidth)
-      ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
 
       if (img) {
         ctx.save()
@@ -184,14 +180,22 @@ export function AssemblyCanvas({
         ctx.drawImage(img, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight)
         ctx.restore()
       } else {
-        ctx.fillStyle = '#e5e7eb'
+        // Empty-zone placeholder fill sits on top of the selection tint above,
+        // so it needs its own selected variant or the highlight disappears.
+        ctx.fillStyle = index === selectedZoneIndex ? '#bfdbfe' : '#e5e7eb'
         ctx.fillRect(zoneX + 2, zoneY + 2, zoneWidth - 4, zoneHeight - 4)
-        ctx.fillStyle = '#9ca3af'
+        ctx.fillStyle = index === selectedZoneIndex ? '#1d4ed8' : '#9ca3af'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.font = '14px sans-serif'
         ctx.fillText('+', zoneX + zoneWidth / 2, zoneY + zoneHeight / 2)
       }
+
+      // Drawn after the photo/placeholder fill so the selection highlight is
+      // never covered by it (previously only the empty-zone case kept it visible).
+      ctx.strokeStyle = index === selectedZoneIndex ? '#2563eb' : '#ffffff'
+      ctx.lineWidth = index === selectedZoneIndex ? Math.max(4, separatorWidth + 2) : Math.max(1, separatorWidth)
+      ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
 
       ctx.fillStyle = index === selectedZoneIndex ? '#1d4ed8' : '#6b7280'
       ctx.font = '12px sans-serif'

@@ -9,13 +9,14 @@ import { useUiStore } from '../../state/uiStore'
 import { Modal } from '../../ui/Modal'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { CONSTANTS } from '../../utils/constants'
+import { extractExifDate } from '../../screens/Editor/PhotoPicker'
 
 function isMobileDevice(): boolean {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 }
 
 interface PhotoAssemblyProps {
-  onComplete: (imageBase64: string, assemblyState: object) => void
+  onComplete: (imageBase64: string, assemblyState: object, lastPhotoDate?: string) => void
   onCancel: () => void
 }
 
@@ -43,6 +44,13 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   const [showWebcam, setShowWebcam] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [webcamError, setWebcamError] = useState<string>('')
+  const [lastPhotoDate, setLastPhotoDate] = useState<Date | null>(null)
+
+  const trackPhotoDate = (file: File) => {
+    extractExifDate(file).then((date) => {
+      if (date) setLastPhotoDate(date)
+    })
+  }
 
   const getOverlapScore = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => {
     const ax2 = a.x + a.width
@@ -137,6 +145,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
       const file = files[0]
       const photoIndex = stateManager.addPhoto(file)
       stateManager.assignPhotoToZone(photoIndex, pendingZoneIndex)
+      trackPhotoDate(file)
       setSelectedZoneIndex(pendingZoneIndex)
       setPendingZoneIndex(null)
     } else {
@@ -146,12 +155,13 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
         if (!file) return
         const photoIndex = stateManager.addPhoto(file)
         stateManager.assignPhotoToZone(photoIndex, zoneIndex)
+        trackPhotoDate(file)
         assigned += 1
       })
       if (assigned === 0) {
-        showToast('Toutes les zones sont déjà remplies', 'info')
+        showToast('All zones are already filled', 'info')
       } else if (files.length > assigned) {
-        showToast(`${files.length - assigned} photo(s) ignorée(s) (zones pleines)`, 'info')
+        showToast(`${files.length - assigned} photo(s) skipped (zones full)`, 'info')
       }
     }
 
@@ -164,11 +174,18 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
 
   const handleAddPhotoRequest = (zoneIndex: number) => {
     setPendingZoneIndex(zoneIndex)
+    if (zoneFileInputRef.current) zoneFileInputRef.current.multiple = false
     if (isMobile) {
       zoneFileInputRef.current?.click()
       return
     }
     setShowAddPhotoMenu(true)
+  }
+
+  const handleAddMultiplePhotosRequest = () => {
+    setPendingZoneIndex(null)
+    if (zoneFileInputRef.current) zoneFileInputRef.current.multiple = true
+    zoneFileInputRef.current?.click()
   }
 
   const handleTakePhoto = useCallback(async () => {
@@ -423,7 +440,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
       const imageBase64 = await canvasToBase64(canvas, 0.9)
       const assemblyState = stateManager.serialize()
 
-      onComplete(imageBase64, assemblyState)
+      onComplete(imageBase64, assemblyState, lastPhotoDate ? lastPhotoDate.toISOString() : undefined)
     } catch (error) {
       showToast('Failed to create assembly', 'error')
     }
@@ -476,14 +493,14 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
               onClick={() => setIsLayoutModalOpen(true)}
               className="px-2 py-1 rounded-md border border-gray-300 text-xs text-gray-700 hover:border-gray-400"
             >
-              Choisir
+              Choose
             </button>
           </div>
           <div className="text-sm font-semibold text-gray-900">
             {selectedTemplate?.name} • {selectedTemplate?.zones.length} photos
           </div>
           <div className="mt-2 flex items-center gap-3">
-            <span className="text-xs text-gray-500">Épaisseur liseré</span>
+            <span className="text-xs text-gray-500">Border thickness</span>
             <input
               type="range"
               min={1}
@@ -496,6 +513,14 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {(selectedTemplate?.zones.length ?? 0) > 1 && (
+            <button
+              onClick={handleAddMultiplePhotosRequest}
+              className="px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:border-gray-400"
+            >
+              Add multiple
+            </button>
+          )}
           <button
             onClick={() => setIsZonesModalOpen(true)}
             className="px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:border-gray-400"
@@ -621,7 +646,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
       <Modal
         isOpen={isLayoutModalOpen}
         onClose={() => setIsLayoutModalOpen(false)}
-        title="Choisir un layout"
+        title="Choose a layout"
       >
         <TemplateSelector
           selectedTemplateId={selectedTemplate.id}
@@ -632,10 +657,10 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
 
       <ConfirmDialog
         isOpen={showCancelConfirm}
-        title="Annuler l'assemblage ?"
-        message="Des photos sont déjà placées. Voulez-vous vraiment fermer l'assemblage ?"
-        confirmLabel="Annuler"
-        cancelLabel="Retour"
+        title="Cancel assembly?"
+        message="Photos have already been placed. Are you sure you want to close the assembly?"
+        confirmLabel="Cancel"
+        cancelLabel="Back"
         onConfirm={onCancel}
         onCancel={() => setShowCancelConfirm(false)}
         variant="danger"
@@ -657,7 +682,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
                   Zone {index + 1}
                 </div>
                 <div className="text-xs text-gray-500">
-                  {zone.photoIndex >= 0 ? 'Photo assignée' : 'Vide'}
+                  {zone.photoIndex >= 0 ? 'Photo assigned' : 'Empty'}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -668,7 +693,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
                   }}
                   className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:border-gray-400"
                 >
-                  Sélectionner
+                  Select
                 </button>
                 <button
                   onClick={() => {
@@ -677,7 +702,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
                   }}
                   className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700"
                 >
-                  Ajouter
+                  Add
                 </button>
               </div>
             </div>

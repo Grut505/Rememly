@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { articlesService } from '../../services/articles.service'
 import { useArticlesStore } from '../../state/articlesStore'
 import { useUiStore } from '../../state/uiStore'
+import { configApi } from '../../api/config'
 
 export function PhotoAssemblyScreen() {
   const navigate = useNavigate()
@@ -14,6 +15,13 @@ export function PhotoAssemblyScreen() {
   const { updateArticle: updateArticleInStore } = useArticlesStore()
   const { showToast } = useUiStore()
   const [isValidating, setIsValidating] = useState(false)
+  const [autoDateFromPhoto, setAutoDateFromPhoto] = useState(true)
+
+  useEffect(() => {
+    configApi.get('auto_date_from_photo')
+      .then((result) => setAutoDateFromPhoto(result.value !== 'false'))
+      .catch(() => setAutoDateFromPhoto(true))
+  }, [])
 
   // Get mode and article ID from navigation state
   const editMode = location.state?.editMode || false
@@ -21,8 +29,10 @@ export function PhotoAssemblyScreen() {
   const texte = location.state?.texte || ''
   const dateModification = location.state?.dateModification || new Date().toISOString()
 
-  const handleComplete = async (imageBase64: string, assemblyState: object) => {
+  const handleComplete = async (imageBase64: string, assemblyState: object, lastPhotoDate?: string) => {
     if (!user) return
+
+    const effectiveDate = autoDateFromPhoto && lastPhotoDate ? lastPhotoDate : dateModification
 
     try {
       // Convert base64 to File for upload
@@ -48,7 +58,7 @@ export function PhotoAssemblyScreen() {
           user.email,
           texte,
           file,
-          dateModification,
+          effectiveDate,
           undefined, // famileoPostId
           assemblyState
         )
@@ -112,7 +122,7 @@ export function PhotoAssemblyScreen() {
               disabled={isValidating}
               className={`px-3 py-2 rounded-lg text-sm font-medium ${isValidating ? 'bg-green-300 text-white cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
             >
-              {isValidating ? 'Processing...' : 'Valider'}
+              {isValidating ? 'Processing...' : 'Confirm'}
             </button>
           </div>
           <div className="flex-1 overflow-y-auto relative">

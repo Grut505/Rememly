@@ -624,6 +624,102 @@ export const pdfMergeCleanupHandler: RouteHandler = async (request, context) => 
   return ok({ cleaned: false, message: 'No Worker properties to clean in preparation mode.' })
 }
 
+async function driveFindFolder(accessToken: string, name: string, parentId: string | null): Promise<string | null> {
+  const parentClause = parentId ? `'${parentId}' in parents and ` : ''
+  const q = `${parentClause}name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
+  if (!res.ok) return null
+  const data = await res.json<{ files?: Array<{ id: string }> }>()
+  return data.files && data.files[0] ? data.files[0].id : null
+}
+
+async function driveCreateFolder(accessToken: string, name: string, parentId: string | null): Promise<string | null> {
+  const body: Record<string, unknown> = { name, mimeType: 'application/vnd.google-apps.folder' }
+  if (parentId) body.parents = [parentId]
+  const res = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) return null
+  const data = await res.json<{ id: string }>()
+  return data.id
+}
+
+async function driveFindOrCreateFolder(accessToken: string, name: string, parentId: string | null): Promise<string | null> {
+  const existing = await driveFindFolder(accessToken, name, parentId)
+  if (existing) return existing
+  return driveCreateFolder(accessToken, name, parentId)
+}
+
+async function driveGetFileParents(accessToken: string, fileId: string): Promise<string[]> {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok) return []
+  const data = await res.json<{ parents?: string[] }>()
+  return data.parents || []
+}
+
+async function driveMoveFile(accessToken: string, fileId: string, newParentId: string): Promise<boolean> {
+  const parents = await driveGetFileParents(accessToken, fileId)
+  const params = new URLSearchParams({ addParents: newParentId, removeParents: parents.join(',') })
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?${params.toString()}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  return res.ok
+}
+
+async function driveTrashFolder(accessToken: string, folderId: string): Promise<boolean> {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  })
+  return res.ok
+}
+
+export const pdfMergeCleanupJobHandler: RouteHandler = async (request, context) => {
+  const auth = await requireAuth(request, context.env)
+  if (!auth.ok) return auth.response
+
+  const body = await readJson<{ job_id?: string }>(request)
+  if (!body.job_id) return fail('INVALID_PARAMS', 'Missing job_id', 400)
+
+  const job = await getPdfJob(context.env.DB, body.job_id)
+  if (!job) return fail('NOT_FOUND', 'Job not found', 404)
+
+  if (!job.pdf_file_id || !job.pdf_url) {
+    return fail('MISSING_MERGED_PDF', 'Merged PDF not found', 400)
+  }
+  const folderId = job.chunks_folder_id as string | null
+  if (!folderId) {
+    return fail('NO_CHUNKS_FOLDER', 'No chunks folder to clean', 400)
+  }
+
+  const tokenResult = await refreshGdriveToken(context.env)
+  if (!tokenResult.ok) {
+    return fail(tokenResult.code, tokenResult.message, 502)
+  }
+
+  const rememlyId = await driveFindOrCreateFolder(tokenResult.token, 'Rememly', null)
+  const pdfRootId = rememlyId ? await driveFindOrCreateFolder(tokenResult.token, 'pdf', rememlyId) : null
+  if (pdfRootId) {
+    await driveMoveFile(tokenResult.token, job.pdf_file_id as string, pdfRootId)
+  }
+  await driveTrashFolder(tokenResult.token, folderId)
+
+  await context.env.DB.prepare(
+    `update jobs_pdf set chunks_folder_id = '', chunks_folder_url = '', progress_message = 'Chunks cleaned' where job_id = ?1`
+  )
+    .bind(body.job_id)
+    .run()
+
+  return ok({ cleaned: true })
+}
+
 export const pdfCoverPreviewHandler: RouteHandler = async (request, context) => {
   const auth = await requireAuth(request, context.env)
   if (!auth.ok) return auth.response

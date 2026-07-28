@@ -36,6 +36,7 @@ import {
   pdfDeleteHandler,
   pdfListHandler,
   pdfMergeCleanupHandler,
+  pdfMergeCleanupJobHandler,
   pdfMergeCompleteHandler,
   pdfMergeFailedHandler,
   pdfMergeStatusHandler,
@@ -140,6 +141,7 @@ register('GET', '/pdf/render-failed', pdfRenderFailedHandler)
 register('POST', '/pdf/render-failed', pdfRenderFailedHandler)
 register('POST', '/pdf/merge-cancel', preparationOnlyHandler)
 register('POST', '/pdf/cleanup-properties', pdfMergeCleanupHandler)
+register('POST', '/pdf/merge-cleanup', pdfMergeCleanupJobHandler)
 register('POST', '/pdf/cover-preview', pdfCoverPreviewHandler)
 register('GET', '/pdf/cover-preview', pdfCoverPreviewHandler)
 register('POST', '/pdf/cover-preview-delete', pdfCoverPreviewDeleteHandler)

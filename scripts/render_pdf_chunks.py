@@ -580,8 +580,25 @@ def generate_cover_masked_mosaic(articles: list, max_photos: Optional[int], opti
 
     family_height_raw = options.get('cover_family_h_cm') or config.get('pdf_cover_family_h_cm')
     family_height_cm = clamp(float(family_height_raw) if family_height_raw is not None else 3.5, 1.5, 6)
-    page_width_cm = family_height_cm
-    page_height_cm = 27.7
+
+    # Must mirror the scale applied to the text mask box in generate_cover_masked_text_html
+    # (family_mask_height_px / family_mask_width_px). Otherwise this strip gets built at one
+    # aspect ratio/size and then silently cropped+repositioned ("slice") to fit the differently
+    # shaped box the text function embeds it into, throwing off the photo-to-glyph alignment.
+    def resolve_family_scale(key, config_key):
+        raw = options.get(key)
+        if raw is None:
+            raw = config.get(config_key)
+        try:
+            return clamp(float(raw), 0.6, 3) if raw is not None else 1.0
+        except (TypeError, ValueError):
+            return 1.0
+
+    family_scale_x = resolve_family_scale('cover_family_scale_x', 'pdf_cover_family_scale_x')
+    family_scale_y = resolve_family_scale('cover_family_scale_y', 'pdf_cover_family_scale_y')
+
+    page_width_cm = family_height_cm * family_scale_y
+    page_height_cm = 27.7 * family_scale_x
     gap = 0.07
     target_cell_count = max(len(images), 90)
 

@@ -487,6 +487,8 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
     family_mask_baseline_px = max(1, round(family_font_px * 0.86 * family_scale_y))
 
     family_outline_raw = options.get('cover_family_outline_px')
+    if family_outline_raw is None:
+        family_outline_raw = config.get('pdf_cover_family_outline_px')
     try:
         family_outline_px = clamp(float(family_outline_raw), 0, 20) if family_outline_raw is not None else None
     except (TypeError, ValueError):

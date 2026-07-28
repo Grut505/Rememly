@@ -1,0 +1,66 @@
+name: PDF Cover Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      preview_id:
+        description: "PDF preview id"
+        required: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CALLBACK_URL: ${{ secrets.BACKEND_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate callback URL
+        run: |
+          if [ -z "$CALLBACK_URL" ]; then
+            echo "Missing CALLBACK_URL (set BACKEND_URL)"
+            exit 1
+          fi
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/render_pdf_chunks.requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Render preview
+        id: render
+        run: |
+          set -euo pipefail
+          timeout 5m python -u scripts/render_cover_preview.py \
+            --preview-id "${{ inputs.preview_id }}" \
+            --callback-url "${CALLBACK_URL}" \
+            --callback-token "${{ secrets.PDF_MERGE_TOKEN }}" \
+            1> /tmp/preview_out.txt 2> /tmp/preview_err.txt
+          echo "---- preview stdout (tail) ----"
+          tail -n 50 /tmp/preview_out.txt || true
+          echo "---- preview stderr (tail) ----"
+          tail -n 50 /tmp/preview_err.txt || true
+
+      - name: Notify backend (preview failed)
+        if: ${{ failure() && steps.render.outcome != 'success' }}
+        run: |
+          ERROR_MSG="$(tail -c 1500 /tmp/preview_err.txt 2>/dev/null || echo 'GitHub Action failed')"
+          STATUS_CODE=$(curl -sS -L -G -o /tmp/preview_failed.json -w "%{http_code}" \
+            -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" \
+            --data-urlencode "path=pdf/preview-failed" \
+            --data-urlencode "token=${{ secrets.PDF_MERGE_TOKEN }}" \
+            --data-urlencode "preview_id=${{ inputs.preview_id }}" \
+            --data-urlencode "message=${ERROR_MSG}" \
+            "${CALLBACK_URL}")
+          echo "preview-failed HTTP ${STATUS_CODE}"
+          if [ "${STATUS_CODE}" -ge 400 ]; then
+            cat /tmp/preview_failed.json || true
+          fi

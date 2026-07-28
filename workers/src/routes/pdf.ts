@@ -746,11 +746,192 @@ export const pdfMergeCleanupJobHandler: RouteHandler = async (request, context) 
   return ok({ cleaned: true })
 }
 
+function arrayBufferToBase64Pdf(buffer: ArrayBuffer): string {
+  let binary = ''
+  const bytes = new Uint8Array(buffer)
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  }
+  return btoa(binary)
+}
+
+function base64ToUint8ArrayPdf(base64: string): Uint8Array {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes
+}
+
 export const pdfCoverPreviewHandler: RouteHandler = async (request, context) => {
   const auth = await requireAuth(request, context.env)
   if (!auth.ok) return auth.response
-  return fail('PREVIEW_NOT_IMPLEMENTED', 'PDF cover preview is not implemented in Worker preparation mode yet', 501)
+
+  const body = await readJson<{ from?: string; to?: string; options?: Record<string, unknown> }>(request)
+  const previewId = crypto.randomUUID()
+  const optionsJson = JSON.stringify(body.options || {})
+  const now = new Date().toISOString()
+
+  await context.env.DB.prepare(
+    `insert into pdf_previews (id, status, options_json, created_by, created_at, updated_at)
+     values (?1, 'PENDING', ?2, ?3, ?4, ?4)`
+  )
+    .bind(previewId, optionsJson, auth.user.email, now)
+    .run()
+
+  const dispatchResult = await dispatchGithubWorkflow(context.env, 'pdf-preview.yml', { preview_id: previewId })
+  if (!dispatchResult.ok) {
+    await context.env.DB.prepare(
+      `update pdf_previews set status = 'ERROR', error_message = ?2, updated_at = ?3 where id = ?1`
+    )
+      .bind(previewId, dispatchResult.message, new Date().toISOString())
+      .run()
+    return fail(dispatchResult.code, dispatchResult.message, 502, dispatchResult.detail)
+  }
+
+  await context.env.DB.prepare(
+    `update pdf_previews set status = 'RUNNING', updated_at = ?2 where id = ?1`
+  )
+    .bind(previewId, new Date().toISOString())
+    .run()
+
+  return ok({ file_id: previewId, url: '' })
 }
 
-export const pdfCoverPreviewDeleteHandler: RouteHandler = pdfCoverPreviewHandler
-export const pdfCoverPreviewContentHandler: RouteHandler = pdfCoverPreviewHandler
+export const pdfPreviewStatusHandler: RouteHandler = async (request, context) => {
+  const auth = await requireAuth(request, context.env)
+  if (!auth.ok) return auth.response
+
+  const previewId = new URL(request.url).searchParams.get('preview_id')
+  if (!previewId) return fail('INVALID_PARAMS', 'preview_id is required', 400)
+
+  const row = await context.env.DB.prepare(
+    'select id, status, error_message from pdf_previews where id = ?1 limit 1'
+  )
+    .bind(previewId)
+    .first<{ id: string; status: string; error_message: string | null }>()
+
+  if (!row) return fail('NOT_FOUND', 'Preview not found', 404)
+
+  return ok({ status: row.status, error_message: row.error_message || '' })
+}
+
+export const pdfCoverPreviewContentHandler: RouteHandler = async (request, context) => {
+  const auth = await requireAuth(request, context.env)
+  if (!auth.ok) return auth.response
+
+  const body = await readJson<{ file_id?: string }>(request)
+  if (!body.file_id) return fail('INVALID_PARAMS', 'file_id is required', 400)
+
+  const row = await context.env.DB.prepare(
+    'select id, status, r2_key from pdf_previews where id = ?1 limit 1'
+  )
+    .bind(body.file_id)
+    .first<{ id: string; status: string; r2_key: string | null }>()
+
+  if (!row) return fail('NOT_FOUND', 'Preview not found', 404)
+  if (row.status !== 'DONE' || !row.r2_key) {
+    return fail('NOT_READY', 'Preview is not ready yet', 409)
+  }
+
+  const object = await context.env.FILES.get(row.r2_key)
+  if (!object) return fail('NOT_FOUND', 'Preview file not found', 404)
+
+  const buffer = await object.arrayBuffer()
+  return ok({ mime_type: 'application/pdf', base64: arrayBufferToBase64Pdf(buffer) })
+}
+
+export const pdfCoverPreviewDeleteHandler: RouteHandler = async (request, context) => {
+  const auth = await requireAuth(request, context.env)
+  if (!auth.ok) return auth.response
+
+  const body = await readJson<{ file_id?: string }>(request)
+  if (!body.file_id) return fail('INVALID_PARAMS', 'file_id is required', 400)
+
+  const row = await context.env.DB.prepare('select r2_key from pdf_previews where id = ?1 limit 1')
+    .bind(body.file_id)
+    .first<{ r2_key: string | null }>()
+
+  if (row?.r2_key) {
+    await context.env.FILES.delete(row.r2_key)
+  }
+  await context.env.DB.prepare('delete from pdf_previews where id = ?1').bind(body.file_id).run()
+
+  return ok({ deleted: true })
+}
+
+export const pdfPreviewJobHandler: RouteHandler = async (request, context) => {
+  const params = new URL(request.url).searchParams
+  const token = params.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
+    return fail('FORBIDDEN', 'Invalid token', 403)
+  }
+
+  const previewId = params.get('preview_id')
+  if (!previewId) return fail('INVALID_PARAMS', 'preview_id is required', 400)
+
+  const row = await context.env.DB.prepare('select options_json from pdf_previews where id = ?1 limit 1')
+    .bind(previewId)
+    .first<{ options_json: string }>()
+  if (!row) return fail('NOT_FOUND', 'Preview not found', 404)
+
+  const configRows = await context.env.DB.prepare('select key, value from config').all<{ key: string; value: string | null }>()
+  const config = Object.fromEntries((configRows.results || []).map((r) => [r.key, r.value]))
+
+  let options: Record<string, unknown> = {}
+  try {
+    options = JSON.parse(row.options_json || '{}')
+  } catch {
+    options = {}
+  }
+
+  return ok({ options, config })
+}
+
+export const pdfPreviewCompleteHandler: RouteHandler = async (request, context) => {
+  const params = new URL(request.url).searchParams
+  const token = params.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
+    return fail('FORBIDDEN', 'Invalid token', 403)
+  }
+
+  const body = await readJson<{ preview_id?: string; base64?: string }>(request)
+  if (!body.preview_id || !body.base64) {
+    return fail('INVALID_PARAMS', 'preview_id and base64 are required', 400)
+  }
+
+  const r2Key = `previews/${body.preview_id}.pdf`
+  await context.env.FILES.put(r2Key, base64ToUint8ArrayPdf(body.base64), {
+    httpMetadata: { contentType: 'application/pdf' },
+  })
+
+  await context.env.DB.prepare(
+    `update pdf_previews set status = 'DONE', r2_key = ?2, updated_at = ?3 where id = ?1`
+  )
+    .bind(body.preview_id, r2Key, new Date().toISOString())
+    .run()
+
+  return ok({ ok: true })
+}
+
+export const pdfPreviewFailedHandler: RouteHandler = async (request, context) => {
+  const params = new URL(request.url).searchParams
+  const token = params.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
+    return fail('FORBIDDEN', 'Invalid token', 403)
+  }
+
+  const previewId = params.get('preview_id')
+  if (!previewId) return fail('INVALID_PARAMS', 'preview_id is required', 400)
+
+  const message = params.get('message') || 'Preview render failed'
+  await context.env.DB.prepare(
+    `update pdf_previews set status = 'ERROR', error_message = ?2, updated_at = ?3 where id = ?1`
+  )
+    .bind(previewId, message, new Date().toISOString())
+    .run()
+
+  return ok({ ok: true })
+}

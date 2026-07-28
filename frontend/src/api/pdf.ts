@@ -88,6 +88,11 @@ export interface CoverPreviewContentResponse {
   base64: string
 }
 
+export interface PreviewStatusResponse {
+  status: 'PENDING' | 'RUNNING' | 'DONE' | 'ERROR'
+  error_message?: string
+}
+
 export interface MergeTokenStatusResponse {
   configured: boolean
   has_refresh_token?: boolean
@@ -103,6 +108,9 @@ export const pdfApi = {
 
   previewCover: (payload: CreatePdfPayload) =>
     apiClient.post<CoverPreviewResponse>('pdf/cover-preview', payload),
+
+  previewStatus: (fileId: string) =>
+    apiClient.get<PreviewStatusResponse>('pdf/preview-status', { preview_id: fileId }),
 
   previewCoverContent: (fileId: string) =>
     apiClient.post<CoverPreviewContentResponse>('pdf/cover-preview-content', { file_id: fileId }),

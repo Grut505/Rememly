@@ -44,6 +44,10 @@ import {
   pdfMergeTokenRefreshHandler,
   pdfMergeTokenStatusHandler,
   pdfMergeTriggerHandler,
+  pdfPreviewCompleteHandler,
+  pdfPreviewFailedHandler,
+  pdfPreviewJobHandler,
+  pdfPreviewStatusHandler,
   pdfProcessHandler,
   pdfRenderCompleteHandler,
   pdfRenderFailedHandler,
@@ -144,6 +148,12 @@ register('GET', '/pdf/cover-preview', pdfCoverPreviewHandler)
 register('POST', '/pdf/cover-preview-delete', pdfCoverPreviewDeleteHandler)
 register('GET', '/pdf/cover-preview-content', pdfCoverPreviewContentHandler)
 register('POST', '/pdf/cover-preview-content', pdfCoverPreviewContentHandler)
+register('GET', '/pdf/preview-status', pdfPreviewStatusHandler)
+register('POST', '/pdf/preview-status', pdfPreviewStatusHandler)
+register('GET', '/pdf/preview-job', pdfPreviewJobHandler)
+register('POST', '/pdf/preview-complete', pdfPreviewCompleteHandler)
+register('GET', '/pdf/preview-failed', pdfPreviewFailedHandler)
+register('POST', '/pdf/preview-failed', pdfPreviewFailedHandler)
 register('GET', '/logs/pdf/range', logsRangeHandler)
 register('POST', '/logs/pdf/range', logsRangeHandler)
 register('POST', '/logs/pdf/clear', logsClearHandler)

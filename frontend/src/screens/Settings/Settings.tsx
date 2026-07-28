@@ -460,6 +460,20 @@ export function Settings() {
       })
       setPreviewFileId(response.file_id)
       localStorage.setItem('cover_preview_file_id', response.file_id)
+
+      const deadline = Date.now() + 2 * 60 * 1000
+      while (true) {
+        const status = await pdfApi.previewStatus(response.file_id)
+        if (status.status === 'DONE') break
+        if (status.status === 'ERROR') {
+          throw new Error(status.error_message || 'Preview generation failed')
+        }
+        if (Date.now() > deadline) {
+          throw new Error('Preview generation timed out')
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+      }
+
       const content = await pdfApi.previewCoverContent(response.file_id)
       const byteCharacters = atob(content.base64)
       const bytes = new Uint8Array(byteCharacters.length)
@@ -470,7 +484,7 @@ export function Settings() {
       const url = URL.createObjectURL(blob)
       setPreviewUrl(url)
     } catch (error) {
-      showToast('Preview failed', 'error')
+      showToast(error instanceof Error ? error.message : 'Preview failed', 'error')
     } finally {
       setPreviewLoading(false)
     }

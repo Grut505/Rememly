@@ -46,6 +46,7 @@ import {
   pdfProcessHandler,
   pdfRenderCompleteHandler,
   pdfRenderFailedHandler,
+  pdfRenderImageHandler,
   pdfRenderJobHandler,
   pdfRenderStatusHandler,
   pdfStatusHandler,
@@ -130,6 +131,7 @@ register('GET', '/pdf/merge-failed', pdfMergeFailedHandler)
 register('POST', '/pdf/merge-failed', pdfMergeFailedHandler)
 register('GET', '/pdf/render-job', pdfRenderJobHandler)
 register('POST', '/pdf/render-job', pdfRenderJobHandler)
+register('GET', '/pdf/render-image', pdfRenderImageHandler)
 register('GET', '/pdf/render-status', pdfRenderStatusHandler)
 register('POST', '/pdf/render-status', pdfRenderStatusHandler)
 register('GET', '/pdf/render-complete', pdfRenderCompleteHandler)

@@ -215,6 +215,35 @@ export const pdfRenderJobHandler: RouteHandler = async (request, context) => {
   return ok({ job, articles: articles.results || [] })
 }
 
+export const pdfRenderImageHandler: RouteHandler = async (request, context) => {
+  const params = new URL(request.url).searchParams
+  const token = params.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
+    return fail('FORBIDDEN', 'Invalid token', 403)
+  }
+
+  const fileId = params.get('file_id')
+  if (!fileId) return fail('INVALID_PARAMS', 'file_id is required', 400)
+
+  if (fileId.includes('/')) {
+    // Images uploaded through the Worker are stored in R2 under a path-like key
+    // (e.g. articles/{id}/original/...), unlike opaque Google Drive file IDs.
+    const object = await context.env.FILES.get(fileId)
+    if (!object) return fail('NOT_FOUND', 'Image not found in R2', 404)
+    return new Response(object.body, {
+      headers: { 'content-type': object.httpMetadata?.contentType || 'application/octet-stream' },
+    })
+  }
+
+  const response = await fetch(`https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w2000`)
+  if (response.status !== 200) {
+    return fail('FETCH_ERROR', `Failed to fetch image from Drive: HTTP ${response.status}`, 502)
+  }
+  return new Response(response.body, {
+    headers: { 'content-type': response.headers.get('content-type') || 'image/jpeg' },
+  })
+}
+
 export const pdfRenderStatusHandler: RouteHandler = async (request, context) => {
   const params = new URL(request.url).searchParams
   const token = params.get('token')

@@ -143,11 +143,17 @@ def esc(value) -> str:
     return html.escape(str(value or ""))
 
 
-def image_src(article: dict) -> str:
+def image_src(article: dict, callback_url: str, callback_token: str) -> str:
     file_id = article.get("image_file_id")
-    if file_id:
-        return f"https://drive.google.com/thumbnail?id={file_id}&sz=w1200"
-    return article.get("image_url") or ""
+    if not file_id:
+        return article.get("image_url") or ""
+    if "/" in file_id:
+        # R2-backed image (uploaded through the Worker) - proxy through our
+        # token-authed endpoint since the R2 bucket has no public URL.
+        qs = urllib.parse.urlencode({"path": "pdf/render-image", "token": callback_token, "file_id": file_id})
+        return f"{callback_url}?{qs}"
+    # Legacy Google Drive file id (imported before the R2 migration) - public thumbnail.
+    return f"https://drive.google.com/thumbnail?id={file_id}&sz=w1200"
 
 
 def format_date(date_str: str) -> str:
@@ -170,10 +176,10 @@ def build_cover_html(job: dict, article_count: int) -> str:
 </div></body></html>"""
 
 
-def build_month_html(month_label: str, articles: list) -> str:
+def build_month_html(month_label: str, articles: list, callback_url: str, callback_token: str) -> str:
     rows = []
     for article in articles:
-        src = image_src(article)
+        src = image_src(article, callback_url, callback_token)
         img_tag = f'<img src="{esc(src)}">' if src else ""
         rows.append(f"""<div class="article">
   {img_tag}
@@ -243,7 +249,10 @@ def main():
                           10, f"Rendered cover (1/{total_chunks})")
 
             for idx, key in enumerate(months, start=1):
-                chunk_pdf = render_html_to_pdf(browser, build_month_html(month_label(key), by_month[key]))
+                chunk_pdf = render_html_to_pdf(
+                    browser,
+                    build_month_html(month_label(key), by_month[key], args.callback_url, args.callback_token),
+                )
                 upload_pdf(service, folder_id, f"chunk_{idx:03d}_{key}.pdf", chunk_pdf)
                 progress = 10 + int(80 * idx / max(len(months), 1))
                 report_status(args.callback_url, args.callback_token, args.job_id,

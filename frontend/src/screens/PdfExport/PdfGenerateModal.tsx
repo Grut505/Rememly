@@ -2,12 +2,19 @@ import { useEffect, useState } from 'react'
 import { Button } from '../../ui/Button'
 import { DatePicker } from '../../ui/DatePicker'
 import { Slider } from '../../ui/Slider'
+import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { articlesApi } from '../../api/articles'
 import { Article } from '../../api/types'
 import { getMonthYear } from '../../utils/date'
 import { usePdfGenerationStore } from '../../stores/pdfGenerationStore'
 import type { PdfListItem } from '../../api/pdf'
 import { pdfApi } from '../../api/pdf'
+import { configApi } from '../../api/config'
+import {
+  BlurbFormat, BlurbCoverType, BlurbPaperType,
+  BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, PAGE_COUNT_MIN, PAGE_COUNT_MAX,
+  estimateInteriorPageCount, spineWidthIn, formatSpineWidth,
+} from '../../utils/blurbPrintSpec'
 
 interface PdfGenerateModalProps {
   isOpen: boolean
@@ -49,6 +56,44 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const [autoMerge, setAutoMerge] = useState(true)
   const [cleanChunksAfterMerge, setCleanChunksAfterMerge] = useState(true)
 
+  // Blurb print-ready cover options (only shown/used when Blurb mode is on in Settings)
+  const [blurbModeEnabled, setBlurbModeEnabled] = useState(false)
+  const [blurbUnits, setBlurbUnits] = useState<'inches' | 'centimeters'>('inches')
+  const [blurbFormat, setBlurbFormat] = useState<BlurbFormat>('magazine_premium')
+  const [blurbCoverType, setBlurbCoverType] = useState<BlurbCoverType>('softcover')
+  const [blurbPaperType, setBlurbPaperType] = useState<BlurbPaperType>(BLURB_PAPER_TYPES[0])
+  const [blurbFrontBgColor, setBlurbFrontBgColor] = useState('#ffffff')
+  const [blurbBackBgColor, setBlurbBackBgColor] = useState('#ffffff')
+  const [blurbSpineBgColor, setBlurbSpineBgColor] = useState('#ffffff')
+  const [blurbBackCoverStyle, setBlurbBackCoverStyle] = useState<'color' | 'mosaic'>('color')
+  const [blurbSpineText, setBlurbSpineText] = useState('')
+  const [blurbSpineFontSizeCm, setBlurbSpineFontSizeCm] = useState(0.5)
+  const [showSpineWarning, setShowSpineWarning] = useState(false)
+
+  useEffect(() => {
+    Promise.all([
+      configApi.get('blurb_mode_enabled'),
+      configApi.get('blurb_measurement_units'),
+    ]).then(([modeResult, unitsResult]) => {
+      setBlurbModeEnabled(modeResult.value === 'true')
+      setBlurbUnits(unitsResult.value === 'centimeters' ? 'centimeters' : 'inches')
+    }).catch(() => {
+      // keep defaults (Blurb mode off)
+    })
+  }, [])
+
+  const estimatedPageCount = estimateInteriorPageCount(monthCounts.map((m) => m.activeCount))
+  const pageCountInRange = estimatedPageCount >= PAGE_COUNT_MIN && estimatedPageCount <= PAGE_COUNT_MAX
+  const estimatedSpineWidthIn = pageCountInRange
+    ? spineWidthIn(estimatedPageCount, blurbCoverType, blurbPaperType)
+    : null
+  // A single line of spine text needs roughly its own font size in width to
+  // read at all once rotated onto the spine - matches the render script's
+  // same-threshold check.
+  const spineTextFits = Boolean(blurbSpineText.trim())
+    && estimatedSpineWidthIn !== null
+    && estimatedSpineWidthIn * 2.54 >= Math.max(blurbSpineFontSizeCm, 0.3)
+
   const reset = () => {
     setStep('dates')
     setStartDate('')
@@ -62,6 +107,16 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     setCoverStyle('masked-title')
     setAutoMerge(true)
     setCleanChunksAfterMerge(true)
+    setBlurbFormat('magazine_premium')
+    setBlurbCoverType('softcover')
+    setBlurbPaperType(BLURB_PAPER_TYPES[0])
+    setBlurbFrontBgColor('#ffffff')
+    setBlurbBackBgColor('#ffffff')
+    setBlurbSpineBgColor('#ffffff')
+    setBlurbBackCoverStyle('color')
+    setBlurbSpineText('')
+    setBlurbSpineFontSizeCm(0.5)
+    setShowSpineWarning(false)
   }
 
   const handleClose = () => {
@@ -160,7 +215,18 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
     }
   }
 
+  const handleGenerateClick = () => {
+    // If Blurb mode is on and the spine text won't fit, warn before
+    // generating rather than silently dropping it in the render.
+    if (blurbModeEnabled && blurbSpineText.trim() && !spineTextFits) {
+      setShowSpineWarning(true)
+      return
+    }
+    handleGenerate()
+  }
+
   const handleGenerate = async () => {
+    setShowSpineWarning(false)
     // Start generation in background using the global store
     const job = await startGeneration(startDate, endDate, {
       mosaic_layout: mosaicLayout,
@@ -169,6 +235,18 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       cover_style: coverStyle,
       auto_merge: autoMerge,
       clean_chunks: autoMerge ? cleanChunksAfterMerge : undefined,
+      ...(blurbModeEnabled ? {
+        blurb_mode_enabled: true,
+        blurb_format: blurbFormat,
+        blurb_cover_type: blurbCoverType,
+        blurb_paper_type: blurbPaperType,
+        blurb_front_bg_color: blurbFrontBgColor,
+        blurb_back_bg_color: blurbBackBgColor,
+        blurb_spine_bg_color: blurbSpineBgColor,
+        blurb_back_cover_style: blurbBackCoverStyle,
+        blurb_spine_text: blurbSpineText.trim() || undefined,
+        blurb_spine_font_size_cm: blurbSpineFontSizeCm,
+      } : {}),
     })
 
     // Close modal immediately - progress will show in global notification
@@ -372,6 +450,159 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
 
               </div>
 
+              {/* Blurb print-ready cover options - only shown when Blurb mode is enabled in Settings */}
+              {blurbModeEnabled && (
+                <div className="border border-purple-200 rounded-lg bg-purple-50/40 p-4 space-y-4">
+                  <div className="text-sm font-medium text-purple-900">Print-ready cover for Blurb</div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Book format</label>
+                    <div className="flex gap-2">
+                      {(Object.keys(BLURB_FORMAT_LABELS) as BlurbFormat[]).map((fmt) => (
+                        <button
+                          key={fmt}
+                          onClick={() => setBlurbFormat(fmt)}
+                          className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                            blurbFormat === fmt
+                              ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {BLURB_FORMAT_LABELS[fmt]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Cover type</label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setBlurbCoverType('softcover')}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                          blurbCoverType === 'softcover'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Softcover
+                      </button>
+                      <button
+                        onClick={() => setBlurbCoverType('hardcover')}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                          blurbCoverType === 'hardcover'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Hardcover (ImageWrap)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Paper type</label>
+                    <select
+                      value={blurbPaperType}
+                      onChange={(e) => setBlurbPaperType(e.target.value as BlurbPaperType)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      {BLURB_PAPER_TYPES.map((paper) => (
+                        <option key={paper} value={paper}>{paper}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-1">
+                    <p className="text-xs text-gray-600">
+                      Estimated interior page count: <strong>{estimatedPageCount}</strong>
+                      {!pageCountInRange && (
+                        <span className="text-red-600"> (outside Blurb's {PAGE_COUNT_MIN}-{PAGE_COUNT_MAX} range - the cover won't be generated)</span>
+                      )}
+                    </p>
+                    {estimatedSpineWidthIn !== null && (
+                      <p className="text-xs text-gray-600">
+                        Estimated spine width: <strong>{formatSpineWidth(estimatedSpineWidthIn, blurbUnits)}</strong>
+                      </p>
+                    )}
+                    <p className="text-[11px] text-gray-400">
+                      Estimates only - the real page count and spine width are computed from the actual generated interior.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Background colors</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Front</label>
+                        <input type="color" value={blurbFrontBgColor} onChange={(e) => setBlurbFrontBgColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Back</label>
+                        <input type="color" value={blurbBackBgColor} onChange={(e) => setBlurbBackBgColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Spine</label>
+                        <input type="color" value={blurbSpineBgColor} onChange={(e) => setBlurbSpineBgColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Back cover style</label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setBlurbBackCoverStyle('color')}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                          blurbBackCoverStyle === 'color'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Solid color
+                      </button>
+                      <button
+                        onClick={() => setBlurbBackCoverStyle('mosaic')}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                          blurbBackCoverStyle === 'mosaic'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Full-album mosaic
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Spine text (optional)</label>
+                    <input
+                      type="text"
+                      value={blurbSpineText}
+                      onChange={(e) => setBlurbSpineText(e.target.value)}
+                      placeholder="e.g. family name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    <div className="mt-2">
+                      <Slider
+                        label="Font size"
+                        min={0.2}
+                        max={1.5}
+                        step={0.05}
+                        value={blurbSpineFontSizeCm}
+                        onChange={setBlurbSpineFontSizeCm}
+                        formatValue={(v) => `${v.toFixed(2)}cm`}
+                      />
+                    </div>
+                    {blurbSpineText.trim() && !spineTextFits && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        The spine may be too narrow for this text at the current font size - you'll be asked to confirm before generating.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Month divider layout */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -488,7 +719,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
               <Button variant="secondary" onClick={() => setStep('preview')} fullWidth>
                 Back
               </Button>
-              <Button onClick={handleGenerate} disabled={isGenerating} fullWidth>
+              <Button onClick={handleGenerateClick} disabled={isGenerating} fullWidth>
                 <svg className="w-5 h-5 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                   <path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
@@ -498,6 +729,17 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showSpineWarning}
+        title="Spine text may not fit"
+        message="The spine is estimated to be too narrow for your spine text at the current font size. If you continue, the cover-wrap PDF will render the spine as color-only, without the text."
+        confirmLabel="Generate anyway"
+        cancelLabel="Go back"
+        variant="danger"
+        onConfirm={handleGenerate}
+        onCancel={() => setShowSpineWarning(false)}
+      />
 
     </div>
   )

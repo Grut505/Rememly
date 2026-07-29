@@ -41,8 +41,17 @@ def get_drive_service(credentials_path: str, token_path: str, use_console: bool)
     return build("drive", "v3", credentials=creds)
 
 
+# Uploaded as its own file by render_pdf_chunks.py when Blurb mode is on -
+# a complete standalone PDF, not one of the interior chunks. It must be
+# excluded from the merge and delivered separately (see move_cover_wrap_if_present).
+COVER_WRAP_FILENAME = "cover_wrap.pdf"
+
+
 def list_pdf_files(service, folder_id: str) -> List[dict]:
-    q = f"'{folder_id}' in parents and mimeType='application/pdf' and trashed=false"
+    q = (
+        f"'{folder_id}' in parents and mimeType='application/pdf' and trashed=false "
+        f"and name != '{COVER_WRAP_FILENAME}'"
+    )
     results = service.files().list(q=q, fields="files(id,name,size,createdTime)").execute()
     files = results.get("files", [])
 
@@ -117,6 +126,26 @@ def move_file_to_folder(service, file_id: str, new_parent_id: str):
         removeParents=previous_parents,
         fields="id, parents",
     ).execute()
+
+
+def find_file_by_name(service, folder_id: str, name: str) -> Optional[dict]:
+    q = f"'{folder_id}' in parents and name='{name}' and trashed=false"
+    results = service.files().list(q=q, fields="files(id,name)").execute()
+    files = results.get("files", [])
+    return files[0] if files else None
+
+
+def move_cover_wrap_if_present(service, folder_id: str, destination_folder_id: str, new_name: str) -> Optional[dict]:
+    """If render_pdf_chunks.py uploaded a Blurb cover-wrap PDF alongside the
+    interior chunks, move it (not merge it) into the same destination as the
+    merged album PDF, renamed distinctly. No-op if Blurb mode wasn't on for
+    this job."""
+    cover_wrap = find_file_by_name(service, folder_id, COVER_WRAP_FILENAME)
+    if not cover_wrap:
+        return None
+    service.files().update(fileId=cover_wrap["id"], body={"name": new_name}).execute()
+    move_file_to_folder(service, cover_wrap["id"], destination_folder_id)
+    return cover_wrap
 
 
 def delete_chunks(service, folder_id: str, keep_file_id: str):
@@ -233,6 +262,12 @@ def main():
         if pdf_root_id:
             print("Moving merged PDF to Rememly/pdf ...")
             move_file_to_folder(service, created["id"], pdf_root_id)
+
+            cover_wrap_name = f"cover_blurb_{ts}.pdf"
+            moved_cover_wrap = move_cover_wrap_if_present(service, folder_id, pdf_root_id, cover_wrap_name)
+            if moved_cover_wrap:
+                print(f"Moved Blurb cover-wrap PDF to Rememly/pdf as {cover_wrap_name}")
+                result["cover_wrap_file_id"] = moved_cover_wrap["id"]
 
     if clean_chunks:
         print("Cleaning chunk PDFs in folder...")

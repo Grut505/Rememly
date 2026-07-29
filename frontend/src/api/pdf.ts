@@ -39,6 +39,16 @@ export interface PdfOptions {
   preview_solid?: boolean
   auto_merge?: boolean
   clean_chunks?: boolean
+  blurb_mode_enabled?: boolean
+  blurb_format?: 'magazine_premium' | 'standard_portrait'
+  blurb_cover_type?: 'softcover' | 'hardcover'
+  blurb_paper_type?: string
+  blurb_front_bg_color?: string
+  blurb_back_bg_color?: string
+  blurb_spine_bg_color?: string
+  blurb_back_cover_style?: 'color' | 'mosaic'
+  blurb_spine_text?: string
+  blurb_spine_font_size_cm?: number
 }
 
 export interface CreatePdfPayload {

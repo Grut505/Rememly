@@ -36,6 +36,12 @@ export function Settings() {
 
   const [autoDateFromPhoto, setAutoDateFromPhoto] = useState(true)
   const [initialAutoDateFromPhoto, setInitialAutoDateFromPhoto] = useState(true)
+  const [blurbModeEnabled, setBlurbModeEnabled] = useState(false)
+  const [initialBlurbModeEnabled, setInitialBlurbModeEnabled] = useState(false)
+  const [blurbMeasurementUnits, setBlurbMeasurementUnits] = useState<'inches' | 'centimeters'>('inches')
+  const [initialBlurbMeasurementUnits, setInitialBlurbMeasurementUnits] = useState<'inches' | 'centimeters'>('inches')
+  const [blurbBackCoverMosaicMaxPhotos, setBlurbBackCoverMosaicMaxPhotos] = useState(200)
+  const [initialBlurbBackCoverMosaicMaxPhotos, setInitialBlurbBackCoverMosaicMaxPhotos] = useState(200)
   const [familyName, setFamilyName] = useState('')
   const [initialFamilyName, setInitialFamilyName] = useState('')
   const [coverTitle, setCoverTitle] = useState('')
@@ -118,6 +124,9 @@ export function Settings() {
   const [usersLoading, setUsersLoading] = useState(false)
   const [users, setUsers] = useState<DeclaredUser[]>([])
   const isDirty = autoDateFromPhoto !== initialAutoDateFromPhoto
+    || blurbModeEnabled !== initialBlurbModeEnabled
+    || blurbMeasurementUnits !== initialBlurbMeasurementUnits
+    || blurbBackCoverMosaicMaxPhotos !== initialBlurbBackCoverMosaicMaxPhotos
     || familyName.trim() !== initialFamilyName.trim()
     || coverTitle.trim() !== initialCoverTitle.trim()
     || coverSubtitle.trim() !== initialCoverSubtitle.trim()
@@ -147,6 +156,7 @@ export function Settings() {
   useEffect(() => {
     loadConfig()
     loadAutoDateSetting()
+    loadBlurbSettings()
     loadLogsRange()
     loadFamileoLogsRange()
     loadUsers()
@@ -162,6 +172,29 @@ export function Settings() {
       setInitialAutoDateFromPhoto(value)
     } catch {
       // keep default (enabled)
+    }
+  }
+
+  const loadBlurbSettings = async () => {
+    try {
+      const [modeResult, unitsResult, mosaicCapResult] = await Promise.all([
+        configApi.get('blurb_mode_enabled'),
+        configApi.get('blurb_measurement_units'),
+        configApi.get('blurb_back_cover_mosaic_max_photos'),
+      ])
+      const modeValue = modeResult.value === 'true'
+      setBlurbModeEnabled(modeValue)
+      setInitialBlurbModeEnabled(modeValue)
+      const unitsValue = unitsResult.value === 'centimeters' ? 'centimeters' : 'inches'
+      setBlurbMeasurementUnits(unitsValue)
+      setInitialBlurbMeasurementUnits(unitsValue)
+      const mosaicCapNum = Number.isFinite(parseInt(mosaicCapResult.value || '', 10))
+        ? parseInt(mosaicCapResult.value || '200', 10)
+        : 200
+      setBlurbBackCoverMosaicMaxPhotos(mosaicCapNum)
+      setInitialBlurbBackCoverMosaicMaxPhotos(mosaicCapNum)
+    } catch {
+      // keep defaults (Blurb mode off, inches, 200-photo cap)
     }
   }
 
@@ -375,6 +408,9 @@ export function Settings() {
       const nextSubtitle = coverSubtitle.trim()
       await Promise.all([
         configApi.set('auto_date_from_photo', String(autoDateFromPhoto)),
+        configApi.set('blurb_mode_enabled', String(blurbModeEnabled)),
+        configApi.set('blurb_measurement_units', blurbMeasurementUnits),
+        configApi.set('blurb_back_cover_mosaic_max_photos', String(blurbBackCoverMosaicMaxPhotos)),
         configApi.set('family_name', nextValue),
         configApi.set('pdf_cover_title', nextTitle),
         configApi.set('pdf_cover_subtitle', nextSubtitle),
@@ -402,6 +438,9 @@ export function Settings() {
         configApi.set('pdf_cover_subtitle_h_cm', String(coverSubtitleFontCm)),
       ])
       setInitialAutoDateFromPhoto(autoDateFromPhoto)
+      setInitialBlurbModeEnabled(blurbModeEnabled)
+      setInitialBlurbMeasurementUnits(blurbMeasurementUnits)
+      setInitialBlurbBackCoverMosaicMaxPhotos(blurbBackCoverMosaicMaxPhotos)
       setFamilyName(nextValue)
       setInitialFamilyName(nextValue)
       setCoverTitle(nextTitle)
@@ -817,6 +856,72 @@ export function Settings() {
                   <p className="text-xs text-gray-500">When creating a new article, use the selected photo's date instead of today's date</p>
                 </div>
               </label>
+            </div>
+
+            {/* Blurb print-ready mode */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Blurb print-ready mode</h3>
+              <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={blurbModeEnabled}
+                  onChange={(e) => setBlurbModeEnabled(e.target.checked)}
+                  className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Enable Blurb mode</span>
+                  <p className="text-xs text-gray-500">Show print-ready cover options (book format, cover type, paper type) in the PDF export flow</p>
+                </div>
+              </label>
+              {blurbModeEnabled && (
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Measurement units</label>
+                    <div className="flex rounded-lg border border-gray-300 overflow-hidden max-w-xs">
+                      <button
+                        type="button"
+                        onClick={() => setBlurbMeasurementUnits('inches')}
+                        className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                          blurbMeasurementUnits === 'inches'
+                            ? 'bg-primary-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        Inches
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBlurbMeasurementUnits('centimeters')}
+                        className={`flex-1 px-3 py-2 text-sm font-medium border-l border-gray-300 transition-colors ${
+                          blurbMeasurementUnits === 'centimeters'
+                            ? 'bg-primary-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        Centimeters
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Calculations always use RPI Print's inch-based values - centimeters are a rounded display conversion only.
+                    </p>
+                  </div>
+                  <div>
+                    <Input
+                      label="Back cover mosaic max photos"
+                      type="number"
+                      value={String(blurbBackCoverMosaicMaxPhotos)}
+                      onChange={(e) => {
+                        const next = parseInt(e.target.value, 10)
+                        setBlurbBackCoverMosaicMaxPhotos(Number.isFinite(next) ? next : 200)
+                      }}
+                      className="max-w-xs"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Caps how many photos the full-album back-cover mosaic uses. Use -1 for no cap (every photo in the exported date range).
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Family Name */}

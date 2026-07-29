@@ -32,6 +32,8 @@ from googleapiclient.http import MediaIoBaseUpload
 from PIL import Image
 from playwright.sync_api import sync_playwright
 
+import blurb_print_spec
+
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SEASONAL_IMAGES_DIR = REPO_ROOT / "tools" / "images"
@@ -258,8 +260,8 @@ def month_mosaic_html(images: list, layout: str = 'full') -> str:
     if not images:
         return ''
 
-    mosaic_width = 12 if layout == 'centered' else 19
-    mosaic_height = 12 if layout == 'centered' else 27.7
+    mosaic_width = 12 if layout == 'centered' else PAGE_CONTENT_WIDTH_CM
+    mosaic_height = 12 if layout == 'centered' else PAGE_CONTENT_HEIGHT_CM
     gap = 0.1
 
     cols = 2 if len(images) <= 4 else (3 if len(images) <= 9 else 4)
@@ -311,8 +313,8 @@ def generate_seasonal_fruits(month_index: int) -> str:
     if not images:
         return ''
 
-    page_width = 19.0
-    page_height = 27.7
+    page_width = PAGE_CONTENT_WIDTH_CM
+    page_height = PAGE_CONTENT_HEIGHT_CM
     perimeter = 2 * (page_width + page_height - 4)
     ideal_size = min(2.2, perimeter / len(images) * 0.8)
     img_size = max(1.4, ideal_size)
@@ -393,7 +395,11 @@ def generate_cover_mosaic(articles: list, date_from: str, date_to: str, max_phot
     if not images:
         return f'<div class="cover"><h1>{title_text}</h1><p class="dates">{dates_text}</p></div>'
 
-    cells = smart_mosaic_layout(images, 19, 22, 0.07)
+    # 22cm was the original A4-derived height available for the mosaic below
+    # the title block (27.7cm page minus ~5.7cm for the title/dates text).
+    # Keep the same proportion of the page for other formats.
+    mosaic_area_height = PAGE_CONTENT_HEIGHT_CM * (22 / 27.7)
+    cells = smart_mosaic_layout(images, PAGE_CONTENT_WIDTH_CM, mosaic_area_height, 0.07)
     mosaic_html = ''.join(
         f'<div class="mosaic-cell" style="left:{c["x"]:.3f}cm; top:{c["y"]:.3f}cm; '
         f'width:{c["w"]:.3f}cm; height:{c["h"]:.3f}cm;">'
@@ -534,7 +540,7 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
     fallback_family_block = ''
     if not family_mask_enabled:
         fallback_family_block = f'''<div style="position:absolute; inset:0; color:#000; font-family: {family_font_family}; font-weight:{family_font_weight}; font-size:{family_font_cm}cm; letter-spacing:{family_letter_spacing}em; line-height:1; z-index:30;">
-      <div style="position:absolute; left:{family_x_cm}cm; bottom:0.2cm; width:27.7cm; white-space:nowrap; transform: rotate(-90deg) scaleX({family_scale_x}) scaleY({family_scale_y}); transform-origin: left bottom;">
+      <div style="position:absolute; left:{family_x_cm}cm; bottom:0.2cm; width:{PAGE_CONTENT_HEIGHT_CM}cm; white-space:nowrap; transform: rotate(-90deg) scaleX({family_scale_x}) scaleY({family_scale_y}); transform-origin: left bottom;">
         {render_multiline(family_mask_text)}
       </div>
     </div>'''
@@ -546,17 +552,17 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
     </div>'''
 
     return f'''
-  <div class="cover-mask-layout" style="width: 19cm; height: 27.7cm; position: relative;">
-    <svg width="19cm" height="27.7cm" viewBox="0 0 1900 2770" xmlns="http://www.w3.org/2000/svg" style="position:absolute; inset:0;">
+  <div class="cover-mask-layout" style="width: {PAGE_CONTENT_WIDTH_CM}cm; height: {PAGE_CONTENT_HEIGHT_CM}cm; position: relative;">
+    <svg width="{PAGE_CONTENT_WIDTH_CM}cm" height="{PAGE_CONTENT_HEIGHT_CM}cm" viewBox="0 0 {round(PAGE_CONTENT_WIDTH_CM * 100)} {round(PAGE_CONTENT_HEIGHT_CM * 100)}" xmlns="http://www.w3.org/2000/svg" style="position:absolute; inset:0;">
       <rect width="100%" height="100%" fill="#ffffff" />
     </svg>
     {fallback_family_block}
-    <div style="position:absolute; left:{title_x_cm}cm; top:{title_y_cm}cm; max-width:19cm; color:#000; font-family: {title_font_family}; font-weight:{title_font_weight}; font-size:{title_font_cm}cm; letter-spacing:{title_letter_spacing}em; z-index:30;">
+    <div style="position:absolute; left:{title_x_cm}cm; top:{title_y_cm}cm; max-width:{PAGE_CONTENT_WIDTH_CM}cm; color:#000; font-family: {title_font_family}; font-weight:{title_font_weight}; font-size:{title_font_cm}cm; letter-spacing:{title_letter_spacing}em; z-index:30;">
       <span style="display:inline-block; transform: scaleX({title_scale_x}) scaleY({title_scale_y}); transform-origin: left top;">
         {render_multiline(cover_title)}
       </span>
     </div>
-    <div style="position:absolute; left:{subtitle_x_cm}cm; top:{subtitle_y_cm}cm; max-width:19cm; color:#000; font-family: {subtitle_font_family}; font-weight:{subtitle_font_weight}; font-size:{subtitle_font_cm}cm; letter-spacing:{subtitle_letter_spacing}em; z-index:30;">
+    <div style="position:absolute; left:{subtitle_x_cm}cm; top:{subtitle_y_cm}cm; max-width:{PAGE_CONTENT_WIDTH_CM}cm; color:#000; font-family: {subtitle_font_family}; font-weight:{subtitle_font_weight}; font-size:{subtitle_font_cm}cm; letter-spacing:{subtitle_letter_spacing}em; z-index:30;">
       <span style="display:inline-block; transform: scaleX({subtitle_scale_x}) scaleY({subtitle_scale_y}); transform-origin: left top;">
         {render_multiline(cover_subtitle)}
       </span>
@@ -600,7 +606,7 @@ def generate_cover_masked_mosaic(articles: list, max_photos: Optional[int], opti
     family_scale_y = resolve_family_scale('cover_family_scale_y', 'pdf_cover_family_scale_y')
 
     page_width_cm = family_height_cm * family_scale_y
-    page_height_cm = 27.7 * family_scale_x
+    page_height_cm = PAGE_CONTENT_HEIGHT_CM * family_scale_x
     gap = 0.07
     target_cell_count = max(len(images), 90)
 
@@ -640,8 +646,156 @@ def generate_cover_html(articles: list, date_from: str, date_to: str, options: d
 
     return f'''<!doctype html>
 <html>
-<head><meta charset="utf-8"><style>{PAGE_CSS}</style></head>
+<head><meta charset="utf-8"><style>{build_page_css()}</style></head>
 <body>{cover_html}</body>
+</html>'''
+
+
+# ---------------------------------------------------------------------------
+# Blurb print-ready cover wrap (front + spine + back, one flat canvas)
+# ---------------------------------------------------------------------------
+
+def _blurb_front_panel_html(articles: list, date_from: str, date_to: str, options: dict, config: dict,
+                             callback_url: str, callback_token: str, panel_w_cm: float, panel_h_cm: float) -> str:
+    """Reuses the existing front-cover generators (mosaic / masked-title),
+    temporarily pointing PAGE_CONTENT_WIDTH/HEIGHT at the wrap's front panel
+    size instead of the interior page size, then restores it - these
+    generators read the page-size globals rather than taking width/height
+    parameters directly."""
+    saved_w, saved_h = PAGE_CONTENT_WIDTH_CM, PAGE_CONTENT_HEIGHT_CM
+    set_page_dimensions(panel_w_cm, panel_h_cm)
+    try:
+        max_photos = options.get('max_mosaic_photos')
+        style = options.get('cover_style') or 'mosaic'
+        if style == 'masked-title':
+            return generate_cover_masked_mosaic(articles, max_photos, options, config, callback_url, callback_token)
+        return generate_cover_mosaic(articles, date_from, date_to, max_photos, options, config, callback_url, callback_token)
+    finally:
+        set_page_dimensions(saved_w, saved_h)
+
+
+def _blurb_back_panel_html(articles: list, options: dict, callback_url: str, callback_token: str,
+                            panel_w_cm: float, panel_h_cm: float, mosaic_max_photos: int) -> str:
+    style = options.get('blurb_back_cover_style') or 'color'
+    if style != 'mosaic':
+        return ''
+
+    images = []
+    limit = len(articles) if mosaic_max_photos is None or mosaic_max_photos < 0 else mosaic_max_photos
+    for article in articles:
+        if len(images) >= limit:
+            break
+        data = fetch_image_bytes(article, callback_url, callback_token)
+        if not data or looks_like_screenshot(data):
+            continue
+        resized = resize_image_bytes(data, COVER_MAX_DIM)
+        if resized:
+            b64, mime, aspect = resized
+            images.append({'base64': b64, 'mimeType': mime, 'aspectRatio': aspect})
+
+    if not images:
+        return ''
+
+    cells = smart_mosaic_layout(images, panel_w_cm, panel_h_cm, 0.07)
+    return ''.join(
+        f'<div class="mosaic-cell" style="left:{c["x"]:.3f}cm; top:{c["y"]:.3f}cm; '
+        f'width:{c["w"]:.3f}cm; height:{c["h"]:.3f}cm;">'
+        f'<img src="data:{c["img"]["mimeType"]};base64,{c["img"]["base64"]}" alt="" /></div>'
+        for c in cells
+    )
+
+
+def generate_blurb_cover_html(articles: list, date_from: str, date_to: str, options: dict, config: dict,
+                               callback_url: str, callback_token: str, format_key: str, cover_type: str,
+                               paper_type: str, page_count: int) -> str:
+    """Assembles the print-ready cover wrap (back panel | spine | front
+    panel, one flat canvas) per blurb_print_spec's geometry, reusing the
+    existing front-cover mosaic/masked-title generators for the front panel."""
+    bleed_in = blurb_print_spec.BLEED_IN[cover_type]
+    panel_w_in, panel_h_in = blurb_print_spec.panel_dimensions_in(format_key, cover_type)
+    spine_w_in = blurb_print_spec.spine_width_in(page_count, cover_type, paper_type)
+    safe_zone_in = blurb_print_spec.SAFE_ZONE_MARGIN_IN
+
+    bleed_cm = blurb_print_spec.inch_to_cm(bleed_in)
+    panel_w_cm = blurb_print_spec.inch_to_cm(panel_w_in)
+    panel_h_cm = blurb_print_spec.inch_to_cm(panel_h_in)
+    spine_w_cm = blurb_print_spec.inch_to_cm(spine_w_in)
+    safe_zone_cm = blurb_print_spec.inch_to_cm(safe_zone_in)
+    barcode_w_cm = blurb_print_spec.inch_to_cm(blurb_print_spec.BARCODE_AREA_IN[0])
+    barcode_h_cm = blurb_print_spec.inch_to_cm(blurb_print_spec.BARCODE_AREA_IN[1])
+    barcode_margin_side_cm = blurb_print_spec.inch_to_cm(blurb_print_spec.BARCODE_MARGIN_FROM_SPINE_SIDE_IN)
+    barcode_margin_bottom_cm = blurb_print_spec.inch_to_cm(blurb_print_spec.BARCODE_MARGIN_FROM_BOTTOM_IN)
+
+    full_w_cm = 2 * panel_w_cm + spine_w_cm + 2 * bleed_cm
+    full_h_cm = panel_h_cm + 2 * bleed_cm
+
+    back_x_cm = 0.0
+    spine_x_cm = bleed_cm + panel_w_cm
+    front_x_cm = bleed_cm + panel_w_cm + spine_w_cm
+
+    front_bg_color = options.get('blurb_front_bg_color') or '#ffffff'
+    back_bg_color = options.get('blurb_back_bg_color') or '#ffffff'
+    spine_bg_color = options.get('blurb_spine_bg_color') or '#ffffff'
+    mosaic_max_photos = options.get('blurb_back_cover_mosaic_max_photos')
+
+    front_inner_html = _blurb_front_panel_html(
+        articles, date_from, date_to, options, config, callback_url, callback_token, panel_w_cm, panel_h_cm
+    )
+    back_inner_html = _blurb_back_panel_html(
+        articles, options, callback_url, callback_token, panel_w_cm, panel_h_cm, mosaic_max_photos
+    )
+
+    # Spine text: only rendered if it fits legibly at the requested font size.
+    # A single line of text needs roughly its font size in width to read at
+    # all once rotated onto the spine - below that, skip it entirely rather
+    # than render illegible/overlapping text.
+    spine_text = (options.get('blurb_spine_text') or '').strip()
+    spine_font_cm = float(options.get('blurb_spine_font_size_cm') or 0.5)
+    spine_fits = bool(spine_text) and spine_w_cm >= max(spine_font_cm, 0.3)
+    spine_text_html = ''
+    if spine_fits:
+        # A -90deg rotation with transform-origin "left bottom" shifts the
+        # box LEFT by roughly its own (unrotated) line-height once rotated -
+        # positioning it at left:0 pushes it off-page to the left. Centering
+        # it at spine_w_cm/2 (plus a half-line-height nudge, approximated
+        # from font size) keeps it within the spine regardless of exact
+        # font metrics. Verified empirically by measuring the rotated box's
+        # bounding rect with Playwright.
+        spine_left_cm = spine_w_cm / 2 + spine_font_cm * 0.6
+        spine_text_html = f'''<div style="position:absolute; left:{spine_left_cm}cm; bottom:0.3cm; width:{panel_h_cm}cm; white-space:nowrap; transform: rotate(-90deg); transform-origin: left bottom; text-align:center; font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif; font-size:{spine_font_cm}cm; color:#000;">
+      {esc(spine_text)}
+    </div>'''
+
+    return f'''<!doctype html>
+<html>
+<head><meta charset="utf-8"><style>{_font_face_css()}
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+@page {{ size: {full_w_cm}cm {full_h_cm}cm; margin: 0; }}
+body {{ font-family: Arial, sans-serif; }}
+.blurb-cover-canvas {{ position: relative; width: {full_w_cm}cm; height: {full_h_cm}cm; overflow: hidden; }}
+.blurb-panel {{ position: absolute; top: 0; height: {full_h_cm}cm; overflow: hidden; }}
+.blurb-safe-zone {{ position: absolute; overflow: hidden; }}
+.mosaic-cell {{ position: absolute; overflow: hidden; }}
+.mosaic-cell img {{ width: 100%; height: 100%; object-fit: cover; }}
+</style></head>
+<body>
+  <div class="blurb-cover-canvas">
+    <div class="blurb-panel" style="left:{back_x_cm}cm; width:{bleed_cm + panel_w_cm}cm; background:{back_bg_color};">
+      <div class="blurb-safe-zone" style="left:{bleed_cm + safe_zone_cm}cm; top:{bleed_cm + safe_zone_cm}cm; width:{panel_w_cm - 2 * safe_zone_cm}cm; height:{panel_h_cm - 2 * safe_zone_cm}cm;">
+        {back_inner_html}
+      </div>
+      <div style="position:absolute; right:{barcode_margin_side_cm}cm; bottom:{bleed_cm + barcode_margin_bottom_cm}cm; width:{barcode_w_cm}cm; height:{barcode_h_cm}cm; background:#ffffff;"></div>
+    </div>
+    <div class="blurb-panel" style="left:{spine_x_cm}cm; width:{spine_w_cm}cm; background:{spine_bg_color};">
+      {spine_text_html}
+    </div>
+    <div class="blurb-panel" style="left:{front_x_cm}cm; width:{panel_w_cm + bleed_cm}cm; background:{front_bg_color};">
+      <div style="position:absolute; left:0; top:0; width:{panel_w_cm}cm; height:{panel_h_cm}cm; overflow:hidden;">
+        {front_inner_html}
+      </div>
+    </div>
+  </div>
+</body>
 </html>'''
 
 
@@ -755,7 +909,7 @@ def generate_month_chunk_html(month_articles: list, month_year_label: str, month
 
     return f'''<!doctype html>
 <html>
-<head><meta charset="utf-8"><style>{PAGE_CSS}</style></head>
+<head><meta charset="utf-8"><style>{build_page_css()}</style></head>
 <body>
 {divider_html}
 {pages_html}
@@ -800,66 +954,88 @@ def _font_face_css() -> str:
 # CSS (ported verbatim from backend/src/pdf.js getPdfStyles())
 # ---------------------------------------------------------------------------
 
-PAGE_CSS = _font_face_css() + """
-@page { size: A4; margin: 1cm; }
-* { box-sizing: border-box; }
-body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+# Page content-area dimensions in cm - i.e. the physical page (trim) size
+# minus the @page margin. Default to the pre-Blurb A4-derived content area
+# (A4 21x29.7cm minus a 1cm margin on every side = 19x27.7cm). Overridden
+# once per job in main() via set_page_dimensions() when Blurb mode is
+# enabled, using the selected format's trim size (see blurb_print_spec.py).
+# Every hardcoded "27.7"/"19" page-height/width reference in this file
+# reads these instead of a literal, so the whole interior layout follows
+# whatever format was selected without forking the templates.
+PAGE_MARGIN_CM = 1.0
+PAGE_CONTENT_WIDTH_CM = 19.0
+PAGE_CONTENT_HEIGHT_CM = 27.7
 
-.cover { page-break-after: always; text-align: center; padding-top: 8cm; }
-.cover h1 { font-size: 40pt; margin-bottom: 0.9cm; font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif; letter-spacing: 0.02em; }
-.cover .dates { font-size: 20pt; color: #666; font-family: "Optima", "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
 
-.cover-mosaic { height: 27.7cm; display: flex; flex-direction: column; }
-.cover-title { text-align: center; padding: 0.5cm 0 0.8cm 0; flex-shrink: 0; }
-.cover-title h1 { font-size: 30pt; margin: 0 0 0.35cm 0; color: #2b2b2b; font-weight: 700; font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif; letter-spacing: 0.03em; }
-.cover-title .dates { font-size: 15pt; color: #555; margin: 0; font-family: "Optima", "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
+def set_page_dimensions(content_width_cm: float, content_height_cm: float) -> None:
+    global PAGE_CONTENT_WIDTH_CM, PAGE_CONTENT_HEIGHT_CM
+    PAGE_CONTENT_WIDTH_CM = content_width_cm
+    PAGE_CONTENT_HEIGHT_CM = content_height_cm
 
-.mosaic-container { flex: 1; position: relative; overflow: hidden; }
-.mosaic-cell { position: absolute; overflow: hidden; }
-.mosaic-cell img { width: 100%; height: 100%; object-fit: cover; }
 
-.articles-page { page-break-before: always; height: 27.7cm; display: flex; flex-direction: column; gap: 0.4cm; }
-.article { flex: 1; border: 1px solid #ccc; display: flex; flex-direction: column; overflow: hidden; max-height: 13.5cm; }
-.article:nth-child(2) { margin-top: 0.2cm; }
-.article-content { flex: 1; display: flex; overflow: hidden; }
+def build_page_css() -> str:
+    page_width_cm = PAGE_CONTENT_WIDTH_CM + 2 * PAGE_MARGIN_CM
+    page_height_cm = PAGE_CONTENT_HEIGHT_CM + 2 * PAGE_MARGIN_CM
+    return _font_face_css() + f"""
+@page {{ size: {page_width_cm}cm {page_height_cm}cm; margin: {PAGE_MARGIN_CM}cm; }}
+* {{ box-sizing: border-box; }}
+body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
 
-.article-content.landscape { flex-direction: column; align-items: stretch; }
-.article-content.landscape .article-image { width: 100%; display: flex; justify-content: center; }
-.article-content.landscape .article-image img { width: 100%; max-height: 9.5cm; object-fit: contain; object-position: center top; }
-.article-content.landscape .article-bottom { display: flex; flex-direction: row; align-items: center; gap: 0.5cm; padding: 0.3cm; }
-.article-content.landscape .article-date { flex-shrink: 0; }
-.article-content.landscape .article-text { flex: 1; }
+.cover {{ page-break-after: always; text-align: center; padding-top: 8cm; }}
+.cover h1 {{ font-size: 40pt; margin-bottom: 0.9cm; font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif; letter-spacing: 0.02em; }}
+.cover .dates {{ font-size: 20pt; color: #666; font-family: "Optima", "Segoe UI", "Helvetica Neue", Arial, sans-serif; }}
 
-.article-content.portrait { flex-direction: row; align-items: stretch; }
-.article-content.portrait .article-image { flex-shrink: 0; display: flex; align-items: stretch; margin-right: 0.4cm; }
-.article-content.portrait .article-image img { height: 100%; max-width: 10cm; object-fit: contain; object-position: left top; }
-.article-content.portrait .article-right { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.3cm; padding: 0.3cm 0.3cm 0.3cm 0; }
+.cover-mosaic {{ height: {PAGE_CONTENT_HEIGHT_CM}cm; display: flex; flex-direction: column; }}
+.cover-title {{ text-align: center; padding: 0.5cm 0 0.8cm 0; flex-shrink: 0; }}
+.cover-title h1 {{ font-size: 30pt; margin: 0 0 0.35cm 0; color: #2b2b2b; font-weight: 700; font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif; letter-spacing: 0.03em; }}
+.cover-title .dates {{ font-size: 15pt; color: #555; margin: 0; font-family: "Optima", "Segoe UI", "Helvetica Neue", Arial, sans-serif; }}
 
-.article-date { font-size: 11pt; color: #3366cc; font-weight: 500; }
-.article-text { font-size: 13pt; line-height: 1.4; }
+.mosaic-container {{ flex: 1; position: relative; overflow: hidden; }}
+.mosaic-cell {{ position: absolute; overflow: hidden; }}
+.mosaic-cell img {{ width: 100%; height: 100%; object-fit: cover; }}
 
-.page-number { text-align: right; font-size: 10pt; color: #666; padding-top: 0.3cm; }
-.articles-page .page-number { margin-top: auto; align-self: flex-end; }
+.articles-page {{ page-break-before: always; height: {PAGE_CONTENT_HEIGHT_CM}cm; display: flex; flex-direction: column; gap: 0.4cm; }}
+.article {{ flex: 1; border: 1px solid #ccc; display: flex; flex-direction: column; overflow: hidden; max-height: 13.5cm; }}
+.article:nth-child(2) {{ margin-top: 0.2cm; }}
+.article-content {{ flex: 1; display: flex; overflow: hidden; }}
 
-.month-divider { page-break-before: always; position: relative; height: 27.7cm; overflow: hidden; }
-.month-divider .page-number { position: absolute; bottom: 0; right: 0; z-index: 10; }
-.month-mosaic-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; opacity: 0.15; }
-.month-mosaic-cell { position: absolute; overflow: hidden; }
-.month-mosaic-cell img { width: 100%; height: 100%; object-fit: cover; }
+.article-content.landscape {{ flex-direction: column; align-items: stretch; }}
+.article-content.landscape .article-image {{ width: 100%; display: flex; justify-content: center; }}
+.article-content.landscape .article-image img {{ width: 100%; max-height: 9.5cm; object-fit: contain; object-position: center top; }}
+.article-content.landscape .article-bottom {{ display: flex; flex-direction: row; align-items: center; gap: 0.5cm; padding: 0.3cm; }}
+.article-content.landscape .article-date {{ flex-shrink: 0; }}
+.article-content.landscape .article-text {{ flex: 1; }}
 
-.month-title-container { position: absolute; top: 40%; left: 0; right: 0; text-align: center; transform: translateY(-50%); z-index: 5; }
-.month-title { font-size: 42pt; font-weight: bold; color: #333; margin: 0 0 0.5cm 0; text-shadow: 2px 2px 4px rgba(255,255,255,0.8); }
-.month-subtitle { font-size: 16pt; color: #666; margin: 0; }
+.article-content.portrait {{ flex-direction: row; align-items: stretch; }}
+.article-content.portrait .article-image {{ flex-shrink: 0; display: flex; align-items: stretch; margin-right: 0.4cm; }}
+.article-content.portrait .article-image img {{ height: 100%; max-width: 10cm; object-fit: contain; object-position: left top; }}
+.article-content.portrait .article-right {{ flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.3cm; padding: 0.3cm 0.3cm 0.3cm 0; }}
 
-.month-divider-centered .month-title-container-centered { position: absolute; top: 8%; left: 0; right: 0; text-align: center; z-index: 5; }
+.article-date {{ font-size: 11pt; color: #3366cc; font-weight: 500; }}
+.article-text {{ font-size: 13pt; line-height: 1.4; }}
 
-.season-decorations { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 3; }
-.season-item { position: absolute; }
-.season-item img { width: 100%; height: 100%; object-fit: contain; }
+.page-number {{ text-align: right; font-size: 10pt; color: #666; padding-top: 0.3cm; }}
+.articles-page .page-number {{ margin-top: auto; align-self: flex-end; }}
 
-.month-mosaic-centered { position: absolute; top: 32%; left: 50%; transform: translateX(-50%); width: 12cm; height: 12cm; border-radius: 0.15cm; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-.month-mosaic-centered .month-mosaic-cell { position: absolute; }
-.month-mosaic-centered .month-mosaic-cell img { width: 100%; height: 100%; object-fit: cover; }
+.month-divider {{ page-break-before: always; position: relative; height: {PAGE_CONTENT_HEIGHT_CM}cm; overflow: hidden; }}
+.month-divider .page-number {{ position: absolute; bottom: 0; right: 0; z-index: 10; }}
+.month-mosaic-bg {{ position: absolute; top: 0; left: 0; right: 0; bottom: 0; opacity: 0.15; }}
+.month-mosaic-cell {{ position: absolute; overflow: hidden; }}
+.month-mosaic-cell img {{ width: 100%; height: 100%; object-fit: cover; }}
+
+.month-title-container {{ position: absolute; top: 40%; left: 0; right: 0; text-align: center; transform: translateY(-50%); z-index: 5; }}
+.month-title {{ font-size: 42pt; font-weight: bold; color: #333; margin: 0 0 0.5cm 0; text-shadow: 2px 2px 4px rgba(255,255,255,0.8); }}
+.month-subtitle {{ font-size: 16pt; color: #666; margin: 0; }}
+
+.month-divider-centered .month-title-container-centered {{ position: absolute; top: 8%; left: 0; right: 0; text-align: center; z-index: 5; }}
+
+.season-decorations {{ position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 3; }}
+.season-item {{ position: absolute; }}
+.season-item img {{ width: 100%; height: 100%; object-fit: contain; }}
+
+.month-mosaic-centered {{ position: absolute; top: 32%; left: 50%; transform: translateX(-50%); width: 12cm; height: 12cm; border-radius: 0.15cm; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }}
+.month-mosaic-centered .month-mosaic-cell {{ position: absolute; }}
+.month-mosaic-centered .month-mosaic-cell img {{ width: 100%; height: 100%; object-fit: cover; }}
 """
 
 
@@ -975,7 +1151,14 @@ def render_html_to_pdf(browser, html_content: str) -> bytes:
         # masked-title cover's vertical text between renders.
         page.evaluate("document.fonts.ready")
         page.wait_for_function("document.fonts.status === 'loaded'", timeout=15000)
-        return page.pdf(print_background=True)
+        # prefer_css_page_size is required for the @page CSS rule to actually
+        # control the output page size - without it, Playwright silently
+        # defaults to Letter (21.59x27.94cm) regardless of @page, which was
+        # true even before Blurb mode existed (today's "A4" pages have
+        # actually always come out at Letter size). Confirmed by rendering a
+        # custom @page size with and without this flag and measuring the
+        # resulting PDF's MediaBox.
+        return page.pdf(print_background=True, prefer_css_page_size=True)
     finally:
         page.close()
 
@@ -1005,6 +1188,17 @@ def main():
     job, articles, config = fetch_job(args.callback_url, args.callback_token, args.job_id)
     options = json.loads(job.get('options_json') or '{}')
 
+    blurb_mode = bool(options.get('blurb_mode_enabled'))
+    blurb_format = options.get('blurb_format') or 'magazine_premium'
+    blurb_cover_type = options.get('blurb_cover_type') or 'softcover'
+    blurb_paper_type = options.get('blurb_paper_type') or '100# Text, Gloss'
+
+    if blurb_mode:
+        trim_w_in, trim_h_in = blurb_print_spec.TRIM_SIZES_IN[blurb_format]
+        content_w_cm = blurb_print_spec.inch_to_cm(trim_w_in) - 2 * PAGE_MARGIN_CM
+        content_h_cm = blurb_print_spec.inch_to_cm(trim_h_in) - 2 * PAGE_MARGIN_CM
+        set_page_dimensions(content_w_cm, content_h_cm)
+
     try:
         by_month = defaultdict(list)
         for article in articles:
@@ -1015,9 +1209,27 @@ def main():
         page_counts = {key: 1 + math.ceil(len(by_month[key]) / 2) for key in months}
         total_pages = sum(page_counts.values())
 
+        # RPI Print requires an even interior page count. Rather than reject
+        # the export, pad with one blank trailing page - the family shouldn't
+        # have to add/remove a photo just to satisfy a print-vendor rule.
+        needs_blank_padding = blurb_mode and total_pages % 2 == 1
+        if needs_blank_padding:
+            total_pages += 1
+
+        blurb_page_count_ok = True
+        blurb_spine_width_in = None
+        if blurb_mode:
+            blurb_page_count_ok = (
+                blurb_print_spec.PAGE_COUNT_MIN <= total_pages <= blurb_print_spec.PAGE_COUNT_MAX
+            )
+            if blurb_page_count_ok:
+                blurb_spine_width_in = blurb_print_spec.spine_width_in(
+                    total_pages, blurb_cover_type, blurb_paper_type
+                )
+
         service = get_drive_service(args.credentials, args.token, args.no_browser)
         folder_id, folder_url = create_job_chunks_folder(service, args.job_id)
-        total_chunks = 1 + len(months)
+        total_chunks = 1 + len(months) + (1 if needs_blank_padding else 0) + (1 if blurb_mode and blurb_page_count_ok else 0)
         report_status(args.callback_url, args.callback_token, args.job_id, 8,
                       f"Rendering {total_chunks} chunk(s) for {len(articles)} article(s)")
 
@@ -1045,6 +1257,34 @@ def main():
                 progress = 10 + int(65 * idx / max(len(months), 1))
                 report_status(args.callback_url, args.callback_token, args.job_id,
                               progress, f"Rendered {month_label(key)} ({idx + 1}/{total_chunks})")
+
+            if needs_blank_padding:
+                blank_html = f'''<!doctype html>
+<html><head><meta charset="utf-8"><style>{build_page_css()}</style></head>
+<body><div class="articles-page"></div></body></html>'''
+                blank_pdf = render_html_to_pdf(browser, blank_html)
+                upload_pdf(service, folder_id, f"chunk_{len(months) + 1:03d}_blank.pdf", blank_pdf)
+                report_status(args.callback_url, args.callback_token, args.job_id,
+                              78, "Rendered blank padding page (even page count for Blurb)")
+
+            if blurb_mode:
+                if blurb_page_count_ok:
+                    cover_wrap_html = generate_blurb_cover_html(
+                        articles, job.get('date_from', ''), job.get('date_to', ''),
+                        options, config, args.callback_url, args.callback_token,
+                        format_key=blurb_format, cover_type=blurb_cover_type,
+                        paper_type=blurb_paper_type, page_count=total_pages,
+                    )
+                    cover_wrap_pdf = render_html_to_pdf(browser, cover_wrap_html)
+                    upload_pdf(service, folder_id, "cover_wrap.pdf", cover_wrap_pdf)
+                    report_status(args.callback_url, args.callback_token, args.job_id,
+                                  85, f"Rendered Blurb cover-wrap (spine {blurb_spine_width_in:.3f}in)")
+                else:
+                    report_status(
+                        args.callback_url, args.callback_token, args.job_id, 85,
+                        f"Skipped Blurb cover-wrap: page count {total_pages} is outside "
+                        f"the supported {blurb_print_spec.PAGE_COUNT_MIN}-{blurb_print_spec.PAGE_COUNT_MAX} range"
+                    )
 
             browser.close()
 

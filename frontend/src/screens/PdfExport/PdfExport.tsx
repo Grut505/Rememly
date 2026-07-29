@@ -626,16 +626,9 @@ export function PdfExport() {
                           </svg>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-gray-900">
-                              {formatDateRange(pdf.date_from, pdf.date_to)}
-                            </p>
-                            {pdf.is_blurb && (
-                              <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
-                                Blurb
-                              </span>
-                            )}
-                          </div>
+                          <p className="font-medium text-gray-900">
+                            {formatDateRange(pdf.date_from, pdf.date_to)}
+                          </p>
                           <div className="flex items-center gap-2 mt-1">
                             <div className="flex-1 h-1.5 bg-blue-200 rounded-full overflow-hidden">
                               <div
@@ -688,6 +681,13 @@ export function PdfExport() {
                           )}
                         </button>
                       </div>
+                      {pdf.is_blurb && (
+                        <div className="flex justify-end mt-2">
+                          <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
+                            Blurb
+                          </span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -732,36 +732,9 @@ export function PdfExport() {
                         )}
 
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-gray-900">
-                              {formatDateRange(pdf.date_from, pdf.date_to)}
-                            </p>
-                            {pdf.pdf_url && (
-                              <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">
-                                Merged
-                              </span>
-                            )}
-                            {!pdf.pdf_url && pdf.status === 'DONE' && (
-                              <span className="px-2 py-0.5 text-xs font-medium bg-yellow-50 text-yellow-700 rounded">
-                                Merge pending
-                              </span>
-                            )}
-                            {pdf.status === 'ERROR' && (
-                              <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
-                                Error
-                              </span>
-                            )}
-                            {pdf.status === 'CANCELLED' && (
-                              <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded">
-                                Cancelled
-                              </span>
-                            )}
-                            {pdf.is_blurb && (
-                              <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
-                                Blurb
-                              </span>
-                            )}
-                          </div>
+                          <p className="font-medium text-gray-900">
+                            {formatDateRange(pdf.date_from, pdf.date_to)}
+                          </p>
                           <p className="text-sm text-gray-500 mt-1">
                             Created on {formatDate(pdf.created_at)}
                           </p>
@@ -867,6 +840,35 @@ export function PdfExport() {
                           </div>
                         )}
                       </div>
+                      {(pdf.pdf_url || (!pdf.pdf_url && pdf.status === 'DONE') || pdf.status === 'ERROR' || pdf.status === 'CANCELLED' || pdf.is_blurb) && (
+                        <div className="flex justify-end flex-wrap gap-1 mt-2">
+                          {pdf.pdf_url && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">
+                              Merged
+                            </span>
+                          )}
+                          {!pdf.pdf_url && pdf.status === 'DONE' && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-yellow-50 text-yellow-700 rounded">
+                              Merge pending
+                            </span>
+                          )}
+                          {pdf.status === 'ERROR' && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
+                              Error
+                            </span>
+                          )}
+                          {pdf.status === 'CANCELLED' && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded">
+                              Cancelled
+                            </span>
+                          )}
+                          {pdf.is_blurb && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
+                              Blurb
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

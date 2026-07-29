@@ -102,9 +102,13 @@ jobs:
           fi
           CLEAN_FLAG=""
           if [ "${{ inputs.clean_chunks }}" = "true" ]; then
-            CLEAN_FLAG="--clean-chunks"
+            CLEAN_FLAG="--clean-chunks --delete-chunks-folder"
           fi
-          timeout 45m python -u scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --no-browser --skip-callback $CLEAN_FLAG \
+          # --move-to-pdf-root is required in production - without it the merged
+          # PDF (and any Blurb cover-wrap) just stays in the temporary per-job
+          # chunks folder instead of moving to Rememly/pdf. There's no ini file
+          # on this runner (it's gitignored, local-dev only) to fall back on.
+          timeout 45m python -u scripts/merge_pdf_from_drive.py --folder-id "${{ inputs.folder_id }}" --credentials credentials.json --token token.json --no-browser --skip-callback --move-to-pdf-root $CLEAN_FLAG \
             1> /tmp/merge_out.txt 2> /tmp/merge_err.txt
           echo "---- merge stdout (tail) ----"
           tail -n 50 /tmp/merge_out.txt || true

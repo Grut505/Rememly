@@ -200,6 +200,8 @@ def main():
     parser.add_argument("--no-browser", action="store_true", help="Use console OAuth flow (no local browser)")
     parser.add_argument("--auth-only", action="store_true", help="Only (re)authenticate and write token.json, then exit")
     parser.add_argument("--clean-chunks", action="store_true", help="Delete chunk PDFs after successful merge")
+    parser.add_argument("--move-to-pdf-root", action="store_true", help="Move the merged PDF (and Blurb cover-wrap, if any) into Rememly/pdf")
+    parser.add_argument("--delete-chunks-folder", action="store_true", help="Delete the per-job chunks folder after cleaning it")
     parser.add_argument("--skip-callback", action="store_true", help="Do not call Apps Script merge-complete callback")
     args = parser.parse_args()
 
@@ -218,8 +220,14 @@ def main():
     open_local = (cfg.get("open_local", "false").lower() == "true")
     apps_script_url = cfg.get("apps_script_url", "").strip()
     merge_token = cfg.get("merge_token", "").strip()
-    delete_chunks_folder = (cfg.get("delete_chunks_folder", "false").lower() == "true")
-    move_to_pdf_root = (cfg.get("move_to_pdf_root", "false").lower() == "true")
+    # CLI flags OR'd with the (gitignored, local-only) ini file - the real
+    # GitHub Actions runner has no ini file at all (it's not committed), so
+    # these must be reachable via CLI flags too, not silently default to
+    # off in CI. This was a real, previously-unnoticed production bug: the
+    # merged PDF (and any Blurb cover-wrap) never actually moved out of the
+    # temporary per-job chunks folder, for every job, not just Blurb ones.
+    delete_chunks_folder = args.delete_chunks_folder or (cfg.get("delete_chunks_folder", "false").lower() == "true")
+    move_to_pdf_root = args.move_to_pdf_root or (cfg.get("move_to_pdf_root", "false").lower() == "true")
     clean_chunks = args.clean_chunks or (cfg.get("clean_chunks", "false").lower() == "true")
 
     service = get_drive_service(credentials, token, args.no_browser)
@@ -272,7 +280,6 @@ def main():
     # family must point at a dedicated folder containing both, not at either
     # file alone (and not at the shared Rememly/pdf root, which also holds
     # every other job's output).
-    is_blurb = False
     callback_url = created.get("webViewLink", "")
 
     if move_to_pdf_root:
@@ -280,7 +287,6 @@ def main():
         if pdf_root_id:
             cover_wrap_present = find_file_by_name(service, folder_id, COVER_WRAP_FILENAME) is not None
             if cover_wrap_present:
-                is_blurb = True
                 print("Blurb mode: creating a dedicated delivery folder for the content + cover pair ...")
                 delivery_folder = create_folder(service, f"Blurb_{ts}", pdf_root_id)
                 delivery_folder_id = delivery_folder["id"]
@@ -314,7 +320,6 @@ def main():
             created["id"],
             callback_url,
             clean_chunks,
-            is_blurb,
         )
 
     if clean_chunks and delete_chunks_folder:

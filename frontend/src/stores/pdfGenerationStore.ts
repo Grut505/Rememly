@@ -103,6 +103,9 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
         progress_message: response.progress_message,
         pdf_url: response.pdf_url,
         pdf_file_id: response.pdf_file_id,
+        // The server only computes is_blurb when reading a job back (status/list) -
+        // there's no round trip needed here since we already know what we submitted.
+        is_blurb: Boolean(options.blurb_mode_enabled),
       }
 
       if (response.status === 'DONE' && response.pdf_url) {

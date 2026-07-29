@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 import { DatePicker } from '../../ui/DatePicker'
+import { Switch } from '../../ui/Switch'
 import { MONTHS_EN, isStandalonePWA } from '../../utils/constants'
 import { getCurrentYear } from '../../utils/date'
 import { articlesApi } from '../../api/articles'
@@ -25,6 +26,7 @@ interface FiltersPanelProps {
 }
 
 export type StatusFilter = 'active' | 'draft' | 'all' | 'deleted'
+type BaseStatus = 'active' | 'draft' | 'all'
 export type SourceFilter = 'all' | 'famileo' | 'local'
 
 export interface FilterValues {
@@ -48,7 +50,13 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
   const [author, setAuthor] = useState(initialFilters?.author ?? DEFAULT_FILTERS.author)
   const [search, setSearch] = useState(initialFilters?.search ?? DEFAULT_FILTERS.search)
   const [duplicatesOnly, setDuplicatesOnly] = useState(initialFilters?.duplicatesOnly ?? DEFAULT_FILTERS.duplicatesOnly)
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilters?.statusFilter ?? DEFAULT_FILTERS.statusFilter)
+  // "Deleted" is an override, not a fourth option alongside All/Active/Draft:
+  // baseStatus keeps whichever of those three was picked, and deletedOnly - when
+  // on - overrides it to show only deleted articles, independently of baseStatus.
+  const initialStatus = initialFilters?.statusFilter ?? DEFAULT_FILTERS.statusFilter
+  const [baseStatus, setBaseStatus] = useState<BaseStatus>(initialStatus === 'deleted' ? 'all' : initialStatus)
+  const [deletedOnly, setDeletedOnly] = useState(initialStatus === 'deleted')
+  const statusFilter: StatusFilter = deletedOnly ? 'deleted' : baseStatus
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialFilters?.sourceFilter ?? DEFAULT_FILTERS.sourceFilter)
   const [authors, setAuthors] = useState<{ email: string; pseudo: string }[]>([])
   const [loadingAuthors, setLoadingAuthors] = useState(false)
@@ -62,7 +70,9 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
       setAuthor(initialFilters.author ?? DEFAULT_FILTERS.author)
       setSearch(initialFilters.search ?? DEFAULT_FILTERS.search)
       setDuplicatesOnly(initialFilters.duplicatesOnly ?? DEFAULT_FILTERS.duplicatesOnly)
-      setStatusFilter(initialFilters.statusFilter ?? DEFAULT_FILTERS.statusFilter)
+      const nextStatus = initialFilters.statusFilter ?? DEFAULT_FILTERS.statusFilter
+      setBaseStatus(nextStatus === 'deleted' ? 'all' : nextStatus)
+      setDeletedOnly(nextStatus === 'deleted')
       setSourceFilter(initialFilters.sourceFilter ?? DEFAULT_FILTERS.sourceFilter)
     }
   }, [initialFilters])
@@ -108,7 +118,8 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
     setAuthor(DEFAULT_FILTERS.author)
     setSearch(DEFAULT_FILTERS.search)
     setDuplicatesOnly(DEFAULT_FILTERS.duplicatesOnly)
-    setStatusFilter(DEFAULT_FILTERS.statusFilter)
+    setBaseStatus(DEFAULT_FILTERS.statusFilter as BaseStatus)
+    setDeletedOnly(false)
     setSourceFilter(DEFAULT_FILTERS.sourceFilter)
     onApply(DEFAULT_FILTERS)
     onClose()
@@ -256,51 +267,50 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Status
           </label>
-          <div className="flex rounded-lg border border-gray-300 overflow-hidden">
+          <div className={`flex rounded-lg border border-gray-300 overflow-hidden ${deletedOnly ? 'opacity-50' : ''}`}>
             <button
               type="button"
-              onClick={() => setStatusFilter('all')}
+              onClick={() => setBaseStatus('all')}
+              disabled={deletedOnly}
               className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
-                statusFilter === 'all'
+                baseStatus === 'all'
                   ? 'bg-primary-600 text-white'
                   : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
+              } ${deletedOnly ? 'cursor-not-allowed' : ''}`}
             >
               All
             </button>
             <button
               type="button"
-              onClick={() => setStatusFilter('active')}
+              onClick={() => setBaseStatus('active')}
+              disabled={deletedOnly}
               className={`flex-1 px-3 py-2 text-sm font-medium border-l border-gray-300 transition-colors ${
-                statusFilter === 'active'
+                baseStatus === 'active'
                   ? 'bg-primary-600 text-white'
                   : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
+              } ${deletedOnly ? 'cursor-not-allowed' : ''}`}
             >
               Active
             </button>
             <button
               type="button"
-              onClick={() => setStatusFilter('draft')}
+              onClick={() => setBaseStatus('draft')}
+              disabled={deletedOnly}
               className={`flex-1 px-3 py-2 text-sm font-medium border-l border-gray-300 transition-colors ${
-                statusFilter === 'draft'
+                baseStatus === 'draft'
                   ? 'bg-amber-500 text-white'
                   : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
+              } ${deletedOnly ? 'cursor-not-allowed' : ''}`}
             >
               Draft
             </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('deleted')}
-              className={`flex-1 px-3 py-2 text-sm font-medium border-l border-gray-300 transition-colors ${
-                statusFilter === 'deleted'
-                  ? 'bg-red-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              Deleted
-            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">All = Active + Draft</p>
+          <div className="mt-2 flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
+            <Switch checked={deletedOnly} onChange={setDeletedOnly} label="Deleted only" />
+            {deletedOnly && (
+              <span className="text-xs text-red-600 font-medium">Overrides the above</span>
+            )}
           </div>
         </div>
 

@@ -65,11 +65,14 @@ async function buildFamileoFingerprint(authorEmail: string, dateValue: string, t
   return sha256Hex(`${author}|${dateKey}|${text}`)
 }
 
+// 'all' means Active + Draft - Deleted is handled separately as an override,
+// never folded into "all" (see FiltersPanel: the Deleted toggle overrides
+// whatever All/Active/Draft is selected, it doesn't combine with it).
 function parseStatusFilter(value: string | null) {
   const normalized = String(value || 'active').toLowerCase()
   if (normalized === 'draft') return ['DRAFT']
   if (normalized === 'deleted') return ['DELETED']
-  if (normalized === 'all') return ['ACTIVE', 'DRAFT', 'DELETED']
+  if (normalized === 'all') return ['ACTIVE', 'DRAFT']
   return ['ACTIVE']
 }
 

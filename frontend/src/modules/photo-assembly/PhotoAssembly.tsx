@@ -4,12 +4,14 @@ import { StateManager } from './StateManager'
 import { TemplateSelector } from './TemplateSelector'
 import { AssemblyCanvas } from './AssemblyCanvas'
 import { ZoneController } from './ZoneController'
+import { ZoneFineEditor } from './ZoneFineEditor'
 import { canvasToBase64 } from '../../utils/image'
 import { useUiStore } from '../../state/uiStore'
 import { Modal } from '../../ui/Modal'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { CONSTANTS } from '../../utils/constants'
 import { extractExifDate } from '../../screens/Editor/PhotoPicker'
+import { Slider } from '../../ui/Slider'
 
 function isMobileDevice(): boolean {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -36,7 +38,6 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   const [canvasKey, setCanvasKey] = useState(0)
   const [stateVersion, setStateVersion] = useState(0)
   const [isLayoutModalOpen, setIsLayoutModalOpen] = useState(false)
-  const [isZonesModalOpen, setIsZonesModalOpen] = useState(false)
   const [separatorWidth, setSeparatorWidth] = useState(4)
   const [pendingZoneIndex, setPendingZoneIndex] = useState<number | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -45,6 +46,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [webcamError, setWebcamError] = useState<string>('')
   const [lastPhotoDate, setLastPhotoDate] = useState<Date | null>(null)
+  const [fineAdjustZoneIndex, setFineAdjustZoneIndex] = useState<number | null>(null)
 
   const trackPhotoDate = (file: File) => {
     extractExifDate(file).then((date) => {
@@ -267,6 +269,13 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
     handleZoneUpdate()
   }
 
+  const handleFineAdjustApply = (transform: { zoom: number; x: number; y: number; rotation: number }) => {
+    if (fineAdjustZoneIndex === null) return
+    stateManager.updateZoneTransform(fineAdjustZoneIndex, transform)
+    setFineAdjustZoneIndex(null)
+    handleZoneUpdate()
+  }
+
   const getPhotoDimensions = async (photo: File) => {
     const cached = photoDimRef.current.get(photo)
     if (cached) return cached
@@ -458,12 +467,24 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
     }
   }, [selectedTemplate])
 
+  // handleValidate/handleCancelRequest close over stateManager, which is
+  // replaced (new instance) whenever the layout changes. The window
+  // listeners below are only ever registered once (empty deps, so the
+  // effect never re-runs), so without these refs they'd keep calling the
+  // very first render's closures forever - checking a stateManager that's
+  // stale as soon as the user picks a different layout, which made Confirm
+  // always fail with "Please fill all zones" even when every zone was filled.
+  const handleValidateRef = useRef(handleValidate)
+  handleValidateRef.current = handleValidate
+  const handleCancelRequestRef = useRef(handleCancelRequest)
+  handleCancelRequestRef.current = handleCancelRequest
+
   useEffect(() => {
     const onValidate = () => {
-      handleValidate()
+      handleValidateRef.current()
     }
     const onCancel = () => {
-      handleCancelRequest()
+      handleCancelRequestRef.current()
     }
     window.addEventListener('photo-assembly-validate', onValidate)
     window.addEventListener('photo-assembly-cancel', onCancel)
@@ -491,7 +512,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
             <span>Layout</span>
             <button
               onClick={() => setIsLayoutModalOpen(true)}
-              className="px-2 py-1 rounded-md border border-gray-300 text-xs text-gray-700 hover:border-gray-400"
+              className="px-3 py-1.5 rounded-md border border-gray-300 text-sm text-gray-700 hover:border-gray-400 touch-manipulation"
             >
               Choose
             </button>
@@ -499,18 +520,14 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
           <div className="text-sm font-semibold text-gray-900">
             {selectedTemplate?.name} • {selectedTemplate?.zones.length} photos
           </div>
-          <div className="mt-2 flex items-center gap-3">
-            <span className="text-xs text-gray-500">Border thickness</span>
-            <input
-              type="range"
-              min={1}
-              max={24}
-              value={separatorWidth}
-              onChange={(e) => setSeparatorWidth(Number(e.target.value))}
-              className="w-24 accent-primary-600"
-            />
-            <span className="text-xs text-gray-600 w-4 text-right">{separatorWidth}</span>
-          </div>
+          <Slider
+            label="Border thickness"
+            min={1}
+            max={50}
+            value={separatorWidth}
+            onChange={setSeparatorWidth}
+            className="mt-2 max-w-xs"
+          />
         </div>
         <div className="flex items-center gap-2">
           {(selectedTemplate?.zones.length ?? 0) > 1 && (
@@ -521,12 +538,6 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
               Add multiple
             </button>
           )}
-          <button
-            onClick={() => setIsZonesModalOpen(true)}
-            className="px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:border-gray-400"
-          >
-            Zones
-          </button>
         </div>
       </div>
 
@@ -561,8 +572,30 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
           onFitPhotoWidth={handleFitZoneWidth}
           onFitPhotoHeight={handleFitZoneHeight}
           onCenterPhoto={handleCenterZone}
+          onFineAdjust={setFineAdjustZoneIndex}
         />
       )}
+
+      {fineAdjustZoneIndex !== null && (() => {
+        const photo = stateManager.getPhotoForZone(fineAdjustZoneIndex)
+        const zone = selectedTemplate.zones[fineAdjustZoneIndex]
+        const zoneState = stateManager.getState().zoneStates[fineAdjustZoneIndex]
+        if (!photo || !zone) return null
+        const { width: canvasWidth, height: canvasHeight } = getCanvasSize(selectedTemplate)
+        return (
+          <ZoneFineEditor
+            photo={photo}
+            zoom={zoneState.zoom}
+            x={zoneState.x}
+            y={zoneState.y}
+            rotation={zoneState.rotation || 0}
+            realZoneWidthPx={(zone.width / 100) * canvasWidth}
+            realZoneHeightPx={(zone.height / 100) * canvasHeight}
+            onApply={handleFineAdjustApply}
+            onClose={() => setFineAdjustZoneIndex(null)}
+          />
+        )
+      })()}
 
       {/* Footer removed: controls moved to header */}
 
@@ -665,50 +698,6 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
         onCancel={() => setShowCancelConfirm(false)}
         variant="danger"
       />
-
-      <Modal
-        isOpen={isZonesModalOpen}
-        onClose={() => setIsZonesModalOpen(false)}
-        title="Zones"
-      >
-        <div className="p-4 space-y-3">
-          {stateManager.getState().zoneStates.map((zone, index) => (
-            <div
-              key={`zone-${index}`}
-              className="flex items-center justify-between p-3 border border-gray-200 rounded-lg"
-            >
-              <div>
-                <div className="text-sm font-medium text-gray-900">
-                  Zone {index + 1}
-                </div>
-                <div className="text-xs text-gray-500">
-                  {zone.photoIndex >= 0 ? 'Photo assigned' : 'Empty'}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    setSelectedZoneIndex(index)
-                    setIsZonesModalOpen(false)
-                  }}
-                  className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:border-gray-400"
-                >
-                  Select
-                </button>
-                <button
-                  onClick={() => {
-                    handleAddPhotoRequest(index)
-                    setIsZonesModalOpen(false)
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700"
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Modal>
     </div>
   )
 }

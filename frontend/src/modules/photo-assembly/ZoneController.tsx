@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { StateManager } from './StateManager'
+import { Slider } from '../../ui/Slider'
 
 interface ZoneControllerProps {
   zoneIndex: number
@@ -12,6 +13,7 @@ interface ZoneControllerProps {
   onFitPhotoWidth: (zoneIndex: number) => void
   onFitPhotoHeight: (zoneIndex: number) => void
   onCenterPhoto: (zoneIndex: number) => void
+  onFineAdjust: (zoneIndex: number) => void
 }
 
 export function ZoneController({
@@ -25,9 +27,11 @@ export function ZoneController({
   onFitPhotoWidth,
   onFitPhotoHeight,
   onCenterPhoto,
+  onFineAdjust,
 }: ZoneControllerProps) {
   const state = stateManager.getState()
   const zoneState = state.zoneStates[zoneIndex]
+  const hasPhoto = zoneState.photoIndex >= 0
 
   const [zoom, setZoom] = useState(zoneState.zoom)
   const [rotation, setRotation] = useState(zoneState.rotation || 0)
@@ -67,7 +71,7 @@ export function ZoneController({
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-2 shadow-lg z-20">
       <div className="max-w-mobile mx-auto">
-        <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+        <div className="flex items-center flex-wrap gap-2">
           <button
             onClick={onClose}
             className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50"
@@ -189,20 +193,30 @@ export function ZoneController({
               <path d="M3 4v4h4"></path>
             </svg>
           </button>
-          <div className="flex items-center gap-2 px-2">
-            <span className="text-xs text-gray-500">{zoom.toFixed(1)}x</span>
-            <input
-              type="range"
-              min="0.1"
-              max="8"
-              step="0.1"
-              value={zoom}
-              onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
-              className="w-28 accent-primary-600"
-              aria-label="Zoom"
-            />
-          </div>
+          <button
+            onClick={() => onFineAdjust(zoneIndex)}
+            disabled={!hasPhoto}
+            className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Fine adjust (enlarged view)"
+            aria-label="Fine adjust"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <circle cx="10" cy="10" r="6"></circle>
+              <path d="M14.5 14.5L20 20"></path>
+              <path d="M10 8v4M8 10h4"></path>
+            </svg>
+          </button>
         </div>
+        <Slider
+          label="Zoom"
+          min={0.1}
+          max={8}
+          step={0.1}
+          value={zoom}
+          onChange={handleZoomChange}
+          formatValue={(v) => `${v.toFixed(1)}x`}
+          className="mt-2"
+        />
       </div>
     </div>
   )

@@ -52,4 +52,41 @@
   .touch-manipulation {
     touch-action: manipulation;
   }
+
+  .app-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 8px;
+    border-radius: 9999px;
+    background: #e5e7eb;
+    touch-action: manipulation;
+  }
+
+  .app-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 9999px;
+    background: #2563eb;
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  }
+
+  .app-no-callout {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .app-slider::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+    border-radius: 9999px;
+    background: #2563eb;
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  }
 }

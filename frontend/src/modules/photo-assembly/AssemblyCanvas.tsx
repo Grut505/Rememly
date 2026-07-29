@@ -11,6 +11,9 @@ interface AssemblyCanvasProps {
   onStateChange: () => void
   stateVersion: number
   separatorWidth: number
+  minZoom?: number
+  maxZoom?: number
+  maxHeightClassName?: string
 }
 
 export function AssemblyCanvas({
@@ -21,6 +24,9 @@ export function AssemblyCanvas({
   onStateChange,
   stateVersion,
   separatorWidth,
+  minZoom = 0.5,
+  maxZoom = 5,
+  maxHeightClassName = 'max-h-[55vh]',
 }: AssemblyCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [images, setImages] = useState<Map<number, CanvasImageSource>>(new Map())
@@ -143,6 +149,13 @@ export function AssemblyCanvas({
 
     const width = canvas.width
     const height = canvas.height
+    // The canvas is rendered at a fixed high internal resolution (for the
+    // final exported image) but displayed much smaller on screen - a stroke
+    // width specified in canvas units becomes a fraction of a real pixel
+    // once scaled down, making editing-only indicators (selection, swap)
+    // invisible. This converts a desired on-screen pixel size to canvas
+    // units so they stay visible regardless of viewport size.
+    const editScale = width / (canvas.clientWidth || width)
 
     ctx.fillStyle = '#f3f4f6'
     ctx.fillRect(0, 0, width, height)
@@ -194,7 +207,7 @@ export function AssemblyCanvas({
       // Drawn after the photo/placeholder fill so the selection highlight is
       // never covered by it (previously only the empty-zone case kept it visible).
       ctx.strokeStyle = index === selectedZoneIndex ? '#2563eb' : '#ffffff'
-      ctx.lineWidth = index === selectedZoneIndex ? Math.max(4, separatorWidth + 2) : Math.max(1, separatorWidth)
+      ctx.lineWidth = index === selectedZoneIndex ? Math.max(separatorWidth + 2, 3 * editScale) : Math.max(1, separatorWidth)
       ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
 
       ctx.fillStyle = index === selectedZoneIndex ? '#1d4ed8' : '#6b7280'
@@ -204,7 +217,22 @@ export function AssemblyCanvas({
       ctx.fillText(`${index + 1}`, zoneX + 6, zoneY + 6)
     })
 
-    const swapTarget = swapRef.current.targetZone
+    const swap = swapRef.current
+    if (swap.isSwapMode && swap.fromZone !== null) {
+      const zone = template.zones[swap.fromZone]
+      const zoneX = (zone.x / 100) * width
+      const zoneY = (zone.y / 100) * height
+      const zoneWidth = (zone.width / 100) * width
+      const zoneHeight = (zone.height / 100) * height
+      ctx.save()
+      ctx.strokeStyle = '#f59e0b'
+      ctx.lineWidth = 4 * editScale
+      ctx.setLineDash([14 * editScale, 8 * editScale])
+      ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
+      ctx.restore()
+    }
+
+    const swapTarget = swap.targetZone
     if (swapTarget !== null && swapTarget >= 0) {
       const zone = template.zones[swapTarget]
       const zoneX = (zone.x / 100) * width
@@ -212,7 +240,7 @@ export function AssemblyCanvas({
       const zoneWidth = (zone.width / 100) * width
       const zoneHeight = (zone.height / 100) * height
       ctx.strokeStyle = '#10b981'
-      ctx.lineWidth = 3
+      ctx.lineWidth = 4 * editScale
       ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
     }
   }
@@ -308,8 +336,9 @@ export function AssemblyCanvas({
     }
     swap.timer = window.setTimeout(() => {
       swap.isSwapMode = true
+      if (navigator.vibrate) navigator.vibrate(15)
       drawCanvas()
-    }, 250)
+    }, 350)
   }
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -335,7 +364,7 @@ export function AssemblyCanvas({
     if (swap.startPoint && !swap.isSwapMode) {
       const dx = point.x - swap.startPoint.x
       const dy = point.y - swap.startPoint.y
-      if (Math.hypot(dx, dy) > 8) {
+      if (Math.hypot(dx, dy) > 14) {
         if (swap.timer) {
           window.clearTimeout(swap.timer)
           swap.timer = null
@@ -372,7 +401,7 @@ export function AssemblyCanvas({
       const moveDx = center.x - gesture.startCenter.x
       const moveDy = center.y - gesture.startCenter.y
       stateManager.updateZoneTransform(zoneIndex, {
-        zoom: Math.min(5, Math.max(0.5, gesture.startZoom * scale)),
+        zoom: Math.min(maxZoom, Math.max(minZoom, gesture.startZoom * scale)),
         x: gesture.startX + moveDx,
         y: gesture.startY + moveDy,
       })
@@ -448,7 +477,7 @@ export function AssemblyCanvas({
     e.preventDefault()
     const delta = e.deltaY
     const step = delta > 0 ? -0.1 : 0.1
-    const nextZoom = Math.min(5, Math.max(0.5, zoneState.zoom + step))
+    const nextZoom = Math.min(maxZoom, Math.max(minZoom, zoneState.zoom + step))
     stateManager.updateZoneTransform(selectedZoneIndex, { zoom: nextZoom })
     onStateChange()
     drawCanvas()
@@ -472,7 +501,7 @@ export function AssemblyCanvas({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         onWheel={handleWheel}
-        className="w-full h-auto max-h-[55vh] cursor-pointer touch-none"
+        className={`w-full h-auto ${maxHeightClassName} cursor-pointer touch-none select-none app-no-callout`}
       />
     </div>
   )

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button } from '../../ui/Button'
 import { DatePicker } from '../../ui/DatePicker'
+import { Slider } from '../../ui/Slider'
 import { articlesApi } from '../../api/articles'
 import { Article } from '../../api/types'
 import { getMonthYear } from '../../utils/date'
@@ -323,19 +324,12 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Cover photos
                   </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={1}
-                      max={totalArticles}
-                      value={maxMosaicPhotos || totalArticles}
-                      onChange={(e) => setMaxMosaicPhotos(parseInt(e.target.value))}
-                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
-                    />
-                    <span className="text-sm font-medium text-gray-700 min-w-12 text-right">
-                      {maxMosaicPhotos || totalArticles}
-                    </span>
-                  </div>
+                  <Slider
+                    min={1}
+                    max={Math.max(1, totalArticles)}
+                    value={maxMosaicPhotos || totalArticles}
+                    onChange={(next) => setMaxMosaicPhotos(next)}
+                  />
                   <p className="text-xs text-gray-500 mt-1">
                     Number of photos in the cover mosaic
                   </p>

@@ -8,6 +8,7 @@ import { useImageLoader } from '../../hooks/useImageLoader'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { FamileoPosterModal } from '../../ui/FamileoPosterModal'
 import { articlesService } from '../../services/articles.service'
+import { articlesApi } from '../../api/articles'
 
 // Convert Drive URLs to thumbnail format
 function convertDriveUrl(url: string): string {
@@ -73,12 +74,13 @@ interface ArticleCardProps {
   isDuplicate?: boolean
   onDeleted?: (id: string) => void
   onRestored?: (id: string) => void
+  onPermanentlyDeleted?: (id: string) => void
   selectionMode?: boolean
   selected?: boolean
   onSelectionChange?: (id: string, selected: boolean) => void
 }
 
-export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selectionMode, selected, onSelectionChange }: ArticleCardProps) {
+export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, onPermanentlyDeleted, selectionMode, selected, onSelectionChange }: ArticleCardProps) {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { profile, avatarBlobUrl } = useProfile()
@@ -87,6 +89,8 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
   const [isDeleting, setIsDeleting] = useState(false)
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
+  const [showPermanentDeleteConfirm, setShowPermanentDeleteConfirm] = useState(false)
+  const [isPermanentlyDeleting, setIsPermanentlyDeleting] = useState(false)
   const [showFamileoPoster, setShowFamileoPoster] = useState(false)
 
   const isDeleted = article.status === 'DELETED'
@@ -124,6 +128,24 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
   const handleRestoreClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     setShowRestoreConfirm(true)
+  }
+
+  const handlePermanentDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowPermanentDeleteConfirm(true)
+  }
+
+  const handleConfirmPermanentDelete = async () => {
+    setIsPermanentlyDeleting(true)
+    try {
+      await articlesApi.permanentDelete(article.id)
+      setShowPermanentDeleteConfirm(false)
+      onPermanentlyDeleted?.(article.id)
+    } catch (err) {
+      console.error('Failed to permanently delete article:', err)
+    } finally {
+      setIsPermanentlyDeleting(false)
+    }
   }
 
   const handleFamileoPosterClick = (e: React.MouseEvent) => {
@@ -238,15 +260,27 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
               </svg>
             </button>
             {isDeleted ? (
-              <button
-                onClick={handleRestoreClick}
-                className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors flex-shrink-0 touch-manipulation"
-                aria-label="Restore article"
-              >
-                <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                  <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                </svg>
-              </button>
+              <>
+                <button
+                  onClick={handleRestoreClick}
+                  className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors flex-shrink-0 touch-manipulation"
+                  aria-label="Restore article"
+                >
+                  <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                    <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
+                </button>
+                <button
+                  onClick={handlePermanentDeleteClick}
+                  className="p-2 text-red-600 hover:text-white hover:bg-red-600 rounded-lg transition-colors flex-shrink-0 touch-manipulation"
+                  aria-label="Delete forever"
+                  title="Delete forever"
+                >
+                  <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                    <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                  </svg>
+                </button>
+              </>
             ) : (
               <button
                 onClick={handleDeleteClick}
@@ -319,6 +353,18 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, selec
         onConfirm={handleConfirmRestore}
         onCancel={() => setShowRestoreConfirm(false)}
         isLoading={isRestoring}
+      />
+
+      <ConfirmDialog
+        isOpen={showPermanentDeleteConfirm}
+        title="Delete forever?"
+        message="⚠️ WARNING: this article will be permanently removed from the database. This action cannot be undone!"
+        confirmLabel="Delete forever"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmPermanentDelete}
+        onCancel={() => setShowPermanentDeleteConfirm(false)}
+        variant="danger"
+        isLoading={isPermanentlyDeleting}
       />
 
       <FamileoPosterModal

@@ -213,6 +213,12 @@ export function Timeline() {
     }
   }
 
+  const handleArticlePermanentlyDeleted = (id: string) => {
+    // The article no longer exists in the database at all, so it's removed
+    // from the list regardless of which status filter is currently applied.
+    useArticlesStore.getState().deleteArticle(id)
+  }
+
   const searchQuery = (filters.search || '').trim().toLowerCase()
   const displayedArticles = useMemo(() => {
     let result = articles
@@ -537,6 +543,7 @@ export function Timeline() {
                               isDuplicate={!!article.is_duplicate}
                               onDeleted={handleArticleDeleted}
                               onRestored={handleArticleRestored}
+                              onPermanentlyDeleted={handleArticlePermanentlyDeleted}
                               selectionMode={selectionMode}
                               selected={selectedIds.has(article.id)}
                               onSelectionChange={handleSelectionChange}
@@ -547,6 +554,7 @@ export function Timeline() {
                               isDuplicate={!!article.is_duplicate}
                               onDeleted={handleArticleDeleted}
                               onRestored={handleArticleRestored}
+                              onPermanentlyDeleted={handleArticlePermanentlyDeleted}
                               selectionMode={selectionMode}
                               selected={selectedIds.has(article.id)}
                               onSelectionChange={handleSelectionChange}
@@ -596,6 +604,7 @@ export function Timeline() {
                             isDuplicate={!!article.is_duplicate}
                             onDeleted={handleArticleDeleted}
                             onRestored={handleArticleRestored}
+                            onPermanentlyDeleted={handleArticlePermanentlyDeleted}
                             selectionMode={selectionMode}
                             selected={selectedIds.has(article.id)}
                             onSelectionChange={handleSelectionChange}

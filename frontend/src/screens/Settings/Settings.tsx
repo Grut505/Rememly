@@ -3,6 +3,7 @@ import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 import { Slider } from '../../ui/Slider'
 import { Spinner } from '../../ui/Spinner'
+import { CollapsibleSection } from '../../ui/CollapsibleSection'
 import { useUiStore } from '../../state/uiStore'
 import { AppHeader } from '../../ui/AppHeader'
 import { configApi } from '../../api/config'
@@ -136,7 +137,12 @@ export function Settings() {
   const [famileoClearProgress, setFamileoClearProgress] = useState(0)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewFileId, setPreviewFileId] = useState<string | null>(null)
-  const [previewLoading, setPreviewLoading] = useState(false)
+  // Which preview is currently in flight (for that button's own "Generating..."
+  // state) vs which one the current previewUrl/previewFileId result belongs to
+  // (normal and Blurb previews share the same single-slot result state, so
+  // each button only shows the result view when it's the one that produced it).
+  const [previewLoadingMode, setPreviewLoadingMode] = useState<'normal' | 'blurb' | null>(null)
+  const [previewResultMode, setPreviewResultMode] = useState<'normal' | 'blurb' | null>(null)
   const [isBackfilling, setIsBackfilling] = useState(false)
   const [isRefreshingMergeToken, setIsRefreshingMergeToken] = useState(false)
   const [mergeTokenStatus, setMergeTokenStatus] = useState<{
@@ -581,7 +587,7 @@ export function Settings() {
   }
 
   const handleOpenCoverPreview = async (mode: 'normal' | 'blurb') => {
-    setPreviewLoading(true)
+    setPreviewLoadingMode(mode)
     try {
       const response = await pdfApi.previewCover({
         from: new Date().toISOString().slice(0, 10),
@@ -656,10 +662,11 @@ export function Settings() {
       const blob = new Blob([bytes.buffer], { type: content.mime_type || 'application/pdf' })
       const url = URL.createObjectURL(blob)
       setPreviewUrl(url)
+      setPreviewResultMode(mode)
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Preview failed', 'error')
     } finally {
-      setPreviewLoading(false)
+      setPreviewLoadingMode(null)
     }
   }
 
@@ -668,6 +675,7 @@ export function Settings() {
     const url = previewUrl
     setPreviewUrl(null)
     setPreviewFileId(null)
+    setPreviewResultMode(null)
     if (url && url.startsWith('blob:')) {
       URL.revokeObjectURL(url)
     }
@@ -908,9 +916,9 @@ export function Settings() {
         ) : (
           <>
             {/* Declared users */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-700">Declared users</h3>
+            <CollapsibleSection
+              title="Declared users"
+              headerExtra={
                 <button
                   onClick={loadUsers}
                   disabled={usersLoading}
@@ -918,7 +926,8 @@ export function Settings() {
                 >
                   Refresh
                 </button>
-              </div>
+              }
+            >
               {usersLoading ? (
                 <div className="flex items-center justify-center py-6">
                   <Spinner size="md" />
@@ -955,11 +964,10 @@ export function Settings() {
                   </table>
                 </div>
               )}
-            </div>
+            </CollapsibleSection>
 
             {/* Article editor */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Article editor</h3>
+            <CollapsibleSection title="Article editor">
               <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                 <input
                   type="checkbox"
@@ -972,11 +980,10 @@ export function Settings() {
                   <p className="text-xs text-gray-500">When creating a new article, use the selected photo's date instead of today's date</p>
                 </div>
               </label>
-            </div>
+            </CollapsibleSection>
 
             {/* Blurb print-ready mode */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Blurb print-ready mode</h3>
+            <CollapsibleSection title="Blurb print-ready mode">
               <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                 <input
                   type="checkbox"
@@ -1170,14 +1177,58 @@ export function Settings() {
                       </p>
                     )}
                   </div>
+
+                  <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3">
+                    <Slider
+                      label="Simulated page count (Blurb preview only)"
+                      min={PAGE_COUNT_MIN}
+                      max={PAGE_COUNT_MAX}
+                      step={PAGE_COUNT_STEP}
+                      value={blurbPreviewPageCount}
+                      onChange={setBlurbPreviewPageCount}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Estimated spine width at this page count: <strong>{formatSpineWidth(previewSpineWidthIn, blurbMeasurementUnits)}</strong>. Simulation only - a real Blurb export always uses its own actual generated page count.
+                    </p>
+                  </div>
+
+                  {previewResultMode !== 'blurb' ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleOpenCoverPreview('blurb')}
+                      disabled={previewLoadingMode !== null}
+                      fullWidth
+                    >
+                      {previewLoadingMode === 'blurb' ? 'Generating...' : 'Preview (Blurb)'}
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <a
+                        href={previewUrl || ''}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-primary-200 bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 transition-colors"
+                      >
+                        Open preview PDF
+                        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                          <path d="M14 3h7v7m0-7L10 14m-4 7h7a2 2 0 002-2v-7"></path>
+                        </svg>
+                      </a>
+                      <button
+                        onClick={handleClosePreview}
+                        className="w-full text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Close preview
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
+            </CollapsibleSection>
 
             {/* Family Name */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">PDF cover page</h3>
-              <div className="mt-3 space-y-4">
+            <CollapsibleSection title="PDF cover page">
+              <div className="space-y-4">
                 <details className="rounded-md border border-gray-100 bg-gray-50/70 px-3 py-2">
                   <summary className="text-xs text-gray-600 cursor-pointer select-none">Family name settings</summary>
                   <div className="mt-3 space-y-3">
@@ -1745,48 +1796,19 @@ export function Settings() {
                 </div>
               </div>
               <div className="mt-4">
-                {!previewUrl ? (
-                  <div className="space-y-3">
-                    {blurbModeEnabled && (
-                      <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3">
-                        <Slider
-                          label="Simulated page count (Blurb preview only)"
-                          min={PAGE_COUNT_MIN}
-                          max={PAGE_COUNT_MAX}
-                          step={PAGE_COUNT_STEP}
-                          value={blurbPreviewPageCount}
-                          onChange={setBlurbPreviewPageCount}
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                          Estimated spine width at this page count: <strong>{formatSpineWidth(previewSpineWidthIn, blurbMeasurementUnits)}</strong>. Simulation only - a real Blurb export always uses its own actual generated page count.
-                        </p>
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <Button
-                        variant="secondary"
-                        onClick={() => handleOpenCoverPreview('normal')}
-                        disabled={previewLoading}
-                        fullWidth
-                      >
-                        {previewLoading ? 'Generating...' : 'Preview (normal)'}
-                      </Button>
-                      {blurbModeEnabled && (
-                        <Button
-                          variant="secondary"
-                          onClick={() => handleOpenCoverPreview('blurb')}
-                          disabled={previewLoading}
-                          fullWidth
-                        >
-                          {previewLoading ? 'Generating...' : 'Preview (Blurb)'}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                {previewResultMode !== 'normal' ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => handleOpenCoverPreview('normal')}
+                    disabled={previewLoadingMode !== null}
+                    fullWidth
+                  >
+                    {previewLoadingMode === 'normal' ? 'Generating...' : 'Preview (normal)'}
+                  </Button>
                 ) : (
                   <div className="space-y-2">
                     <a
-                      href={previewUrl}
+                      href={previewUrl || ''}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-primary-200 bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 transition-colors"
@@ -1805,11 +1827,10 @@ export function Settings() {
                   </div>
                 )}
               </div>
-            </div>
+            </CollapsibleSection>
 
             {/* Logs cleanup */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">PDF logs</h3>
+            <CollapsibleSection title="PDF logs">
               {logsLoading ? (
                 <div className="flex items-center justify-center py-6">
                   <Spinner size="md" />
@@ -1863,10 +1884,9 @@ export function Settings() {
                   </div>
                 </>
               )}
-            </div>
+            </CollapsibleSection>
 
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Famileo logs</h3>
+            <CollapsibleSection title="Famileo logs">
               {famileoLogsLoading ? (
                 <div className="flex items-center justify-center py-6">
                   <Spinner size="md" />
@@ -1920,11 +1940,10 @@ export function Settings() {
                   </div>
                 </>
               )}
-            </div>
+            </CollapsibleSection>
 
             {/* Maintenance */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Maintenance</h3>
+            <CollapsibleSection title="Maintenance">
               <div className="flex flex-col items-start gap-4">
                 <div className="flex flex-col items-start gap-2 w-full">
                   <p className="text-xs text-gray-500">
@@ -1958,10 +1977,9 @@ export function Settings() {
                   </Button>
                 </div>
               </div>
-            </div>
+            </CollapsibleSection>
             {backendUrl && (
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">Links</h3>
+              <CollapsibleSection title="Links">
                 <div className="flex flex-col gap-2 text-sm">
                   <a
                     href={backendUrl}
@@ -1972,7 +1990,7 @@ export function Settings() {
                     Open Backend URL
                   </a>
                 </div>
-              </div>
+              </CollapsibleSection>
             )}
           </>
         )}

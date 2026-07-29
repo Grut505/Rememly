@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
+import { Slider } from '../../ui/Slider'
 import { Spinner } from '../../ui/Spinner'
 import { useUiStore } from '../../state/uiStore'
 import { AppHeader } from '../../ui/AppHeader'
@@ -846,7 +847,7 @@ export function Settings() {
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="block text-xs font-medium text-gray-500">
-                          Font size ({familyFontCm.toFixed(2)}cm)
+                          Font size
                         </label>
                         <button
                           onClick={() => setFamilyFontCm(initialFamilyFontCm)}
@@ -856,31 +857,19 @@ export function Settings() {
                           Reset
                         </button>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min={1.5}
-                          max={5}
-                          step={0.05}
-                          value={familyFontCm}
-                          onChange={(e) => setFamilyFontCm(Number(e.target.value))}
-                          className="w-full"
-                        />
-                        <input
-                          type="number"
-                          min={1.5}
-                          max={5}
-                          step={0.05}
-                          value={Number.isFinite(familyFontCm) ? familyFontCm : 3.5}
-                          onChange={(e) => setFamilyFontCm(Number(e.target.value))}
-                          className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                        />
-                      </div>
+                      <Slider
+                        min={1.5}
+                        max={5}
+                        step={0.05}
+                        value={familyFontCm}
+                        onChange={setFamilyFontCm}
+                        formatValue={(v) => `${v.toFixed(2)}cm`}
+                      />
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="block text-xs font-medium text-gray-500">
-                          Character width ({familyScaleX.toFixed(2)}x)
+                          Character width
                         </label>
                         <button
                           onClick={() => setFamilyScaleX(initialFamilyScaleX)}
@@ -890,31 +879,19 @@ export function Settings() {
                           Reset
                         </button>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min={0.6}
-                          max={3}
-                          step={0.01}
-                          value={familyScaleX}
-                          onChange={(e) => setFamilyScaleX(Number(e.target.value))}
-                          className="w-full"
-                        />
-                        <input
-                          type="number"
-                          min={0.6}
-                          max={3}
-                          step={0.01}
-                          value={Number.isFinite(familyScaleX) ? familyScaleX : 1}
-                          onChange={(e) => setFamilyScaleX(Number(e.target.value))}
-                          className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                        />
-                      </div>
+                      <Slider
+                        min={0.6}
+                        max={3}
+                        step={0.01}
+                        value={familyScaleX}
+                        onChange={setFamilyScaleX}
+                        formatValue={(v) => `${v.toFixed(2)}x`}
+                      />
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="block text-xs font-medium text-gray-500">
-                          Character height ({familyScaleY.toFixed(2)}x)
+                          Character height
                         </label>
                         <button
                           onClick={() => setFamilyScaleY(initialFamilyScaleY)}
@@ -924,31 +901,19 @@ export function Settings() {
                           Reset
                         </button>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min={0.6}
-                          max={3}
-                          step={0.01}
-                          value={familyScaleY}
-                          onChange={(e) => setFamilyScaleY(Number(e.target.value))}
-                          className="w-full"
-                        />
-                        <input
-                          type="number"
-                          min={0.6}
-                          max={3}
-                          step={0.01}
-                          value={Number.isFinite(familyScaleY) ? familyScaleY : 1}
-                          onChange={(e) => setFamilyScaleY(Number(e.target.value))}
-                          className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                        />
-                      </div>
+                      <Slider
+                        min={0.6}
+                        max={3}
+                        step={0.01}
+                        value={familyScaleY}
+                        onChange={setFamilyScaleY}
+                        formatValue={(v) => `${v.toFixed(2)}x`}
+                      />
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="block text-xs font-medium text-gray-500">
-                          Outline thickness ({familyOutlinePx.toFixed(1)}px)
+                          Outline thickness
                         </label>
                         <button
                           onClick={() => setFamilyOutlinePx(initialFamilyOutlinePx)}
@@ -958,31 +923,19 @@ export function Settings() {
                           Reset
                         </button>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min={0}
-                          max={20}
-                          step={0.1}
-                          value={familyOutlinePx}
-                          onChange={(e) => setFamilyOutlinePx(Number(e.target.value))}
-                          className="w-full"
-                        />
-                        <input
-                          type="number"
-                          min={0}
-                          max={20}
-                          step={0.1}
-                          value={Number.isFinite(familyOutlinePx) ? familyOutlinePx : 2.2}
-                          onChange={(e) => setFamilyOutlinePx(Number(e.target.value))}
-                          className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                        />
-                      </div>
+                      <Slider
+                        min={0}
+                        max={20}
+                        step={0.1}
+                        value={familyOutlinePx}
+                        onChange={setFamilyOutlinePx}
+                        formatValue={(v) => `${v.toFixed(1)}px`}
+                      />
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="block text-xs font-medium text-gray-500">
-                          Family name horizontal position ({familyXcm.toFixed(2)}cm)
+                          Family name horizontal position
                         </label>
                         <button
                           onClick={() => setFamilyXcm(initialFamilyXcm)}
@@ -992,31 +945,19 @@ export function Settings() {
                           Reset
                         </button>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min={0}
-                          max={12}
-                          step={0.05}
-                          value={familyXcm}
-                          onChange={(e) => setFamilyXcm(Number(e.target.value))}
-                          className="w-full"
-                        />
-                        <input
-                          type="number"
-                          min={0}
-                          max={12}
-                          step={0.01}
-                          value={Number.isFinite(familyXcm) ? familyXcm : 0}
-                          onChange={(e) => setFamilyXcm(Number(e.target.value))}
-                          className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                        />
-                      </div>
+                      <Slider
+                        min={0}
+                        max={12}
+                        step={0.05}
+                        value={familyXcm}
+                        onChange={setFamilyXcm}
+                        formatValue={(v) => `${v.toFixed(2)}cm`}
+                      />
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="block text-xs font-medium text-gray-500">
-                          Letter spacing (relative to title) ({familyLetterSpacingEm.toFixed(3)}em)
+                          Letter spacing (relative to title)
                         </label>
                         <button
                           onClick={() => setFamilyLetterSpacingEm(initialFamilyLetterSpacingEm)}
@@ -1026,26 +967,14 @@ export function Settings() {
                           Reset
                         </button>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min={-0.2}
-                          max={0.2}
-                          step={0.001}
-                          value={familyLetterSpacingEm}
-                          onChange={(e) => setFamilyLetterSpacingEm(Number(e.target.value))}
-                          className="w-full"
-                        />
-                        <input
-                          type="number"
-                          min={-0.2}
-                          max={0.2}
-                          step={0.001}
-                          value={Number.isFinite(familyLetterSpacingEm) ? familyLetterSpacingEm : 0}
-                          onChange={(e) => setFamilyLetterSpacingEm(Number(e.target.value))}
-                          className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                        />
-                      </div>
+                      <Slider
+                        min={-0.2}
+                        max={0.2}
+                        step={0.001}
+                        value={familyLetterSpacingEm}
+                        onChange={setFamilyLetterSpacingEm}
+                        formatValue={(v) => `${v.toFixed(3)}em`}
+                      />
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
@@ -1121,7 +1050,7 @@ export function Settings() {
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-medium text-gray-500">
-                            Horizontal position ({coverTitleXcm.toFixed(2)}cm)
+                            Horizontal position
                           </label>
                           <button
                             onClick={() => setCoverTitleXcm(initialCoverTitleXcm)}
@@ -1131,31 +1060,19 @@ export function Settings() {
                             Reset
                           </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="range"
-                            min={0}
-                            max={12}
-                            step={0.05}
-                            value={coverTitleXcm}
-                            onChange={(e) => setCoverTitleXcm(Number(e.target.value))}
-                            className="w-full"
-                          />
-                          <input
-                            type="number"
-                            min={0}
-                            max={12}
-                            step={0.01}
-                            value={Number.isFinite(coverTitleXcm) ? coverTitleXcm : 0}
-                            onChange={(e) => setCoverTitleXcm(Number(e.target.value))}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                          />
-                        </div>
+                        <Slider
+                          min={0}
+                          max={12}
+                          step={0.05}
+                          value={coverTitleXcm}
+                          onChange={setCoverTitleXcm}
+                          formatValue={(v) => `${v.toFixed(2)}cm`}
+                        />
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-medium text-gray-500">
-                            Font size ({coverTitleFontCm.toFixed(2)}cm)
+                            Font size
                           </label>
                           <button
                             onClick={() => setCoverTitleFontCm(initialCoverTitleFontCm)}
@@ -1165,31 +1082,19 @@ export function Settings() {
                             Reset
                           </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="range"
-                            min={0.5}
-                            max={2}
-                            step={0.01}
-                            value={coverTitleFontCm}
-                            onChange={(e) => setCoverTitleFontCm(Number(e.target.value))}
-                            className="w-full"
-                          />
-                          <input
-                            type="number"
-                            min={0.5}
-                            max={2}
-                            step={0.01}
-                            value={Number.isFinite(coverTitleFontCm) ? coverTitleFontCm : 0.99}
-                            onChange={(e) => setCoverTitleFontCm(Number(e.target.value))}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                          />
-                        </div>
+                        <Slider
+                          min={0.5}
+                          max={2}
+                          step={0.01}
+                          value={coverTitleFontCm}
+                          onChange={setCoverTitleFontCm}
+                          formatValue={(v) => `${v.toFixed(2)}cm`}
+                        />
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-medium text-gray-500">
-                            Character width ({coverTitleScaleX.toFixed(2)}x)
+                            Character width
                           </label>
                           <button
                             onClick={() => setCoverTitleScaleX(initialCoverTitleScaleX)}
@@ -1199,31 +1104,19 @@ export function Settings() {
                             Reset
                           </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="range"
-                            min={0.6}
-                            max={3}
-                            step={0.01}
-                            value={coverTitleScaleX}
-                            onChange={(e) => setCoverTitleScaleX(Number(e.target.value))}
-                            className="w-full"
-                          />
-                          <input
-                            type="number"
-                            min={0.6}
-                            max={3}
-                            step={0.01}
-                            value={Number.isFinite(coverTitleScaleX) ? coverTitleScaleX : 1}
-                            onChange={(e) => setCoverTitleScaleX(Number(e.target.value))}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                          />
-                        </div>
+                        <Slider
+                          min={0.6}
+                          max={3}
+                          step={0.01}
+                          value={coverTitleScaleX}
+                          onChange={setCoverTitleScaleX}
+                          formatValue={(v) => `${v.toFixed(2)}x`}
+                        />
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-medium text-gray-500">
-                            Character height ({coverTitleScaleY.toFixed(2)}x)
+                            Character height
                           </label>
                           <button
                             onClick={() => setCoverTitleScaleY(initialCoverTitleScaleY)}
@@ -1233,31 +1126,19 @@ export function Settings() {
                             Reset
                           </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="range"
-                            min={0.6}
-                            max={3}
-                            step={0.01}
-                            value={coverTitleScaleY}
-                            onChange={(e) => setCoverTitleScaleY(Number(e.target.value))}
-                            className="w-full"
-                          />
-                          <input
-                            type="number"
-                            min={0.6}
-                            max={3}
-                            step={0.01}
-                            value={Number.isFinite(coverTitleScaleY) ? coverTitleScaleY : 1}
-                            onChange={(e) => setCoverTitleScaleY(Number(e.target.value))}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                          />
-                        </div>
+                        <Slider
+                          min={0.6}
+                          max={3}
+                          step={0.01}
+                          value={coverTitleScaleY}
+                          onChange={setCoverTitleScaleY}
+                          formatValue={(v) => `${v.toFixed(2)}x`}
+                        />
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-medium text-gray-500">
-                            Letter spacing ({coverTitleLetterSpacingEm.toFixed(3)}em)
+                            Letter spacing
                           </label>
                           <button
                             onClick={() => setCoverTitleLetterSpacingEm(initialCoverTitleLetterSpacingEm)}
@@ -1267,26 +1148,14 @@ export function Settings() {
                             Reset
                           </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="range"
-                            min={-0.2}
-                            max={0.2}
-                            step={0.001}
-                            value={coverTitleLetterSpacingEm}
-                            onChange={(e) => setCoverTitleLetterSpacingEm(Number(e.target.value))}
-                            className="w-full"
-                          />
-                          <input
-                            type="number"
-                            min={-0.2}
-                            max={0.2}
-                            step={0.001}
-                            value={Number.isFinite(coverTitleLetterSpacingEm) ? coverTitleLetterSpacingEm : 0}
-                            onChange={(e) => setCoverTitleLetterSpacingEm(Number(e.target.value))}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                          />
-                        </div>
+                        <Slider
+                          min={-0.2}
+                          max={0.2}
+                          step={0.001}
+                          value={coverTitleLetterSpacingEm}
+                          onChange={setCoverTitleLetterSpacingEm}
+                          formatValue={(v) => `${v.toFixed(3)}em`}
+                        />
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
@@ -1363,7 +1232,7 @@ export function Settings() {
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-medium text-gray-500">
-                            Horizontal position ({coverSubtitleXcm.toFixed(2)}cm)
+                            Horizontal position
                           </label>
                           <button
                             onClick={() => setCoverSubtitleXcm(initialCoverSubtitleXcm)}
@@ -1373,31 +1242,19 @@ export function Settings() {
                             Reset
                           </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="range"
-                            min={0}
-                            max={12}
-                            step={0.05}
-                            value={coverSubtitleXcm}
-                            onChange={(e) => setCoverSubtitleXcm(Number(e.target.value))}
-                            className="w-full"
-                          />
-                          <input
-                            type="number"
-                            min={0}
-                            max={12}
-                            step={0.01}
-                            value={Number.isFinite(coverSubtitleXcm) ? coverSubtitleXcm : 0}
-                            onChange={(e) => setCoverSubtitleXcm(Number(e.target.value))}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                          />
-                        </div>
+                        <Slider
+                          min={0}
+                          max={12}
+                          step={0.05}
+                          value={coverSubtitleXcm}
+                          onChange={setCoverSubtitleXcm}
+                          formatValue={(v) => `${v.toFixed(2)}cm`}
+                        />
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-medium text-gray-500">
-                            Font size ({coverSubtitleFontCm.toFixed(2)}cm)
+                            Font size
                           </label>
                           <button
                             onClick={() => setCoverSubtitleFontCm(initialCoverSubtitleFontCm)}
@@ -1407,31 +1264,19 @@ export function Settings() {
                             Reset
                           </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="range"
-                            min={0.4}
-                            max={1.6}
-                            step={0.01}
-                            value={coverSubtitleFontCm}
-                            onChange={(e) => setCoverSubtitleFontCm(Number(e.target.value))}
-                            className="w-full"
-                          />
-                          <input
-                            type="number"
-                            min={0.4}
-                            max={1.6}
-                            step={0.01}
-                            value={Number.isFinite(coverSubtitleFontCm) ? coverSubtitleFontCm : 0.85}
-                            onChange={(e) => setCoverSubtitleFontCm(Number(e.target.value))}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                          />
-                        </div>
+                        <Slider
+                          min={0.4}
+                          max={1.6}
+                          step={0.01}
+                          value={coverSubtitleFontCm}
+                          onChange={setCoverSubtitleFontCm}
+                          formatValue={(v) => `${v.toFixed(2)}cm`}
+                        />
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-medium text-gray-500">
-                            Character width ({coverSubtitleScaleX.toFixed(2)}x)
+                            Character width
                           </label>
                           <button
                             onClick={() => setCoverSubtitleScaleX(initialCoverSubtitleScaleX)}
@@ -1441,31 +1286,19 @@ export function Settings() {
                             Reset
                           </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="range"
-                            min={0.6}
-                            max={3}
-                            step={0.01}
-                            value={coverSubtitleScaleX}
-                            onChange={(e) => setCoverSubtitleScaleX(Number(e.target.value))}
-                            className="w-full"
-                          />
-                          <input
-                            type="number"
-                            min={0.6}
-                            max={3}
-                            step={0.01}
-                            value={Number.isFinite(coverSubtitleScaleX) ? coverSubtitleScaleX : 1}
-                            onChange={(e) => setCoverSubtitleScaleX(Number(e.target.value))}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                          />
-                        </div>
+                        <Slider
+                          min={0.6}
+                          max={3}
+                          step={0.01}
+                          value={coverSubtitleScaleX}
+                          onChange={setCoverSubtitleScaleX}
+                          formatValue={(v) => `${v.toFixed(2)}x`}
+                        />
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-medium text-gray-500">
-                            Character height ({coverSubtitleScaleY.toFixed(2)}x)
+                            Character height
                           </label>
                           <button
                             onClick={() => setCoverSubtitleScaleY(initialCoverSubtitleScaleY)}
@@ -1475,31 +1308,19 @@ export function Settings() {
                             Reset
                           </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="range"
-                            min={0.6}
-                            max={3}
-                            step={0.01}
-                            value={coverSubtitleScaleY}
-                            onChange={(e) => setCoverSubtitleScaleY(Number(e.target.value))}
-                            className="w-full"
-                          />
-                          <input
-                            type="number"
-                            min={0.6}
-                            max={3}
-                            step={0.01}
-                            value={Number.isFinite(coverSubtitleScaleY) ? coverSubtitleScaleY : 1}
-                            onChange={(e) => setCoverSubtitleScaleY(Number(e.target.value))}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                          />
-                        </div>
+                        <Slider
+                          min={0.6}
+                          max={3}
+                          step={0.01}
+                          value={coverSubtitleScaleY}
+                          onChange={setCoverSubtitleScaleY}
+                          formatValue={(v) => `${v.toFixed(2)}x`}
+                        />
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-medium text-gray-500">
-                            Letter spacing ({coverSubtitleLetterSpacingEm.toFixed(3)}em)
+                            Letter spacing
                           </label>
                           <button
                             onClick={() => setCoverSubtitleLetterSpacingEm(initialCoverSubtitleLetterSpacingEm)}
@@ -1509,26 +1330,14 @@ export function Settings() {
                             Reset
                           </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="range"
-                            min={-0.2}
-                            max={0.2}
-                            step={0.001}
-                            value={coverSubtitleLetterSpacingEm}
-                            onChange={(e) => setCoverSubtitleLetterSpacingEm(Number(e.target.value))}
-                            className="w-full"
-                          />
-                          <input
-                            type="number"
-                            min={-0.2}
-                            max={0.2}
-                            step={0.001}
-                            value={Number.isFinite(coverSubtitleLetterSpacingEm) ? coverSubtitleLetterSpacingEm : 0}
-                            onChange={(e) => setCoverSubtitleLetterSpacingEm(Number(e.target.value))}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700"
-                          />
-                        </div>
+                        <Slider
+                          min={-0.2}
+                          max={0.2}
+                          step={0.001}
+                          value={coverSubtitleLetterSpacingEm}
+                          onChange={setCoverSubtitleLetterSpacingEm}
+                          formatValue={(v) => `${v.toFixed(3)}em`}
+                        />
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-1">
@@ -1631,32 +1440,30 @@ export function Settings() {
                   <div className="space-y-3">
                     <div>
                       <label className="text-xs text-gray-500">From</label>
-                      <input
-                        type="range"
+                      <Slider
                         min={logsMin}
                         max={logsMax}
+                        step={86400000}
                         value={logsFrom ?? logsMin}
-                        onChange={(e) => {
-                          const value = Number(e.target.value)
+                        onChange={(value) => {
                           setLogsFrom(value)
                           if (logsTo !== null && value > logsTo) setLogsTo(value)
                         }}
-                        className="w-full"
+                        formatValue={formatDateFr}
                       />
                     </div>
                     <div>
                       <label className="text-xs text-gray-500">To</label>
-                      <input
-                        type="range"
+                      <Slider
                         min={logsMin}
                         max={logsMax}
+                        step={86400000}
                         value={logsTo ?? logsMax}
-                        onChange={(e) => {
-                          const value = Number(e.target.value)
+                        onChange={(value) => {
                           setLogsTo(value)
                           if (logsFrom !== null && value < logsFrom) setLogsFrom(value)
                         }}
-                        className="w-full"
+                        formatValue={formatDateFr}
                       />
                     </div>
                   </div>
@@ -1690,32 +1497,30 @@ export function Settings() {
                   <div className="space-y-3">
                     <div>
                       <label className="text-xs text-gray-500">From</label>
-                      <input
-                        type="range"
+                      <Slider
                         min={famileoLogsMin}
                         max={famileoLogsMax}
+                        step={86400000}
                         value={famileoLogsFrom ?? famileoLogsMin}
-                        onChange={(e) => {
-                          const value = Number(e.target.value)
+                        onChange={(value) => {
                           setFamileoLogsFrom(value)
                           if (famileoLogsTo !== null && value > famileoLogsTo) setFamileoLogsTo(value)
                         }}
-                        className="w-full"
+                        formatValue={formatDateFr}
                       />
                     </div>
                     <div>
                       <label className="text-xs text-gray-500">To</label>
-                      <input
-                        type="range"
+                      <Slider
                         min={famileoLogsMin}
                         max={famileoLogsMax}
+                        step={86400000}
                         value={famileoLogsTo ?? famileoLogsMax}
-                        onChange={(e) => {
-                          const value = Number(e.target.value)
+                        onChange={(value) => {
                           setFamileoLogsTo(value)
                           if (famileoLogsFrom !== null && value < famileoLogsFrom) setFamileoLogsFrom(value)
                         }}
-                        className="w-full"
+                        formatValue={formatDateFr}
                       />
                     </div>
                   </div>

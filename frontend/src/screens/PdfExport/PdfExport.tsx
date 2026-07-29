@@ -626,9 +626,16 @@ export function PdfExport() {
                           </svg>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-900">
-                            {formatDateRange(pdf.date_from, pdf.date_to)}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900">
+                              {formatDateRange(pdf.date_from, pdf.date_to)}
+                            </p>
+                            {pdf.is_blurb && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
+                                Blurb
+                              </span>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 mt-1">
                             <div className="flex-1 h-1.5 bg-blue-200 rounded-full overflow-hidden">
                               <div
@@ -749,6 +756,11 @@ export function PdfExport() {
                                 Cancelled
                               </span>
                             )}
+                            {pdf.is_blurb && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
+                                Blurb
+                              </span>
+                            )}
                           </div>
                           <p className="text-sm text-gray-500 mt-1">
                             Created on {formatDate(pdf.created_at)}
@@ -788,7 +800,7 @@ export function PdfExport() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                                title="Voir le PDF"
+                                title={pdf.is_blurb ? 'Voir le dossier (contenu + cover)' : 'Voir le PDF'}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">

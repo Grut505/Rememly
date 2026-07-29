@@ -112,18 +112,29 @@ The print-ready cover's FRONT cover SHALL reuse the same cover style, photo mosa
 - **THEN** the print-ready cover displays the same photos and title, positioned within the new format's safe zone
 
 ### Requirement: Separate cover PDF output
-Generating a print-ready cover SHALL produce a distinct downloadable cover-wrap PDF file, in addition to the interior/whole-album PDF - the two are always delivered as separate files, never merged into one. When Blurb mode is on, the interior/whole-album PDF is itself laid out at the chosen format's dimensions (per `pdf-interior-blurb-layout`); this requirement only guarantees the cover is a separate file, not that the interior is untouched.
+Generating a print-ready cover SHALL produce a distinct downloadable cover-wrap PDF file, in addition to the interior/whole-album PDF - the two are always delivered as separate files, never merged into one. This applies to BOTH cover representations: when Blurb mode is on, the interior/whole-album PDF SHALL NOT include the digital single-page front cover either (it is skipped entirely, not merged in), so the interior contains only month/content chunks (plus blank padding if needed) and the cover-wrap PDF is the sole cover deliverable. The interior/whole-album PDF is itself laid out at the chosen format's dimensions (per `pdf-interior-blurb-layout`); this requirement only guarantees the cover is a separate file, not that the interior is otherwise untouched.
 
 #### Scenario: Both files available after generation
 - **WHEN** the user generates a PDF with Blurb mode enabled
-- **THEN** both the interior/whole-album PDF (laid out at the chosen format) and the new cover-wrap PDF are available for download afterward, as two separate files
+- **THEN** both the interior/whole-album PDF (laid out at the chosen format, with no cover page inside it) and the new cover-wrap PDF are available for download afterward, as two separate files
 
-### Requirement: Cover PDF delivered to the same Drive destination
-The generated print-ready cover PDF SHALL be delivered to the same Google Drive destination as the existing whole-album PDF, using the existing delivery mechanism (files continue to land in Drive, unchanged from today).
+### Requirement: Cover and content delivered to a dedicated folder, linked as a pair
+When Blurb mode produces a cover-wrap PDF, it SHALL be delivered to a dedicated Google Drive folder together with the interior/whole-album PDF (not scattered across the shared delivery location used for non-Blurb jobs). The link surfaced back to the user for a Blurb job SHALL point at that folder, not at either individual file, so opening it reveals both deliverables together. Non-Blurb jobs are unaffected and keep linking directly to the single merged file, as today.
 
-#### Scenario: Cover PDF lands in Drive alongside the album PDF
-- **WHEN** a print-ready cover is generated
-- **THEN** the resulting cover-wrap PDF file is moved into the same Google Drive folder as the whole-album PDF
+#### Scenario: Blurb job link opens a folder with both files
+- **WHEN** a print-ready cover is generated and the cover-wrap PDF is produced successfully
+- **THEN** the job's link points to a Drive folder containing both the interior/whole-album PDF and the cover-wrap PDF
+
+#### Scenario: Non-Blurb job link still opens the single file
+- **WHEN** a PDF job completes with Blurb mode off
+- **THEN** the job's link points directly at the single merged PDF file, unchanged from today
+
+### Requirement: Job flagged as Blurb or normal
+Every PDF job record SHALL expose whether it was a Blurb print-ready generation or a normal one, so this is visible without inspecting the job's raw options data.
+
+#### Scenario: Job list distinguishes Blurb jobs
+- **WHEN** a family member views the list of past PDF jobs
+- **THEN** each job generated with Blurb mode enabled is clearly marked as a Blurb job, distinct from normal jobs
 
 ### Requirement: Out-of-range page count blocks only the cover
 If the actual generated interior page count falls outside RPI Print's supported range (20-550, multiples of 2 - see `pdf-blurb-print-spec`), the system SHALL still generate and deliver the interior/whole-album PDF normally, and SHALL skip cover-wrap generation with a validation message explaining why (e.g. "not enough pages for Blurb's minimum" or "too many pages for this format").

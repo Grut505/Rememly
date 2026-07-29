@@ -156,6 +156,16 @@ def delete_chunks(service, folder_id: str, keep_file_id: str):
         service.files().delete(fileId=f["id"]).execute()
 
 
+def get_file_web_view_link(service, file_id: str) -> Optional[str]:
+    file = service.files().get(fileId=file_id, fields="webViewLink").execute()
+    return file.get("webViewLink")
+
+
+def create_folder(service, name: str, parent_id: str) -> dict:
+    metadata = {"name": name, "mimeType": "application/vnd.google-apps.folder", "parents": [parent_id]}
+    return service.files().create(body=metadata, fields="id,webViewLink").execute()
+
+
 def call_merge_complete(
     apps_script_url: str,
     token: str,
@@ -257,17 +267,39 @@ def main():
     created = upload_file(service, folder_id, output_name, out_bytes.getvalue())
     result = {"file_id": created.get("id"), "url": created.get("webViewLink")}
 
+    # When Blurb mode produced a separate cover-wrap file, the content PDF and
+    # the cover are two distinct deliverables - the link handed back to the
+    # family must point at a dedicated folder containing both, not at either
+    # file alone (and not at the shared Rememly/pdf root, which also holds
+    # every other job's output).
+    is_blurb = False
+    callback_url = created.get("webViewLink", "")
+
     if move_to_pdf_root:
         pdf_root_id = get_pdf_root_folder_id(service)
         if pdf_root_id:
-            print("Moving merged PDF to Rememly/pdf ...")
-            move_file_to_folder(service, created["id"], pdf_root_id)
+            cover_wrap_present = find_file_by_name(service, folder_id, COVER_WRAP_FILENAME) is not None
+            if cover_wrap_present:
+                is_blurb = True
+                print("Blurb mode: creating a dedicated delivery folder for the content + cover pair ...")
+                delivery_folder = create_folder(service, f"Blurb_{ts}", pdf_root_id)
+                delivery_folder_id = delivery_folder["id"]
+                move_file_to_folder(service, created["id"], delivery_folder_id)
 
-            cover_wrap_name = f"cover_blurb_{ts}.pdf"
-            moved_cover_wrap = move_cover_wrap_if_present(service, folder_id, pdf_root_id, cover_wrap_name)
-            if moved_cover_wrap:
-                print(f"Moved Blurb cover-wrap PDF to Rememly/pdf as {cover_wrap_name}")
-                result["cover_wrap_file_id"] = moved_cover_wrap["id"]
+                cover_wrap_name = f"cover_blurb_{ts}.pdf"
+                moved_cover_wrap = move_cover_wrap_if_present(service, folder_id, delivery_folder_id, cover_wrap_name)
+                if moved_cover_wrap:
+                    print(f"Moved content PDF and cover-wrap PDF ({cover_wrap_name}) into {delivery_folder['id']}")
+                    result["cover_wrap_file_id"] = moved_cover_wrap["id"]
+                    result["delivery_folder_id"] = delivery_folder_id
+
+                folder_link = delivery_folder.get("webViewLink") or get_file_web_view_link(service, delivery_folder_id)
+                if folder_link:
+                    callback_url = folder_link
+                    result["url"] = folder_link
+            else:
+                print("Moving merged PDF to Rememly/pdf ...")
+                move_file_to_folder(service, created["id"], pdf_root_id)
 
     if clean_chunks:
         print("Cleaning chunk PDFs in folder...")
@@ -280,8 +312,9 @@ def main():
             merge_token,
             folder_id,
             created["id"],
-            created.get("webViewLink", ""),
+            callback_url,
             clean_chunks,
+            is_blurb,
         )
 
     if clean_chunks and delete_chunks_folder:

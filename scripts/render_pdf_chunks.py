@@ -1229,19 +1229,28 @@ def main():
 
         service = get_drive_service(args.credentials, args.token, args.no_browser)
         folder_id, folder_url = create_job_chunks_folder(service, args.job_id)
-        total_chunks = 1 + len(months) + (1 if needs_blank_padding else 0) + (1 if blurb_mode and blurb_page_count_ok else 0)
+        # In Blurb mode the digital single-page cover is not part of the
+        # interior content at all - the cover_wrap.pdf produced below is the
+        # sole cover deliverable, kept as a separate file (never merged).
+        total_chunks = (
+            (0 if blurb_mode else 1)
+            + len(months)
+            + (1 if needs_blank_padding else 0)
+            + (1 if blurb_mode and blurb_page_count_ok else 0)
+        )
         report_status(args.callback_url, args.callback_token, args.job_id, 8,
                       f"Rendering {total_chunks} chunk(s) for {len(articles)} article(s)")
 
         with sync_playwright() as p:
             browser = p.chromium.launch()
 
-            cover_html = generate_cover_html(articles, job.get('date_from', ''), job.get('date_to', ''),
-                                             options, config, args.callback_url, args.callback_token)
-            cover_pdf = render_html_to_pdf(browser, cover_html)
-            upload_pdf(service, folder_id, "chunk_000_cover.pdf", cover_pdf)
-            report_status(args.callback_url, args.callback_token, args.job_id,
-                          10, f"Rendered cover (1/{total_chunks})")
+            if not blurb_mode:
+                cover_html = generate_cover_html(articles, job.get('date_from', ''), job.get('date_to', ''),
+                                                 options, config, args.callback_url, args.callback_token)
+                cover_pdf = render_html_to_pdf(browser, cover_html)
+                upload_pdf(service, folder_id, "chunk_000_cover.pdf", cover_pdf)
+                report_status(args.callback_url, args.callback_token, args.job_id,
+                              10, f"Rendered cover (1/{total_chunks})")
 
             start_page = 0
             for idx, key in enumerate(months, start=1):

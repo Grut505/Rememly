@@ -1,11 +1,20 @@
 """
 Renders just the PDF cover page for the Settings "Preview PDF" button.
 
-Reuses generate_cover_html()/render_html_to_pdf() from render_pdf_chunks.py so
-the preview matches the real book pixel-for-pixel, with an empty article list
-(no real photos fetched) - this naturally produces the plain/solid-colour
-cover fallback rather than the photo mosaic, which is what a quick settings
-preview needs.
+Reuses generate_cover_html()/generate_blurb_cover_html()/render_html_to_pdf()
+from render_pdf_chunks.py so the preview matches the real book pixel-for-
+pixel, with an empty article list (no real photos fetched) - this naturally
+produces the plain/solid-colour cover fallback rather than the photo mosaic,
+which is what a quick settings preview needs.
+
+When options.blurb_mode_enabled is set, renders the Blurb print-ready cover
+wrap (front + spine + back) instead of the plain digital cover, at the
+selected format/cover type/paper type - the same code path used for the real
+export's cover-wrap file. Settings has no per-export page count to draw on
+(that's only known once real interior content is generated), so a nominal
+placeholder page count is used purely to produce a representative spine
+width for this quick preview; the real export recomputes it from the actual
+generated page count.
 """
 
 import argparse
@@ -18,8 +27,13 @@ import urllib.request
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 
-from render_pdf_chunks import API_HEADERS, generate_cover_html, render_html_to_pdf  # noqa: E402
+import blurb_print_spec  # noqa: E402
+from render_pdf_chunks import (  # noqa: E402
+    API_HEADERS, generate_blurb_cover_html, generate_cover_html, render_html_to_pdf,
+)
 from playwright.sync_api import sync_playwright  # noqa: E402
+
+BLURB_PREVIEW_PAGE_COUNT = blurb_print_spec.PAGE_COUNT_MIN
 
 
 def api_call(callback_url: str, path: str, params: dict, method: str = "GET"):
@@ -65,7 +79,16 @@ def main():
 
     options, config = fetch_preview_job(args.callback_url, args.callback_token, args.preview_id)
 
-    cover_html = generate_cover_html([], "", "", options, config, args.callback_url, args.callback_token)
+    if options.get('blurb_mode_enabled'):
+        cover_html = generate_blurb_cover_html(
+            [], "", "", options, config, args.callback_url, args.callback_token,
+            format_key=options.get('blurb_format') or 'magazine_premium',
+            cover_type=options.get('blurb_cover_type') or 'softcover',
+            paper_type=options.get('blurb_paper_type') or '100# Text, Gloss',
+            page_count=BLURB_PREVIEW_PAGE_COUNT,
+        )
+    else:
+        cover_html = generate_cover_html([], "", "", options, config, args.callback_url, args.callback_token)
 
     with sync_playwright() as p:
         browser = p.chromium.launch()

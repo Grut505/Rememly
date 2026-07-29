@@ -43,6 +43,7 @@ export interface PdfJob {
   date_from?: string
   date_to?: string
   error_message?: string
+  is_blurb?: boolean
 }
 
 export interface ApiResponse<T> {

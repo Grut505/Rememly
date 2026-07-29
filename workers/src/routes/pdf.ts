@@ -15,6 +15,23 @@ async function getPdfJob(db: D1Database, jobId: string) {
   return db.prepare('select * from jobs_pdf where job_id = ?1 limit 1').bind(jobId).first<Record<string, unknown>>()
 }
 
+// Whether a job is a Blurb print-ready generation is decided once, at
+// creation, and already lives in options_json - there's no need for a
+// dedicated column, just surface it explicitly instead of leaving callers to
+// parse options_json themselves.
+function isBlurbJob(job: Record<string, unknown>): boolean {
+  try {
+    const options = JSON.parse((job.options_json as string) || '{}')
+    return Boolean(options && options.blurb_mode_enabled)
+  } catch {
+    return false
+  }
+}
+
+function withBlurbFlag(job: Record<string, unknown>): Record<string, unknown> {
+  return { ...job, is_blurb: isBlurbJob(job) }
+}
+
 function currentIso() {
   return new Date().toISOString()
 }
@@ -393,7 +410,7 @@ export const pdfStatusHandler: RouteHandler = async (request, context) => {
 
   const job = await getPdfJob(context.env.DB, jobId)
   if (!job) return fail('NOT_FOUND', 'Job not found', 404)
-  return ok(job)
+  return ok(withBlurbFlag(job))
 }
 
 export const pdfListHandler: RouteHandler = async (request, context) => {
@@ -432,7 +449,7 @@ export const pdfListHandler: RouteHandler = async (request, context) => {
   ).all<{ created_by: string }>()
 
   return ok({
-    items: items.results || [],
+    items: (items.results || []).map(withBlurbFlag),
     authors: (authors.results || []).map((row) => row.created_by),
   })
 }

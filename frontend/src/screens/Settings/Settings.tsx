@@ -11,6 +11,7 @@ import { usersApi, DeclaredUser } from '../../api/users'
 import { articlesApi } from '../../api/articles'
 import { useImageLoader } from '../../hooks/useImageLoader'
 import { pdfApi } from '../../api/pdf'
+import { BLURB_PAPER_TYPES } from '../../utils/blurbPrintSpec'
 
 const fontOptions = [
   { value: 'garamond', label: 'Garamond' },
@@ -513,6 +514,16 @@ export function Settings() {
           cover_subtitle_scale_y: coverSubtitleScaleY,
           cover_subtitle_x_cm: coverSubtitleXcm,
           cover_subtitle_h_cm: coverSubtitleFontCm,
+          // Format/cover type/paper type/spine/per-zone colors are per-export
+          // choices made in the PDF export flow, not global settings - this
+          // preview just needs *a* valid combination to show the wrap's
+          // shape and proportions at the correct trim/bleed geometry.
+          ...(blurbModeEnabled ? {
+            blurb_mode_enabled: true,
+            blurb_format: 'magazine_premium' as const,
+            blurb_cover_type: 'softcover' as const,
+            blurb_paper_type: BLURB_PAPER_TYPES[0],
+          } : {}),
         },
       })
       setPreviewFileId(response.file_id)

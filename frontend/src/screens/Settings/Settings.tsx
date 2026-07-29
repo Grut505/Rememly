@@ -11,7 +11,11 @@ import { usersApi, DeclaredUser } from '../../api/users'
 import { articlesApi } from '../../api/articles'
 import { useImageLoader } from '../../hooks/useImageLoader'
 import { pdfApi } from '../../api/pdf'
-import { BLURB_PAPER_TYPES } from '../../utils/blurbPrintSpec'
+import {
+  BlurbFormat, BlurbCoverType, BlurbPaperType,
+  BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, PAGE_COUNT_MIN, PAGE_COUNT_MAX, PAGE_COUNT_STEP,
+  spineWidthIn, formatSpineWidth,
+} from '../../utils/blurbPrintSpec'
 
 const fontOptions = [
   { value: 'garamond', label: 'Garamond' },
@@ -43,6 +47,27 @@ export function Settings() {
   const [initialBlurbMeasurementUnits, setInitialBlurbMeasurementUnits] = useState<'inches' | 'centimeters'>('inches')
   const [blurbBackCoverMosaicMaxPhotos, setBlurbBackCoverMosaicMaxPhotos] = useState(200)
   const [initialBlurbBackCoverMosaicMaxPhotos, setInitialBlurbBackCoverMosaicMaxPhotos] = useState(200)
+  const [blurbFormat, setBlurbFormat] = useState<BlurbFormat>('magazine_premium')
+  const [initialBlurbFormat, setInitialBlurbFormat] = useState<BlurbFormat>('magazine_premium')
+  const [blurbCoverType, setBlurbCoverType] = useState<BlurbCoverType>('softcover')
+  const [initialBlurbCoverType, setInitialBlurbCoverType] = useState<BlurbCoverType>('softcover')
+  const [blurbPaperType, setBlurbPaperType] = useState<BlurbPaperType>(BLURB_PAPER_TYPES[0])
+  const [initialBlurbPaperType, setInitialBlurbPaperType] = useState<BlurbPaperType>(BLURB_PAPER_TYPES[0])
+  const [blurbFrontBgColor, setBlurbFrontBgColor] = useState('#ffffff')
+  const [initialBlurbFrontBgColor, setInitialBlurbFrontBgColor] = useState('#ffffff')
+  const [blurbBackBgColor, setBlurbBackBgColor] = useState('#ffffff')
+  const [initialBlurbBackBgColor, setInitialBlurbBackBgColor] = useState('#ffffff')
+  const [blurbSpineBgColor, setBlurbSpineBgColor] = useState('#ffffff')
+  const [initialBlurbSpineBgColor, setInitialBlurbSpineBgColor] = useState('#ffffff')
+  const [blurbBackCoverStyle, setBlurbBackCoverStyle] = useState<'color' | 'mosaic'>('color')
+  const [initialBlurbBackCoverStyle, setInitialBlurbBackCoverStyle] = useState<'color' | 'mosaic'>('color')
+  const [blurbSpineText, setBlurbSpineText] = useState('')
+  const [initialBlurbSpineText, setInitialBlurbSpineText] = useState('')
+  const [blurbSpineFontSizeCm, setBlurbSpineFontSizeCm] = useState(0.5)
+  const [initialBlurbSpineFontSizeCm, setInitialBlurbSpineFontSizeCm] = useState(0.5)
+  // Blurb preview page count - simulation-only, not persisted (Settings has
+  // no real interior content to derive a page count from)
+  const [blurbPreviewPageCount, setBlurbPreviewPageCount] = useState(PAGE_COUNT_MIN)
   const [familyName, setFamilyName] = useState('')
   const [initialFamilyName, setInitialFamilyName] = useState('')
   const [coverTitle, setCoverTitle] = useState('')
@@ -128,6 +153,15 @@ export function Settings() {
     || blurbModeEnabled !== initialBlurbModeEnabled
     || blurbMeasurementUnits !== initialBlurbMeasurementUnits
     || blurbBackCoverMosaicMaxPhotos !== initialBlurbBackCoverMosaicMaxPhotos
+    || blurbFormat !== initialBlurbFormat
+    || blurbCoverType !== initialBlurbCoverType
+    || blurbPaperType !== initialBlurbPaperType
+    || blurbFrontBgColor !== initialBlurbFrontBgColor
+    || blurbBackBgColor !== initialBlurbBackBgColor
+    || blurbSpineBgColor !== initialBlurbSpineBgColor
+    || blurbBackCoverStyle !== initialBlurbBackCoverStyle
+    || blurbSpineText !== initialBlurbSpineText
+    || blurbSpineFontSizeCm !== initialBlurbSpineFontSizeCm
     || familyName.trim() !== initialFamilyName.trim()
     || coverTitle.trim() !== initialCoverTitle.trim()
     || coverSubtitle.trim() !== initialCoverSubtitle.trim()
@@ -154,6 +188,13 @@ export function Settings() {
     || coverSubtitleScaleX !== initialCoverSubtitleScaleX
     || coverSubtitleScaleY !== initialCoverSubtitleScaleY
 
+  // Settings has no real interior content, so the Blurb preview's spine
+  // estimate is driven by the manual page-count slider rather than actual
+  // generated pages - simulation only, never affects a real export.
+  const previewSpineWidthIn = spineWidthIn(blurbPreviewPageCount, blurbCoverType, blurbPaperType)
+  const previewSpineTextFits = Boolean(blurbSpineText.trim())
+    && previewSpineWidthIn * 2.54 >= Math.max(blurbSpineFontSizeCm, 0.3)
+
   useEffect(() => {
     loadConfig()
     loadAutoDateSetting()
@@ -178,10 +219,24 @@ export function Settings() {
 
   const loadBlurbSettings = async () => {
     try {
-      const [modeResult, unitsResult, mosaicCapResult] = await Promise.all([
+      const [
+        modeResult, unitsResult, mosaicCapResult,
+        formatResult, coverTypeResult, paperTypeResult,
+        frontBgResult, backBgResult, spineBgResult,
+        backStyleResult, spineTextResult, spineFontResult,
+      ] = await Promise.all([
         configApi.get('blurb_mode_enabled'),
         configApi.get('blurb_measurement_units'),
         configApi.get('blurb_back_cover_mosaic_max_photos'),
+        configApi.get('blurb_format'),
+        configApi.get('blurb_cover_type'),
+        configApi.get('blurb_paper_type'),
+        configApi.get('blurb_front_bg_color'),
+        configApi.get('blurb_back_bg_color'),
+        configApi.get('blurb_spine_bg_color'),
+        configApi.get('blurb_back_cover_style'),
+        configApi.get('blurb_spine_text'),
+        configApi.get('blurb_spine_font_size_cm'),
       ])
       const modeValue = modeResult.value === 'true'
       setBlurbModeEnabled(modeValue)
@@ -194,8 +249,36 @@ export function Settings() {
         : 200
       setBlurbBackCoverMosaicMaxPhotos(mosaicCapNum)
       setInitialBlurbBackCoverMosaicMaxPhotos(mosaicCapNum)
+
+      const formatValue: BlurbFormat = formatResult.value === 'standard_portrait' ? 'standard_portrait' : 'magazine_premium'
+      setBlurbFormat(formatValue)
+      setInitialBlurbFormat(formatValue)
+      const coverTypeValue: BlurbCoverType = coverTypeResult.value === 'hardcover' ? 'hardcover' : 'softcover'
+      setBlurbCoverType(coverTypeValue)
+      setInitialBlurbCoverType(coverTypeValue)
+      const paperTypeValue = (paperTypeResult.value as BlurbPaperType) || BLURB_PAPER_TYPES[0]
+      setBlurbPaperType(paperTypeValue)
+      setInitialBlurbPaperType(paperTypeValue)
+      const frontBgValue = frontBgResult.value || '#ffffff'
+      setBlurbFrontBgColor(frontBgValue)
+      setInitialBlurbFrontBgColor(frontBgValue)
+      const backBgValue = backBgResult.value || '#ffffff'
+      setBlurbBackBgColor(backBgValue)
+      setInitialBlurbBackBgColor(backBgValue)
+      const spineBgValue = spineBgResult.value || '#ffffff'
+      setBlurbSpineBgColor(spineBgValue)
+      setInitialBlurbSpineBgColor(spineBgValue)
+      const backStyleValue: 'color' | 'mosaic' = backStyleResult.value === 'mosaic' ? 'mosaic' : 'color'
+      setBlurbBackCoverStyle(backStyleValue)
+      setInitialBlurbBackCoverStyle(backStyleValue)
+      const spineTextValue = spineTextResult.value || ''
+      setBlurbSpineText(spineTextValue)
+      setInitialBlurbSpineText(spineTextValue)
+      const spineFontValue = spineFontResult.value ? Number(spineFontResult.value) : 0.5
+      setBlurbSpineFontSizeCm(spineFontValue)
+      setInitialBlurbSpineFontSizeCm(spineFontValue)
     } catch {
-      // keep defaults (Blurb mode off, inches, 200-photo cap)
+      // keep defaults (Blurb mode off, inches, 200-photo cap, Magazine Premium/Softcover/white/color)
     }
   }
 
@@ -412,6 +495,15 @@ export function Settings() {
         configApi.set('blurb_mode_enabled', String(blurbModeEnabled)),
         configApi.set('blurb_measurement_units', blurbMeasurementUnits),
         configApi.set('blurb_back_cover_mosaic_max_photos', String(blurbBackCoverMosaicMaxPhotos)),
+        configApi.set('blurb_format', blurbFormat),
+        configApi.set('blurb_cover_type', blurbCoverType),
+        configApi.set('blurb_paper_type', blurbPaperType),
+        configApi.set('blurb_front_bg_color', blurbFrontBgColor),
+        configApi.set('blurb_back_bg_color', blurbBackBgColor),
+        configApi.set('blurb_spine_bg_color', blurbSpineBgColor),
+        configApi.set('blurb_back_cover_style', blurbBackCoverStyle),
+        configApi.set('blurb_spine_text', blurbSpineText.trim()),
+        configApi.set('blurb_spine_font_size_cm', String(blurbSpineFontSizeCm)),
         configApi.set('family_name', nextValue),
         configApi.set('pdf_cover_title', nextTitle),
         configApi.set('pdf_cover_subtitle', nextSubtitle),
@@ -442,6 +534,16 @@ export function Settings() {
       setInitialBlurbModeEnabled(blurbModeEnabled)
       setInitialBlurbMeasurementUnits(blurbMeasurementUnits)
       setInitialBlurbBackCoverMosaicMaxPhotos(blurbBackCoverMosaicMaxPhotos)
+      setInitialBlurbFormat(blurbFormat)
+      setInitialBlurbCoverType(blurbCoverType)
+      setInitialBlurbPaperType(blurbPaperType)
+      setInitialBlurbFrontBgColor(blurbFrontBgColor)
+      setInitialBlurbBackBgColor(blurbBackBgColor)
+      setInitialBlurbSpineBgColor(blurbSpineBgColor)
+      setInitialBlurbBackCoverStyle(blurbBackCoverStyle)
+      setBlurbSpineText(blurbSpineText.trim())
+      setInitialBlurbSpineText(blurbSpineText.trim())
+      setInitialBlurbSpineFontSizeCm(blurbSpineFontSizeCm)
       setFamilyName(nextValue)
       setInitialFamilyName(nextValue)
       setCoverTitle(nextTitle)
@@ -478,7 +580,7 @@ export function Settings() {
     }
   }
 
-  const handleOpenCoverPreview = async () => {
+  const handleOpenCoverPreview = async (mode: 'normal' | 'blurb') => {
     setPreviewLoading(true)
     try {
       const response = await pdfApi.previewCover({
@@ -514,15 +616,18 @@ export function Settings() {
           cover_subtitle_scale_y: coverSubtitleScaleY,
           cover_subtitle_x_cm: coverSubtitleXcm,
           cover_subtitle_h_cm: coverSubtitleFontCm,
-          // Format/cover type/paper type/spine/per-zone colors are per-export
-          // choices made in the PDF export flow, not global settings - this
-          // preview just needs *a* valid combination to show the wrap's
-          // shape and proportions at the correct trim/bleed geometry.
-          ...(blurbModeEnabled ? {
+          ...(mode === 'blurb' ? {
             blurb_mode_enabled: true,
-            blurb_format: 'magazine_premium' as const,
-            blurb_cover_type: 'softcover' as const,
-            blurb_paper_type: BLURB_PAPER_TYPES[0],
+            blurb_format: blurbFormat,
+            blurb_cover_type: blurbCoverType,
+            blurb_paper_type: blurbPaperType,
+            blurb_front_bg_color: blurbFrontBgColor,
+            blurb_back_bg_color: blurbBackBgColor,
+            blurb_spine_bg_color: blurbSpineBgColor,
+            blurb_back_cover_style: blurbBackCoverStyle,
+            blurb_spine_text: blurbSpineText.trim() || undefined,
+            blurb_spine_font_size_cm: blurbSpineFontSizeCm,
+            blurb_preview_page_count: blurbPreviewPageCount,
           } : {}),
         },
       })
@@ -881,7 +986,7 @@ export function Settings() {
                 />
                 <div>
                   <span className="text-sm font-medium text-gray-700">Enable Blurb mode</span>
-                  <p className="text-xs text-gray-500">Show print-ready cover options (book format, cover type, paper type) in the PDF export flow</p>
+                  <p className="text-xs text-gray-500">Show print-ready cover parameters below and the Normal/Blurb/Both choice in the PDF export flow</p>
                 </div>
               </label>
               {blurbModeEnabled && (
@@ -930,6 +1035,140 @@ export function Settings() {
                     <p className="text-xs text-gray-500 mt-1">
                       Caps how many photos the full-album back-cover mosaic uses. Use -1 for no cap (every photo in the exported date range).
                     </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Book format</label>
+                    <div className="flex gap-2">
+                      {(Object.keys(BLURB_FORMAT_LABELS) as BlurbFormat[]).map((fmt) => (
+                        <button
+                          key={fmt}
+                          type="button"
+                          onClick={() => setBlurbFormat(fmt)}
+                          className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                            blurbFormat === fmt
+                              ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {BLURB_FORMAT_LABELS[fmt]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Cover type</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setBlurbCoverType('softcover')}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                          blurbCoverType === 'softcover'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Softcover
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBlurbCoverType('hardcover')}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                          blurbCoverType === 'hardcover'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Hardcover (ImageWrap)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Paper type</label>
+                    <select
+                      value={blurbPaperType}
+                      onChange={(e) => setBlurbPaperType(e.target.value as BlurbPaperType)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      {BLURB_PAPER_TYPES.map((paper) => (
+                        <option key={paper} value={paper}>{paper}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Background colors</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Front</label>
+                        <input type="color" value={blurbFrontBgColor} onChange={(e) => setBlurbFrontBgColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Back</label>
+                        <input type="color" value={blurbBackBgColor} onChange={(e) => setBlurbBackBgColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Spine</label>
+                        <input type="color" value={blurbSpineBgColor} onChange={(e) => setBlurbSpineBgColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Back cover style</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setBlurbBackCoverStyle('color')}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                          blurbBackCoverStyle === 'color'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Solid color
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBlurbBackCoverStyle('mosaic')}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                          blurbBackCoverStyle === 'mosaic'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Full-album mosaic
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Spine text (optional)</label>
+                    <input
+                      type="text"
+                      value={blurbSpineText}
+                      onChange={(e) => setBlurbSpineText(e.target.value)}
+                      placeholder="e.g. family name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    <div className="mt-2">
+                      <Slider
+                        label="Font size"
+                        min={0.2}
+                        max={1.5}
+                        step={0.05}
+                        value={blurbSpineFontSizeCm}
+                        onChange={setBlurbSpineFontSizeCm}
+                        formatValue={(v) => `${v.toFixed(2)}cm`}
+                      />
+                    </div>
+                    {blurbSpineText.trim() && !previewSpineTextFits && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        The spine may be too narrow for this text at the current preview page count - you'll be asked to confirm before generating a Blurb export.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -1507,14 +1746,43 @@ export function Settings() {
               </div>
               <div className="mt-4">
                 {!previewUrl ? (
-                  <Button
-                    variant="secondary"
-                    onClick={handleOpenCoverPreview}
-                    disabled={previewLoading}
-                    fullWidth
-                  >
-                    {previewLoading ? 'Generating preview...' : 'Preview PDF'}
-                  </Button>
+                  <div className="space-y-3">
+                    {blurbModeEnabled && (
+                      <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3">
+                        <Slider
+                          label="Simulated page count (Blurb preview only)"
+                          min={PAGE_COUNT_MIN}
+                          max={PAGE_COUNT_MAX}
+                          step={PAGE_COUNT_STEP}
+                          value={blurbPreviewPageCount}
+                          onChange={setBlurbPreviewPageCount}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Estimated spine width at this page count: <strong>{formatSpineWidth(previewSpineWidthIn, blurbMeasurementUnits)}</strong>. Simulation only - a real Blurb export always uses its own actual generated page count.
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleOpenCoverPreview('normal')}
+                        disabled={previewLoading}
+                        fullWidth
+                      >
+                        {previewLoading ? 'Generating...' : 'Preview (normal)'}
+                      </Button>
+                      {blurbModeEnabled && (
+                        <Button
+                          variant="secondary"
+                          onClick={() => handleOpenCoverPreview('blurb')}
+                          disabled={previewLoading}
+                          fullWidth
+                        >
+                          {previewLoading ? 'Generating...' : 'Preview (Blurb)'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     <a

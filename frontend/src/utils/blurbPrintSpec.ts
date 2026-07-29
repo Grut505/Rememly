@@ -26,6 +26,7 @@ export const BLURB_PAPER_TYPES: BlurbPaperType[] = [
 
 export const PAGE_COUNT_MIN = 20
 export const PAGE_COUNT_MAX = 550
+export const PAGE_COUNT_STEP = 2
 
 const SOFTCOVER_SPINE_DIVISOR_K: Record<BlurbPaperType, number> = {
   '100# Text, Gloss': 400,

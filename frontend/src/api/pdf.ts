@@ -49,6 +49,7 @@ export interface PdfOptions {
   blurb_back_cover_style?: 'color' | 'mosaic'
   blurb_spine_text?: string
   blurb_spine_font_size_cm?: number
+  blurb_preview_page_count?: number
 }
 
 export interface CreatePdfPayload {

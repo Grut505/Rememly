@@ -10,11 +10,11 @@ which is what a quick settings preview needs.
 When options.blurb_mode_enabled is set, renders the Blurb print-ready cover
 wrap (front + spine + back) instead of the plain digital cover, at the
 selected format/cover type/paper type - the same code path used for the real
-export's cover-wrap file. Settings has no per-export page count to draw on
-(that's only known once real interior content is generated), so a nominal
-placeholder page count is used purely to produce a representative spine
-width for this quick preview; the real export recomputes it from the actual
-generated page count.
+export's cover-wrap file. Settings has no real interior content to derive a
+page count from, so the user picks one manually via a slider
+(options['blurb_preview_page_count']) purely to see a representative spine
+width for this preview; the real export always recomputes it from the
+actual generated page count, unaffected by this simulated value.
 """
 
 import argparse
@@ -33,7 +33,18 @@ from render_pdf_chunks import (  # noqa: E402
 )
 from playwright.sync_api import sync_playwright  # noqa: E402
 
-BLURB_PREVIEW_PAGE_COUNT = blurb_print_spec.PAGE_COUNT_MIN
+
+def resolve_preview_page_count(options: dict) -> int:
+    """The Settings preview lets the user pick a simulated page count via a
+    slider (options['blurb_preview_page_count']) since there's no real
+    interior content to derive one from - clamp defensively in case a stale
+    or malformed value ever reaches here."""
+    raw = options.get('blurb_preview_page_count')
+    try:
+        page_count = int(raw)
+    except (TypeError, ValueError):
+        return blurb_print_spec.PAGE_COUNT_MIN
+    return max(blurb_print_spec.PAGE_COUNT_MIN, min(blurb_print_spec.PAGE_COUNT_MAX, page_count))
 
 
 def api_call(callback_url: str, path: str, params: dict, method: str = "GET"):
@@ -85,7 +96,7 @@ def main():
             format_key=options.get('blurb_format') or 'magazine_premium',
             cover_type=options.get('blurb_cover_type') or 'softcover',
             paper_type=options.get('blurb_paper_type') or '100# Text, Gloss',
-            page_count=BLURB_PREVIEW_PAGE_COUNT,
+            page_count=resolve_preview_page_count(options),
             show_spine_guide=True,
         )
     else:

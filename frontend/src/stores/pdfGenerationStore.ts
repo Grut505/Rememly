@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { pdfApi, PdfListItem } from '../api/pdf'
+import { pdfApi, PdfListItem, PdfOptions } from '../api/pdf'
 
 interface PdfGenerationState {
   // Current generation (used during initial creation)
@@ -20,17 +20,7 @@ interface PdfGenerationState {
   onCompleteCallback: (() => void) | null
 
   // Actions
-  startGeneration: (from: string, to: string, options: {
-    mosaic_layout?: 'full' | 'centered'
-    show_seasonal_fruits?: boolean
-    max_mosaic_photos?: number
-    cover_style?: 'mosaic' | 'masked-title'
-    family_name?: string
-    cover_title?: string
-    cover_subtitle?: string
-    auto_merge?: boolean
-    clean_chunks?: boolean
-  }, onComplete?: () => void) => Promise<PdfListItem | null>
+  startGeneration: (from: string, to: string, options: PdfOptions, onComplete?: () => void) => Promise<PdfListItem | null>
   pollJobStatus: (jobId: string) => Promise<void>
   setLastCompletedJob: (job: PdfListItem | null) => void
   dismissSuccess: () => void

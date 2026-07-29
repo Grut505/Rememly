@@ -14,7 +14,7 @@ const DEFAULT_FILTERS: FilterValues = {
   author: '',
   search: '',
   duplicatesOnly: false,
-  statusFilter: 'active',
+  statusFilter: 'all',
   sourceFilter: 'all',
 }
 
@@ -259,8 +259,19 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
           <div className="flex rounded-lg border border-gray-300 overflow-hidden">
             <button
               type="button"
-              onClick={() => setStatusFilter('active')}
+              onClick={() => setStatusFilter('all')}
               className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                statusFilter === 'all'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('active')}
+              className={`flex-1 px-3 py-2 text-sm font-medium border-l border-gray-300 transition-colors ${
                 statusFilter === 'active'
                   ? 'bg-primary-600 text-white'
                   : 'bg-white text-gray-700 hover:bg-gray-50'
@@ -281,19 +292,8 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
             </button>
             <button
               type="button"
-              onClick={() => setStatusFilter('all')}
-              className={`flex-1 px-3 py-2 text-sm font-medium border-x border-gray-300 transition-colors ${
-                statusFilter === 'all'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              All
-            </button>
-            <button
-              type="button"
               onClick={() => setStatusFilter('deleted')}
-              className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+              className={`flex-1 px-3 py-2 text-sm font-medium border-l border-gray-300 transition-colors ${
                 statusFilter === 'deleted'
                   ? 'bg-red-600 text-white'
                   : 'bg-white text-gray-700 hover:bg-gray-50'

@@ -87,7 +87,7 @@ export function Timeline() {
         author: filters.author,
         duplicates_only: filters.duplicatesOnly ? 'true' : undefined,
         limit: String(CONSTANTS.ARTICLES_PER_PAGE),
-        status_filter: filters.statusFilter || 'active',
+        status_filter: filters.statusFilter || 'all',
         source_filter: filters.sourceFilter || 'all',
       })
       console.log('Received articles:', response.items.length, 'cursor:', response.next_cursor)
@@ -130,7 +130,7 @@ export function Timeline() {
         cursor: currentCursor,
         duplicates_only: filters.duplicatesOnly ? 'true' : undefined,
         limit: String(CONSTANTS.ARTICLES_PER_PAGE),
-        status_filter: filters.statusFilter || 'active',
+        status_filter: filters.statusFilter || 'all',
         source_filter: filters.sourceFilter || 'all',
       })
       console.log('Loaded more articles:', response.items.length, 'next cursor:', response.next_cursor)
@@ -364,7 +364,7 @@ export function Timeline() {
     filters.author ||
     filters.search ||
     filters.duplicatesOnly ||
-    (filters.statusFilter && filters.statusFilter !== 'active') ||
+    (filters.statusFilter && filters.statusFilter !== 'all') ||
     (filters.sourceFilter && filters.sourceFilter !== 'all')
 
   // Convert store filters to FilterPanel format
@@ -376,7 +376,7 @@ export function Timeline() {
     author: filters.author || '',
     search: filters.search || '',
     duplicatesOnly: filters.duplicatesOnly || false,
-    statusFilter: filters.statusFilter || 'active',
+    statusFilter: filters.statusFilter || 'all',
     sourceFilter: filters.sourceFilter || 'all',
   }
 

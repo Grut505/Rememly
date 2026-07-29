@@ -22,7 +22,7 @@ const defaultFilters: ArticleFilters = {
   author: '',
   search: '',
   duplicatesOnly: false,
-  statusFilter: 'active',
+  statusFilter: 'all',
   sourceFilter: 'all',
 }
 

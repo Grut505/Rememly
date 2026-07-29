@@ -73,16 +73,6 @@ export function ZoneController({
       <div className="max-w-mobile mx-auto">
         <div className="flex items-center flex-wrap gap-2">
           <button
-            onClick={onClose}
-            className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-            title="Close"
-            aria-label="Close"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-              <path d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
-          <button
             onClick={() => onAddPhoto(zoneIndex)}
             className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lg bg-primary-600 text-white hover:bg-primary-700"
             title="Add/Replace"
@@ -183,17 +173,6 @@ export function ZoneController({
             </svg>
           </button>
           <button
-            onClick={handleReset}
-            className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
-            title="Reset"
-            aria-label="Reset"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-              <path d="M3 12a9 9 0 1 0 3-6.7"></path>
-              <path d="M3 4v4h4"></path>
-            </svg>
-          </button>
-          <button
             onClick={() => onFineAdjust(zoneIndex)}
             disabled={!hasPhoto}
             className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -217,6 +196,29 @@ export function ZoneController({
           formatValue={(v) => `${v.toFixed(1)}x`}
           className="mt-2"
         />
+        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+          <button
+            onClick={onClose}
+            className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium"
+            title="Close"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <path d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+            Close
+          </button>
+          <button
+            onClick={handleReset}
+            className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium"
+            title="Revert this zone's zoom, position and rotation"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <path d="M9 14 4 9l5-5"></path>
+              <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path>
+            </svg>
+            Revert
+          </button>
+        </div>
       </div>
     </div>
   )

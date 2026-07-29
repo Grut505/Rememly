@@ -707,10 +707,15 @@ def _blurb_back_panel_html(articles: list, options: dict, callback_url: str, cal
 
 def generate_blurb_cover_html(articles: list, date_from: str, date_to: str, options: dict, config: dict,
                                callback_url: str, callback_token: str, format_key: str, cover_type: str,
-                               paper_type: str, page_count: int) -> str:
+                               paper_type: str, page_count: int, show_spine_guide: bool = False) -> str:
     """Assembles the print-ready cover wrap (back panel | spine | front
     panel, one flat canvas) per blurb_print_spec's geometry, reusing the
-    existing front-cover mosaic/masked-title generators for the front panel."""
+    existing front-cover mosaic/masked-title generators for the front panel.
+
+    show_spine_guide draws a dashed outline around the spine panel - a
+    preview-only visual aid (the spine is otherwise indistinguishable from
+    the front/back panels when all three use the same white default
+    background). Never enabled for the real export's cover-wrap file."""
     bleed_in = blurb_print_spec.BLEED_IN[cover_type]
     panel_w_in, panel_h_in = blurb_print_spec.panel_dimensions_in(format_key, cover_type)
     spine_w_in = blurb_print_spec.spine_width_in(page_count, cover_type, paper_type)
@@ -766,6 +771,10 @@ def generate_blurb_cover_html(articles: list, date_from: str, date_to: str, opti
       {esc(spine_text)}
     </div>'''
 
+    spine_guide_html = ''
+    if show_spine_guide:
+        spine_guide_html = f'<div style="position:absolute; left:{spine_x_cm}cm; top:0; width:{spine_w_cm}cm; height:{full_h_cm}cm; border:2px dashed #ff0000; box-sizing:border-box; pointer-events:none;"></div>'
+
     return f'''<!doctype html>
 <html>
 <head><meta charset="utf-8"><style>{_font_face_css()}
@@ -794,6 +803,7 @@ body {{ font-family: Arial, sans-serif; }}
         {front_inner_html}
       </div>
     </div>
+    {spine_guide_html}
   </div>
 </body>
 </html>'''

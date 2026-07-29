@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react'
 import { LayoutTemplate } from './layoutRegistry'
 import { StateManager } from './StateManager'
 import { CONSTANTS } from '../../utils/constants'
@@ -16,7 +16,14 @@ interface AssemblyCanvasProps {
   maxHeightClassName?: string
 }
 
-export function AssemblyCanvas({
+export interface AssemblyCanvasHandle {
+  // Re-renders every zone from its original full-resolution File (decoded
+  // and closed one at a time, not the cached low-res in-editor bitmaps) so
+  // the exported image isn't limited to ASSEMBLY_IMAGE_MAX_DIM_PX quality.
+  renderFullResolution: () => Promise<HTMLCanvasElement>
+}
+
+export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasProps>(function AssemblyCanvas({
   template,
   stateManager,
   selectedZoneIndex,
@@ -27,7 +34,7 @@ export function AssemblyCanvas({
   minZoom = 0.5,
   maxZoom = 5,
   maxHeightClassName = 'max-h-[55vh]',
-}: AssemblyCanvasProps) {
+}, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [images, setImages] = useState<Map<number, CanvasImageSource>>(new Map())
   const imageCacheRef = useRef<Map<File, CanvasImageSource>>(new Map())
@@ -95,7 +102,26 @@ export function AssemblyCanvas({
       if (!img) {
         if (typeof createImageBitmap === 'function') {
           try {
-            img = await createImageBitmap(file)
+            // Decoding at the original camera resolution (often 4000-8000px
+            // on a modern phone) and keeping every zone's bitmap cached for
+            // the component's lifetime is what was crashing iOS PWAs with
+            // ~16 photos loaded at once - iOS silently kills the WKWebView
+            // under memory pressure and reloads it, which looks like the
+            // assembly "resetting" to its default template. Decode once at
+            // full size just long enough to downscale, then close it.
+            const fullBitmap = await createImageBitmap(file)
+            const maxDim = CONSTANTS.ASSEMBLY_IMAGE_MAX_DIM_PX
+            if (fullBitmap.width > maxDim || fullBitmap.height > maxDim) {
+              const scale = maxDim / Math.max(fullBitmap.width, fullBitmap.height)
+              img = await createImageBitmap(fullBitmap, {
+                resizeWidth: Math.round(fullBitmap.width * scale),
+                resizeHeight: Math.round(fullBitmap.height * scale),
+                resizeQuality: 'medium',
+              })
+              fullBitmap.close()
+            } else {
+              img = fullBitmap
+            }
             imageCacheRef.current.set(file, img)
           } catch (error) {
             img = undefined
@@ -123,6 +149,18 @@ export function AssemblyCanvas({
         }
       }
       newImages.set(i, img)
+    }
+
+    // Evict cached bitmaps for photos no longer placed in any zone (e.g.
+    // swapped out), instead of letting the cache grow for the whole session.
+    const currentFiles = new Set(state.photos)
+    for (const [cachedFile, cachedImg] of imageCacheRef.current) {
+      if (!currentFiles.has(cachedFile)) {
+        if (cachedImg && typeof (cachedImg as ImageBitmap).close === 'function') {
+          ;(cachedImg as ImageBitmap).close()
+        }
+        imageCacheRef.current.delete(cachedFile)
+      }
     }
 
     setImages(newImages)
@@ -490,6 +528,79 @@ export function AssemblyCanvas({
     CONSTANTS.TARGET_IMAGE_WIDTH_PX / Math.max(1, template.aspectRatio)
   )
 
+  useImperativeHandle(ref, () => ({
+    renderFullResolution: async () => {
+      const exportCanvas = document.createElement('canvas')
+      exportCanvas.width = canvasWidth
+      exportCanvas.height = canvasHeight
+      const ctx = exportCanvas.getContext('2d')
+      if (!ctx) throw new Error('2D context unavailable')
+
+      const width = exportCanvas.width
+      const height = exportCanvas.height
+
+      ctx.fillStyle = '#f3f4f6'
+      ctx.fillRect(0, 0, width, height)
+
+      const state = stateManager.getState()
+
+      // Sequential and awaited (not Promise.all) so at most one full-
+      // resolution bitmap is decoded at a time, regardless of zone count -
+      // this is the same crash this function exists to avoid re-introducing.
+      for (let index = 0; index < template.zones.length; index++) {
+        const zone = template.zones[index]
+        const zoneState = state.zoneStates[index]
+        const file = zoneState.photoIndex >= 0 ? state.photos[zoneState.photoIndex] : undefined
+
+        const zoneX = (zone.x / 100) * width
+        const zoneY = (zone.y / 100) * height
+        const zoneWidth = (zone.width / 100) * width
+        const zoneHeight = (zone.height / 100) * height
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
+        ctx.fillRect(zoneX, zoneY, zoneWidth, zoneHeight)
+
+        if (file) {
+          let bitmap: ImageBitmap | null = null
+          try {
+            bitmap = await createImageBitmap(file)
+            ctx.save()
+            ctx.beginPath()
+            ctx.rect(zoneX, zoneY, zoneWidth, zoneHeight)
+            ctx.clip()
+
+            const scale = zoneState.zoom
+            const imgWidth = bitmap.width * scale
+            const imgHeight = bitmap.height * scale
+            const centerX = zoneX + zoneWidth / 2 + zoneState.x
+            const centerY = zoneY + zoneHeight / 2 + zoneState.y
+            const rotation = (zoneState.rotation || 0) * (Math.PI / 180)
+
+            ctx.translate(centerX, centerY)
+            ctx.rotate(rotation)
+            ctx.drawImage(bitmap, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight)
+            ctx.restore()
+          } finally {
+            bitmap?.close()
+          }
+        } else {
+          ctx.fillStyle = '#e5e7eb'
+          ctx.fillRect(zoneX + 2, zoneY + 2, zoneWidth - 4, zoneHeight - 4)
+        }
+
+        // Matches drawCanvas's non-selected/non-swap styling - this export
+        // never has a "selected zone" or "swap mode" concept of its own.
+        // Deliberately no zone-index number here (unlike the interactive
+        // editor) - it's an editing aid, not part of the final saved photo.
+        ctx.strokeStyle = '#ffffff'
+        ctx.lineWidth = Math.max(1, separatorWidth)
+        ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
+      }
+
+      return exportCanvas
+    },
+  }), [template, stateManager, separatorWidth, canvasWidth, canvasHeight])
+
   return (
     <div className="w-full bg-gray-100 rounded-lg overflow-hidden">
       <canvas
@@ -505,4 +616,4 @@ export function AssemblyCanvas({
       />
     </div>
   )
-}
+})

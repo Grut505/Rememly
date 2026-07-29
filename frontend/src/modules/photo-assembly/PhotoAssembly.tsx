@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { LAYOUTS, LayoutTemplate } from './layoutRegistry'
 import { StateManager } from './StateManager'
 import { TemplateSelector } from './TemplateSelector'
-import { AssemblyCanvas } from './AssemblyCanvas'
+import { AssemblyCanvas, AssemblyCanvasHandle } from './AssemblyCanvas'
 import { ZoneController } from './ZoneController'
 import { ZoneFineEditor } from './ZoneFineEditor'
 import { canvasToBase64 } from '../../utils/image'
@@ -27,6 +27,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   const zoneFileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const assemblyCanvasRef = useRef<AssemblyCanvasHandle>(null)
   const photoDimRef = useRef<Map<File, { width: number; height: number }>>(new Map())
   const isMobile = isMobileDevice()
 
@@ -453,13 +454,17 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
 
     try {
       window.dispatchEvent(new CustomEvent('photo-assembly-validating', { detail: { loading: true } }))
-      // Generate final image from canvas
-      const canvas = document.querySelector('canvas') as HTMLCanvasElement
-      if (!canvas) {
+      // Re-render at full resolution from the original photo files, rather
+      // than grabbing the live editing canvas - that canvas draws from
+      // capped-size in-editor bitmaps (kept small to avoid crashing iOS PWAs
+      // when many photos are loaded at once), which would make the saved
+      // image soft/blurry for zones larger than that cap.
+      if (!assemblyCanvasRef.current) {
         showToast('Failed to generate image', 'error')
         return
       }
 
+      const canvas = await assemblyCanvasRef.current.renderFullResolution()
       const imageBase64 = await canvasToBase64(canvas, 0.9)
       const assemblyState = stateManager.serialize()
 
@@ -547,6 +552,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
       <div className="flex-1 overflow-y-auto pb-6">
         <div className="p-4 max-w-3xl mx-auto w-full">
           <AssemblyCanvas
+            ref={assemblyCanvasRef}
             key={canvasKey}
             template={selectedTemplate}
             stateManager={stateManager}

@@ -89,3 +89,18 @@ export function formatSpineWidth(widthIn: number, units: 'inches' | 'centimeters
   }
   return `${widthIn.toFixed(3)} in`
 }
+
+export const SPINE_FONT_SIZE_MIN_CM = 0.2
+export const SPINE_FONT_SIZE_MAX_CM = 2.5
+
+// A recommended font size that comfortably fits within the spine at a given
+// width - leaves margin (30%) rather than using the full spine width, which
+// would print edge-to-edge with no breathing room. This is a hint only; the
+// render script's own fit check (spine width >= font size) is authoritative
+// for whether text actually renders or gets dropped.
+export function recommendedSpineFontSizeCm(spineWidthInches: number): number {
+  const spineWidthCm = spineWidthInches * 2.54
+  const raw = spineWidthCm * 0.7
+  const clamped = Math.min(SPINE_FONT_SIZE_MAX_CM, Math.max(SPINE_FONT_SIZE_MIN_CM, raw))
+  return Math.round(clamped / 0.05) * 0.05
+}

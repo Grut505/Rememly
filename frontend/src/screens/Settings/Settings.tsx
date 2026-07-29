@@ -15,7 +15,8 @@ import { pdfApi } from '../../api/pdf'
 import {
   BlurbFormat, BlurbCoverType, BlurbPaperType,
   BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, PAGE_COUNT_MIN, PAGE_COUNT_MAX, PAGE_COUNT_STEP,
-  spineWidthIn, formatSpineWidth,
+  SPINE_FONT_SIZE_MIN_CM, SPINE_FONT_SIZE_MAX_CM,
+  spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm,
 } from '../../utils/blurbPrintSpec'
 
 const fontOptions = [
@@ -67,8 +68,11 @@ export function Settings() {
   const [blurbSpineFontSizeCm, setBlurbSpineFontSizeCm] = useState(0.5)
   const [initialBlurbSpineFontSizeCm, setInitialBlurbSpineFontSizeCm] = useState(0.5)
   // Blurb preview page count - simulation-only, not persisted (Settings has
-  // no real interior content to derive a page count from)
-  const [blurbPreviewPageCount, setBlurbPreviewPageCount] = useState(PAGE_COUNT_MIN)
+  // no real interior content to derive a page count from). Defaults to a
+  // realistic mid-range count rather than PAGE_COUNT_MIN (20 pages), whose
+  // spine is only ~0.16cm wide - too thin for almost any spine text/font
+  // size, making the preview look like the spine text is missing/broken.
+  const [blurbPreviewPageCount, setBlurbPreviewPageCount] = useState(150)
   const [familyName, setFamilyName] = useState('')
   const [initialFamilyName, setInitialFamilyName] = useState('')
   const [coverTitle, setCoverTitle] = useState('')
@@ -1163,14 +1167,17 @@ export function Settings() {
                     <div className="mt-2">
                       <Slider
                         label="Font size"
-                        min={0.2}
-                        max={1.5}
+                        min={SPINE_FONT_SIZE_MIN_CM}
+                        max={SPINE_FONT_SIZE_MAX_CM}
                         step={0.05}
                         value={blurbSpineFontSizeCm}
                         onChange={setBlurbSpineFontSizeCm}
                         formatValue={(v) => `${v.toFixed(2)}cm`}
                       />
                     </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Recommended for the current simulated page count ({blurbPreviewPageCount} pages): <strong>{recommendedSpineFontSizeCm(previewSpineWidthIn).toFixed(2)}cm</strong>.
+                    </p>
                     {blurbSpineText.trim() && !previewSpineTextFits && (
                       <p className="text-xs text-amber-600 mt-1">
                         The spine may be too narrow for this text at the current preview page count - you'll be asked to confirm before generating a Blurb export.

@@ -81,15 +81,30 @@ Every PDF job record SHALL expose whether it was a Blurb print-ready generation 
 ## ADDED Requirements
 
 ### Requirement: Blurb parameters configured in Settings
-When Blurb mode is enabled, Settings SHALL let the user configure the book format (Magazine Premium, Standard Portrait), cover type (Softcover, Hardcover/ImageWrap), and paper type as persistent global values, used by every subsequent Blurb export and Blurb preview. These are no longer entered per export. Interior page count remains derived automatically from the generated interior content (see `pdf-interior-blurb-layout`) and is never a user-entered field.
+When Blurb mode is enabled, Settings SHALL let the user configure the book format (Magazine Premium, Standard Portrait), cover type (Softcover, Hardcover/ImageWrap), paper type, per-zone colors, back-cover style, and spine text as persistent global values, used by every subsequent Blurb export and Blurb preview. These are no longer entered per export. Interior page count remains derived automatically from the generated interior content (see `pdf-interior-blurb-layout`) and is never a user-entered field. The spine font size is the one exception - see Spine font size overridable at export time.
 
 #### Scenario: Format/cover type/paper type configured once, reused every time
 - **WHEN** the user sets format, cover type, and paper type in Settings
 - **THEN** every subsequent Blurb export and Blurb preview uses those values without asking again
 
-#### Scenario: No per-export parameter controls
+#### Scenario: No per-export parameter controls except spine font size
 - **WHEN** the user opens the PDF export flow with Blurb mode enabled
-- **THEN** no format, cover type, paper type, color, spine text, or back-cover-style controls appear in the export flow - only the generation-mode choice (see Generation mode selection)
+- **THEN** no format, cover type, paper type, color, spine text, or back-cover-style controls appear in the export flow - only the generation-mode choice (see Generation mode selection) and, when spine text is configured, the spine font size override (see Spine font size overridable at export time)
+
+### Requirement: Spine font size overridable at export time
+Whether spine text fits legibly depends on the spine width, which depends on the interior page count - Settings can only simulate a page count, but the PDF export flow knows a real estimate (from the actual date range's content) once the user reaches the options step. The export flow SHALL therefore let the user override the spine font size for that export only, defaulting to the value configured in Settings, without persisting the override back to Settings. The export flow SHALL show a recommended font size computed from the estimated spine width at the current font-size bounds, as a hint only.
+
+#### Scenario: Font size defaults from Settings
+- **WHEN** the user opens the PDF export flow with Blurb mode enabled and spine text configured
+- **THEN** the spine font size control initially shows the value currently configured in Settings
+
+#### Scenario: Local override does not change Settings
+- **WHEN** the user adjusts the spine font size in the export flow and generates a Blurb export
+- **THEN** that export uses the adjusted value, but the value stored in Settings is unchanged
+
+#### Scenario: Recommendation reflects the real estimated page count
+- **WHEN** the export flow has computed an estimated page count and spine width for the current date range
+- **THEN** it displays a recommended spine font size computed from that estimated spine width
 
 ### Requirement: Generation mode selection (Normal / Blurb / Both)
 When Blurb mode is enabled in Settings, the PDF export flow SHALL let the user choose the generation mode for each export request: **Normal** (today's single whole-album PDF), **Blurb** (the Blurb-formatted content PDF plus cover-wrap, delivered as a linked pair per the existing delivery requirement), or **Both**. When Blurb mode is disabled, no mode choice is shown and every export is a Normal export, matching today's behavior exactly.
@@ -133,3 +148,7 @@ The Blurb cover preview SHALL let the user manually set a simulated page count v
 #### Scenario: Preview page count never affects real exports
 - **WHEN** the user has set a simulated page count for the preview and then generates a real Blurb export
 - **THEN** the real export's page count and spine width are computed from its own actual generated interior content, unaffected by the preview's simulated value
+
+#### Scenario: Settings shows a recommended spine font size for the simulated page count
+- **WHEN** the user adjusts the simulated page count in Settings
+- **THEN** Settings displays a recommended spine font size computed from the resulting simulated spine width, alongside the configurable font size control

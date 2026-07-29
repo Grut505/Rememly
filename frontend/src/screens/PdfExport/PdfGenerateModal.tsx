@@ -13,7 +13,8 @@ import { configApi } from '../../api/config'
 import {
   BlurbFormat, BlurbCoverType, BlurbPaperType,
   PAGE_COUNT_MIN, PAGE_COUNT_MAX,
-  estimateInteriorPageCount, spineWidthIn, formatSpineWidth,
+  SPINE_FONT_SIZE_MIN_CM, SPINE_FONT_SIZE_MAX_CM,
+  estimateInteriorPageCount, spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm,
 } from '../../utils/blurbPrintSpec'
 
 type GenerationMode = 'normal' | 'blurb' | 'both'
@@ -88,6 +89,12 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const [blurbModeEnabled, setBlurbModeEnabled] = useState(false)
   const [blurbUnits, setBlurbUnits] = useState<'inches' | 'centimeters'>('inches')
   const [blurbSettings, setBlurbSettings] = useState<BlurbSettings>(DEFAULT_BLURB_SETTINGS)
+  // Spine font size is the one Blurb parameter kept editable here too (not
+  // just in Settings): unlike the others, whether it fits depends on the
+  // page count, which is only really known once the real content is
+  // estimated below - Settings only has a simulated page count. Defaults to
+  // the Settings value but can be overridden locally for this export only.
+  const [spineFontSizeCm, setSpineFontSizeCm] = useState(DEFAULT_BLURB_SETTINGS.spineFontSizeCm)
   const [generationMode, setGenerationMode] = useState<GenerationMode>('normal')
   const [showSpineWarning, setShowSpineWarning] = useState(false)
 
@@ -118,6 +125,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         spineText: spineText.value || '',
         spineFontSizeCm: spineFontCm.value ? Number(spineFontCm.value) : DEFAULT_BLURB_SETTINGS.spineFontSizeCm,
       })
+      setSpineFontSizeCm(spineFontCm.value ? Number(spineFontCm.value) : DEFAULT_BLURB_SETTINGS.spineFontSizeCm)
     }).catch(() => {
       // keep defaults (Blurb mode off)
     })
@@ -133,7 +141,10 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   // same-threshold check.
   const spineTextFits = Boolean(blurbSettings.spineText.trim())
     && estimatedSpineWidthIn !== null
-    && estimatedSpineWidthIn * 2.54 >= Math.max(blurbSettings.spineFontSizeCm, 0.3)
+    && estimatedSpineWidthIn * 2.54 >= Math.max(spineFontSizeCm, 0.3)
+  const recommendedFontSizeCm = estimatedSpineWidthIn !== null
+    ? recommendedSpineFontSizeCm(estimatedSpineWidthIn)
+    : null
   const includesBlurb = generationMode === 'blurb' || generationMode === 'both'
 
   const reset = () => {
@@ -291,7 +302,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         blurb_spine_bg_color: blurbSettings.spineBgColor,
         blurb_back_cover_style: blurbSettings.backCoverStyle,
         blurb_spine_text: blurbSettings.spineText.trim() || undefined,
-        blurb_spine_font_size_cm: blurbSettings.spineFontSizeCm,
+        blurb_spine_font_size_cm: spineFontSizeCm,
       }))
     }
 
@@ -551,6 +562,23 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                         <p className="text-xs text-gray-600">
                           Estimated spine width: <strong>{formatSpineWidth(estimatedSpineWidthIn, blurbUnits)}</strong>
                         </p>
+                      )}
+                      {blurbSettings.spineText.trim() && (
+                        <div className="pt-1">
+                          <Slider
+                            label="Spine font size (this export)"
+                            min={SPINE_FONT_SIZE_MIN_CM}
+                            max={SPINE_FONT_SIZE_MAX_CM}
+                            step={0.05}
+                            value={spineFontSizeCm}
+                            onChange={setSpineFontSizeCm}
+                            formatValue={(v) => `${v.toFixed(2)}cm`}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            From Settings by default, adjustable for this export only.
+                            {recommendedFontSizeCm !== null && <> Recommended for this page count: <strong>{recommendedFontSizeCm.toFixed(2)}cm</strong>.</>}
+                          </p>
+                        </div>
                       )}
                       {blurbSettings.spineText.trim() && !spineTextFits && (
                         <p className="text-xs text-amber-600">

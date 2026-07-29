@@ -86,12 +86,38 @@ async function verifySessionToken(env: Env, token: string): Promise<string | nul
   }
 }
 
+type UserRow = { email: string; pseudo: string | null; status: string | null }
+
 async function findUserByEmail(env: Env, email: string) {
   return env.DB.prepare(
     'select email, pseudo, status from users where lower(email) = ?1 limit 1'
   )
     .bind(normalizeEmail(email))
-    .first<{ email: string; pseudo: string | null; status: string | null }>()
+    .first<UserRow>()
+}
+
+// requireAuth runs on almost every route, so without this cache every single
+// API call re-ran this lookup even for a "Session <token>" credential that's
+// already cryptographically verified - just to catch a status change (e.g. an
+// account deactivated after the token was issued). Cloudflare Workers reuse
+// the same V8 isolate across requests when it can, so a module-scoped Map
+// survives between invocations on that isolate and cuts the D1 read down to
+// about once per USER_CACHE_TTL_MS per user instead of once per request. It's
+// best-effort only (isolates get evicted, and separate isolates don't share
+// this Map) - worst case a status change takes up to USER_CACHE_TTL_MS to be
+// picked up, which is an acceptable trade-off for the D1 load it saves.
+const USER_CACHE_TTL_MS = 30_000
+const userCache = new Map<string, { user: UserRow | null; expiresAt: number }>()
+
+async function findUserByEmailCached(env: Env, email: string) {
+  const key = normalizeEmail(email)
+  const cached = userCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.user
+  }
+  const user = await findUserByEmail(env, key)
+  userCache.set(key, { user, expiresAt: Date.now() + USER_CACHE_TTL_MS })
+  return user
 }
 
 async function createPendingUser(env: Env, email: string) {
@@ -152,10 +178,13 @@ export async function requireAuth(
     }
   }
 
-  let user = await findUserByEmail(env, email)
+  let user = await findUserByEmailCached(env, email)
   if (!user && options?.allowPendingCreate) {
     await createPendingUser(env, email)
+    // Bypass the cache here - we just inserted the row, and priming the
+    // cache with this fresh read lets subsequent requests benefit too.
     user = await findUserByEmail(env, email)
+    userCache.set(normalizeEmail(email), { user, expiresAt: Date.now() + USER_CACHE_TTL_MS })
   }
 
   if (!user || String(user.status || '').toUpperCase() !== 'ACTIVE') {

@@ -6,7 +6,6 @@ import { storageService } from '../../services/storage.service'
 import { articlesApi } from '../../api/articles'
 import { useArticlesStore } from '../../state/articlesStore'
 import { useUiStore } from '../../state/uiStore'
-import { configApi } from '../../api/config'
 import { Button } from '../../ui/Button'
 import { LoadingScreen, Spinner } from '../../ui/Spinner'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
@@ -46,7 +45,14 @@ export function ArticleEditor() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showFamileoPoster, setShowFamileoPoster] = useState(false)
   const [articleStatus, setArticleStatus] = useState<ArticleStatus>('DRAFT')
-  const [autoDateFromPhoto, setAutoDateFromPhoto] = useState(true)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+
+  const initialSnapshotRef = useRef<{
+    texte: string
+    dateModification: string
+    photoFile: File | null
+    articleStatus: ArticleStatus
+  } | null>(null)
 
   const isEditMode = !!id
   const isDeleted = articleStatus === 'DELETED'
@@ -90,14 +96,16 @@ export function ArticleEditor() {
   useEffect(() => {
     if (isEditMode) {
       loadArticle()
+    } else {
+      initialSnapshotRef.current = {
+        texte: '',
+        dateModification,
+        photoFile: null,
+        articleStatus: 'DRAFT',
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
-
-  useEffect(() => {
-    configApi.get('auto_date_from_photo')
-      .then((result) => setAutoDateFromPhoto(result.value !== 'false'))
-      .catch(() => setAutoDateFromPhoto(true))
-  }, [])
 
   useEffect(() => {
     if (isEditMode && !photoFile && loadedImageSrc) {
@@ -127,6 +135,12 @@ export function ArticleEditor() {
         setArticleImageUrl(cached.image_url || '')
         setArticleImageFileId(cached.image_file_id || '')
         setArticleStatus(cached.status || 'ACTIVE')
+        initialSnapshotRef.current = {
+          texte: cached.texte || '',
+          dateModification: cached.date,
+          photoFile: null,
+          articleStatus: cached.status || 'ACTIVE',
+        }
         return
       }
 
@@ -136,22 +150,17 @@ export function ArticleEditor() {
       setArticleImageUrl(article.image_url || '')
       setArticleImageFileId(article.image_file_id || '')
       setArticleStatus(article.status || 'ACTIVE')
+      initialSnapshotRef.current = {
+        texte: article.texte,
+        dateModification: article.date,
+        photoFile: null,
+        articleStatus: article.status || 'ACTIVE',
+      }
     } catch (error) {
       showToast('Failed to load article', 'error')
       navigate('/')
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const handlePhotoSelected = (file: File, exifDate?: Date) => {
-    setPhotoFile(file)
-    const url = URL.createObjectURL(file)
-    setPreviewUrl(url)
-
-    // If EXIF date was extracted and we're creating a new article, use it
-    if (exifDate && !isEditMode && autoDateFromPhoto) {
-      setDateModification(exifDate.toISOString())
     }
   }
 
@@ -208,11 +217,30 @@ export function ArticleEditor() {
     }
   }
 
-  const handleCancel = () => {
+  const hasUnsavedChanges = () => {
+    const initial = initialSnapshotRef.current
+    if (!initial) return false
+    return (
+      texte !== initial.texte ||
+      dateModification !== initial.dateModification ||
+      articleStatus !== initial.articleStatus ||
+      photoFile !== null
+    )
+  }
+
+  const discardAndClose = () => {
     if (previewUrl && previewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(previewUrl)
     }
     navigate('/')
+  }
+
+  const handleCancel = () => {
+    if (hasUnsavedChanges()) {
+      setShowCancelConfirm(true)
+      return
+    }
+    discardAndClose()
   }
 
   const handleDelete = async () => {
@@ -255,7 +283,7 @@ export function ArticleEditor() {
       )}
       <div className="flex-1 flex flex-col max-w-content mx-auto w-full bg-white">
       {/* Sub-header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-center flex-shrink-0 relative">
+      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-center flex-shrink-0 sticky app-safe-top-14 z-20 relative">
         <h1 className="text-lg font-semibold">
           {isEditMode ? 'Edit Article' : 'New Article'}
         </h1>
@@ -306,16 +334,15 @@ export function ArticleEditor() {
         </div>
 
         <PhotoPicker
-          onPhotoSelected={handlePhotoSelected}
           currentImage={previewUrl}
-          onPhotoAssembly={() => navigate('/photo-assembly', { state: { editMode: isEditMode, articleId: id, texte, dateModification } })}
+          onPhotoAssembly={() => navigate('/photo-assembly', { state: { editMode: isEditMode, articleId: id, texte, dateModification, articleStatus } })}
         />
 
         <TextInput value={texte} onChange={setTexte} />
       </div>
 
       {/* Actions - fixed at bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 p-3">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 py-3 app-safe-x app-safe-bottom">
         <div className="max-w-content mx-auto w-full flex gap-2">
           {isEditMode && !isDeleted && (
             <Button
@@ -362,6 +389,16 @@ export function ArticleEditor() {
         isLoading={isSaving}
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteConfirm(false)}
+      />
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        title="Discard changes?"
+        message="You have unsaved changes. Are you sure you want to discard them?"
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        variant="danger"
+        onConfirm={discardAndClose}
+        onCancel={() => setShowCancelConfirm(false)}
       />
       <FamileoPosterModal
         isOpen={showFamileoPoster}

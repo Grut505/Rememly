@@ -40,6 +40,15 @@
     top: calc(3.5rem + max(env(safe-area-inset-top), var(--safe-area-top)));
   }
 
+  .app-safe-x {
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+
+  .app-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;

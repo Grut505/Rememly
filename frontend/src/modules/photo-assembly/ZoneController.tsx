@@ -69,7 +69,7 @@ export function ZoneController({
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-2 shadow-lg z-20">
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 shadow-lg z-20 app-safe-x app-safe-bottom">
       <div className="max-w-mobile mx-auto">
         <div className="flex items-center flex-wrap gap-2">
           <button
@@ -167,8 +167,8 @@ export function ZoneController({
             aria-label="Rotate left"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-              <path d="M4 7h6v6"></path>
-              <path d="M20 17a8 8 0 1 1-6-14"></path>
+              <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"></path>
+              <path d="M3 3v5h5"></path>
             </svg>
           </button>
           <button
@@ -178,8 +178,8 @@ export function ZoneController({
             aria-label="Rotate right"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-              <path d="M20 7h-6v6"></path>
-              <path d="M4 17a8 8 0 1 0 6-14"></path>
+              <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"></path>
+              <path d="M21 3v5h-5"></path>
             </svg>
           </button>
           <button

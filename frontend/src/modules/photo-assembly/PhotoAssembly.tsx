@@ -10,7 +10,7 @@ import { useUiStore } from '../../state/uiStore'
 import { Modal } from '../../ui/Modal'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { CONSTANTS } from '../../utils/constants'
-import { extractExifDate } from '../../screens/Editor/PhotoPicker'
+import { getPhotoDate } from '../../utils/exifDate'
 import { Slider } from '../../ui/Slider'
 
 function isMobileDevice(): boolean {
@@ -49,9 +49,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   const [fineAdjustZoneIndex, setFineAdjustZoneIndex] = useState<number | null>(null)
 
   const trackPhotoDate = (file: File) => {
-    extractExifDate(file).then((date) => {
-      if (date) setLastPhotoDate(date)
-    })
+    getPhotoDate(file).then((date) => setLastPhotoDate(date))
   }
 
   const getOverlapScore = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => {
@@ -143,11 +141,14 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
       .map((zone, index) => (zone.photoIndex === -1 ? index : null))
       .filter((index): index is number => index !== null)
 
+    const zonesToFit: number[] = []
+
     if (pendingZoneIndex !== null) {
       const file = files[0]
       const photoIndex = stateManager.addPhoto(file)
       stateManager.assignPhotoToZone(photoIndex, pendingZoneIndex)
       trackPhotoDate(file)
+      zonesToFit.push(pendingZoneIndex)
       setSelectedZoneIndex(pendingZoneIndex)
       setPendingZoneIndex(null)
     } else {
@@ -158,6 +159,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
         const photoIndex = stateManager.addPhoto(file)
         stateManager.assignPhotoToZone(photoIndex, zoneIndex)
         trackPhotoDate(file)
+        zonesToFit.push(zoneIndex)
         assigned += 1
       })
       if (assigned === 0) {
@@ -169,6 +171,13 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
 
     setCanvasKey((k) => k + 1)
     setStateVersion((v) => v + 1)
+
+    // Newly added photos default to auto-fit (cover) so the zone is filled
+    // right away instead of showing the photo at its native 1x zoom.
+    Promise.all(zonesToFit.map((zoneIndex) => handleFitZone(zoneIndex))).then(() => {
+      setCanvasKey((k) => k + 1)
+      setStateVersion((v) => v + 1)
+    })
 
     // Clear input
     e.target.value = ''
@@ -236,10 +245,15 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
           const file = new File([blob], `webcam-${Date.now()}.jpg`, { type: 'image/jpeg' })
           const photoIndex = stateManager.addPhoto(file)
           stateManager.assignPhotoToZone(photoIndex, pendingZoneIndex)
-          setSelectedZoneIndex(pendingZoneIndex)
+          const zoneIndex = pendingZoneIndex
+          setSelectedZoneIndex(zoneIndex)
           setPendingZoneIndex(null)
           setCanvasKey((k) => k + 1)
           setStateVersion((v) => v + 1)
+          handleFitZone(zoneIndex).then(() => {
+            setCanvasKey((k) => k + 1)
+            setStateVersion((v) => v + 1)
+          })
           closeWebcam()
         }, 'image/jpeg', 0.9)
       }
@@ -506,39 +520,27 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   return (
     <div className="h-full flex flex-col bg-gray-50 relative">
       {/* Layout bar */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-        <div>
-          <div className="text-sm text-gray-600 flex items-center gap-2">
-            <span>Layout</span>
-            <button
-              onClick={() => setIsLayoutModalOpen(true)}
-              className="px-3 py-1.5 rounded-md border border-gray-300 text-sm text-gray-700 hover:border-gray-400 touch-manipulation"
-            >
-              Choose
-            </button>
-          </div>
-          <div className="text-sm font-semibold text-gray-900">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-10">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-gray-600">Layout</span>
+          <button
+            onClick={() => setIsLayoutModalOpen(true)}
+            className="px-3 py-1.5 rounded-md border border-gray-300 text-sm text-gray-700 hover:border-gray-400 touch-manipulation"
+          >
+            Choose
+          </button>
+          <span className="text-sm font-semibold text-gray-900">
             {selectedTemplate?.name} • {selectedTemplate?.zones.length} photos
-          </div>
-          <Slider
-            label="Border thickness"
-            min={1}
-            max={50}
-            value={separatorWidth}
-            onChange={setSeparatorWidth}
-            className="mt-2 max-w-xs"
-          />
+          </span>
         </div>
-        <div className="flex items-center gap-2">
-          {(selectedTemplate?.zones.length ?? 0) > 1 && (
-            <button
-              onClick={handleAddMultiplePhotosRequest}
-              className="px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:border-gray-400"
-            >
-              Add multiple
-            </button>
-          )}
-        </div>
+        <Slider
+          label="Border thickness"
+          min={1}
+          max={50}
+          value={separatorWidth}
+          onChange={setSeparatorWidth}
+          className="mt-2 max-w-xs"
+        />
       </div>
 
       {/* Content */}
@@ -554,6 +556,16 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
             stateVersion={stateVersion}
             separatorWidth={separatorWidth}
           />
+          {(selectedTemplate?.zones.length ?? 0) > 1 && (
+            <div className="flex justify-center mt-3">
+              <button
+                onClick={handleAddMultiplePhotosRequest}
+                className="px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:border-gray-400"
+              >
+                Add multiple
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

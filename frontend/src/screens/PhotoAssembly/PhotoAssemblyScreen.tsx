@@ -28,6 +28,7 @@ export function PhotoAssemblyScreen() {
   const articleId = location.state?.articleId
   const texte = location.state?.texte || ''
   const dateModification = location.state?.dateModification || new Date().toISOString()
+  const articleStatus = location.state?.articleStatus
 
   const handleComplete = async (imageBase64: string, assemblyState: object, lastPhotoDate?: string) => {
     if (!user) return
@@ -48,7 +49,9 @@ export function PhotoAssemblyScreen() {
           texte,
           file,
           dateModification,
-          assemblyState
+          assemblyState,
+          undefined, // fullPage
+          articleStatus
         )
         updateArticleInStore(updated)
         showToast('Article updated', 'success')
@@ -60,7 +63,9 @@ export function PhotoAssemblyScreen() {
           file,
           effectiveDate,
           undefined, // famileoPostId
-          assemblyState
+          assemblyState,
+          undefined, // fullPage
+          articleStatus
         )
         showToast('Article created', 'success')
       }

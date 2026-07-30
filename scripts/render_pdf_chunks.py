@@ -662,7 +662,10 @@ def _blurb_front_panel_html(articles: list, date_from: str, date_to: str, option
     size instead of the interior page size, then restores it - these
     generators read the page-size globals rather than taking width/height
     parameters directly."""
-    saved_w, saved_h = PAGE_CONTENT_WIDTH_CM, PAGE_CONTENT_HEIGHT_CM
+    saved_w, saved_h, saved_bleed = PAGE_CONTENT_WIDTH_CM, PAGE_CONTENT_HEIGHT_CM, PAGE_BLEED_CM
+    # The cover-wrap's front panel always renders bleed-free here (its own
+    # bleed is handled separately by generate_blurb_cover_html's own layout
+    # math, not via this module's page-margin globals).
     set_page_dimensions(panel_w_cm, panel_h_cm)
     try:
         max_photos = options.get('max_mosaic_photos')
@@ -671,7 +674,7 @@ def _blurb_front_panel_html(articles: list, date_from: str, date_to: str, option
             return generate_cover_masked_mosaic(articles, max_photos, options, config, callback_url, callback_token)
         return generate_cover_mosaic(articles, date_from, date_to, max_photos, options, config, callback_url, callback_token)
     finally:
-        set_page_dimensions(saved_w, saved_h)
+        set_page_dimensions(saved_w, saved_h, bleed_cm=saved_bleed)
 
 
 def _blurb_back_panel_html(articles: list, options: dict, callback_url: str, callback_token: str,
@@ -940,9 +943,27 @@ def generate_month_chunk_html(month_articles: list, month_year_label: str, month
 
 def _font_face_css() -> str:
     faces = [
-        ("EB Garamond", "EBGaramond-Regular.ttf", "truetype", "400 800"),
-        ("Palatino Linotype", "TeXGyrePagella-Regular.otf", "opentype", "400"),
-        ("Palatino Linotype", "TeXGyrePagella-Bold.otf", "opentype", "700 900"),
+        # EB Garamond ships as a single variable-weight file
+        # (EBGaramond-Regular.ttf, wght 400-800) - Chromium's print-to-PDF
+        # embeds ANY use of a variable font as Type 3 (rasterized glyph
+        # procedures, not a real font program), which Blurb's own validator
+        # rejects as "no embedded font found" even though poppler considers
+        # Type 3 "embedded". Fixed by pre-instancing the variable font into
+        # 5 static files (one per weight offered in Settings), generated via
+        # `fontTools.varLib.instancer` - confirmed via `pdffonts` to embed as
+        # proper CID TrueType instead.
+        ("EB Garamond", "EBGaramond-400-Static.ttf", "truetype", "400"),
+        ("EB Garamond", "EBGaramond-500-Static.ttf", "truetype", "500"),
+        ("EB Garamond", "EBGaramond-600-Static.ttf", "truetype", "600"),
+        ("EB Garamond", "EBGaramond-700-Static.ttf", "truetype", "700"),
+        ("EB Garamond", "EBGaramond-800-Static.ttf", "truetype", "800"),
+        # TeXGyrePagella ships as OpenType/CFF (.otf) - Chromium also embeds
+        # this as Type 3 (independent of the variable-font issue above, and
+        # independent of rotation/SVG usage - confirmed via isolated tests).
+        # Converted to TrueType/glyf outlines (cubic->quadratic via cu2qu,
+        # same technique as the `otf2ttf` tool) which embeds correctly.
+        ("Palatino Linotype", "TeXGyrePagella-Regular-TTF.ttf", "truetype", "400"),
+        ("Palatino Linotype", "TeXGyrePagella-Bold-TTF.ttf", "truetype", "700 900"),
         ("Didot", "GFSDidot-Regular.ttf", "truetype", "400 900"),
     ]
     blocks = []
@@ -975,19 +996,35 @@ def _font_face_css() -> str:
 PAGE_MARGIN_CM = 1.0
 PAGE_CONTENT_WIDTH_CM = 19.0
 PAGE_CONTENT_HEIGHT_CM = 27.7
+# Bleed added to the physical page on 3 sides (top, bottom, right) when
+# Blurb mode is on - RPI/Blurb's real spec for interior "guts" pages: bleed
+# on every edge except the inner/binding one. We always treat the same
+# physical edge (left) as the binding edge for every page rather than
+# alternating recto/verso - our content already fills its safe area
+# edge-to-edge with no bleed-aware artwork, and true alternation would need
+# global page parity threaded through the whole chunk-based render
+# pipeline for no visible difference today. The content area itself is
+# unaffected (unchanged size) - the bleed is extra blank page margin, not
+# more mosaic/photo content extending into it.
+PAGE_BLEED_CM = 0.0
 
 
-def set_page_dimensions(content_width_cm: float, content_height_cm: float) -> None:
-    global PAGE_CONTENT_WIDTH_CM, PAGE_CONTENT_HEIGHT_CM
+def set_page_dimensions(content_width_cm: float, content_height_cm: float, bleed_cm: float = 0.0) -> None:
+    global PAGE_CONTENT_WIDTH_CM, PAGE_CONTENT_HEIGHT_CM, PAGE_BLEED_CM
     PAGE_CONTENT_WIDTH_CM = content_width_cm
     PAGE_CONTENT_HEIGHT_CM = content_height_cm
+    PAGE_BLEED_CM = bleed_cm
 
 
 def build_page_css() -> str:
-    page_width_cm = PAGE_CONTENT_WIDTH_CM + 2 * PAGE_MARGIN_CM
-    page_height_cm = PAGE_CONTENT_HEIGHT_CM + 2 * PAGE_MARGIN_CM
+    page_width_cm = PAGE_CONTENT_WIDTH_CM + 2 * PAGE_MARGIN_CM + PAGE_BLEED_CM
+    page_height_cm = PAGE_CONTENT_HEIGHT_CM + 2 * PAGE_MARGIN_CM + 2 * PAGE_BLEED_CM
+    margin_left_cm = PAGE_MARGIN_CM
+    margin_right_cm = PAGE_MARGIN_CM + PAGE_BLEED_CM
+    margin_top_cm = PAGE_MARGIN_CM + PAGE_BLEED_CM
+    margin_bottom_cm = PAGE_MARGIN_CM + PAGE_BLEED_CM
     return _font_face_css() + f"""
-@page {{ size: {page_width_cm}cm {page_height_cm}cm; margin: {PAGE_MARGIN_CM}cm; }}
+@page {{ size: {page_width_cm}cm {page_height_cm}cm; margin-top: {margin_top_cm}cm; margin-right: {margin_right_cm}cm; margin-bottom: {margin_bottom_cm}cm; margin-left: {margin_left_cm}cm; }}
 * {{ box-sizing: border-box; }}
 body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
 
@@ -1207,7 +1244,14 @@ def main():
         trim_w_in, trim_h_in = blurb_print_spec.TRIM_SIZES_IN[blurb_format]
         content_w_cm = blurb_print_spec.inch_to_cm(trim_w_in) - 2 * PAGE_MARGIN_CM
         content_h_cm = blurb_print_spec.inch_to_cm(trim_h_in) - 2 * PAGE_MARGIN_CM
-        set_page_dimensions(content_w_cm, content_h_cm)
+        # Interior "guts" pages need bleed too (RPI/Blurb spec: every edge
+        # except the inner/binding one) - verified live against blurb.fr's
+        # own calculator for both formats. Previously omitted entirely,
+        # which is very likely why Blurb's real upload validator couldn't
+        # match our content file to any real product and silently guessed
+        # the wrong one.
+        guts_bleed_cm = blurb_print_spec.inch_to_cm(blurb_print_spec.BLEED_IN[blurb_cover_type])
+        set_page_dimensions(content_w_cm, content_h_cm, bleed_cm=guts_bleed_cm)
 
     try:
         by_month = defaultdict(list)

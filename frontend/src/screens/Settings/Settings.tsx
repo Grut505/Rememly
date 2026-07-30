@@ -205,6 +205,15 @@ export function Settings() {
   const previewSpineTextFits = Boolean(blurbSpineText.trim())
     && previewSpineWidthIn * 2.54 >= Math.max(blurbSpineFontSizeCm, 0.3)
 
+  // Blurb only offers Magazine Premium as Softcover - if the user had
+  // Hardcover selected and switches format to Magazine Premium, fall back
+  // to Softcover rather than leaving an invalid combination selected.
+  useEffect(() => {
+    if (blurbFormat === 'magazine_premium' && blurbCoverType === 'hardcover') {
+      setBlurbCoverType('softcover')
+    }
+  }, [blurbFormat, blurbCoverType])
+
   useEffect(() => {
     loadConfig()
     loadAutoDateSetting()
@@ -1085,7 +1094,9 @@ export function Settings() {
                       <button
                         type="button"
                         onClick={() => setBlurbCoverType('hardcover')}
-                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                        disabled={blurbFormat === 'magazine_premium'}
+                        title={blurbFormat === 'magazine_premium' ? 'Hardcover is not offered for Magazine Premium' : undefined}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                           blurbCoverType === 'hardcover'
                             ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
                             : 'border-gray-300 text-gray-600 hover:bg-gray-50'
@@ -1094,6 +1105,11 @@ export function Settings() {
                         Hardcover (ImageWrap)
                       </button>
                     </div>
+                    {blurbFormat === 'magazine_premium' && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Blurb only offers Magazine Premium as Softcover.
+                      </p>
+                    )}
                   </div>
 
                   <div>

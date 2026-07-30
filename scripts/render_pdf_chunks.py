@@ -417,6 +417,34 @@ def generate_cover_mosaic(articles: list, date_from: str, date_to: str, max_phot
   </div>'''
 
 
+def _family_outline_text_svg(text: str, baseline_px: float, font_px: float, font_family: str, font_weight,
+                              letter_spacing_em: float, scale_transform: str, outline_px: float) -> str:
+    """Renders a faux-outline pass for the masked family-name text: several
+    filled copies of the text offset around a ring, instead of a single
+    stroked (fill:none, stroke:...) SVG <text>. Chromium's print-to-PDF
+    embeds ANY stroked SVG text as Type 3 (rasterized glyph procedures),
+    regardless of whether the font itself is static/TrueType - confirmed by
+    isolated testing (plain fill embeds as CID TrueType; stroke, or
+    CSS -webkit-text-stroke, both force Type 3 on the same font file).
+    Offsetting filled copies keeps every glyph render as a plain fill,
+    which embeds correctly."""
+    offsets = [
+        (dx, dy)
+        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+    ]
+    layers = ''.join(
+        f'''<text x="{dx * outline_px}" y="{baseline_px + dy * outline_px}" text-anchor="start" dominant-baseline="alphabetic"
+              font-family="{font_family}" font-weight="{font_weight}" font-size="{font_px}"
+              letter-spacing="{letter_spacing_em}em"
+              transform="{scale_transform}"
+              fill="rgba(0,0,0,0.28)">
+          {render_svg_multiline(text, 0, font_px)}
+        </text>'''
+        for dx, dy in offsets
+    )
+    return layers
+
+
 def generate_cover_masked_text_html(options: dict, config: dict) -> str:
     # 3-tier resolution, matching the pre-migration Apps Script behavior:
     # per-job option -> D1 config value (tuned once, applies to every job) -> hardcoded fallback.
@@ -528,13 +556,7 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
                  preserveAspectRatio="xMidYMid slice"
                  transform="matrix(0 1 -1 0 {family_mask_width_px} 0)" />
         </g>
-        <text x="0" y="{family_mask_baseline_px}" text-anchor="start" dominant-baseline="alphabetic"
-              font-family="{family_font_family}" font-weight="{family_font_weight}" font-size="{family_font_px}"
-              letter-spacing="{family_letter_spacing}em"
-              transform="{family_text_scale_transform}"
-              fill="none" stroke="rgba(0,0,0,0.28)" stroke-width="{family_outline_px}" stroke-linejoin="round" paint-order="stroke fill">
-          {render_svg_multiline(family_mask_text, 0, family_font_px)}
-        </text>
+        {_family_outline_text_svg(family_mask_text, family_mask_baseline_px, family_font_px, family_font_family, family_font_weight, family_letter_spacing, family_text_scale_transform, family_outline_px)}
       </svg>'''
 
     fallback_family_block = ''

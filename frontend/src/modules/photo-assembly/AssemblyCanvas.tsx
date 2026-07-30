@@ -36,8 +36,16 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
   maxHeightClassName = 'max-h-[55vh]',
 }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [images, setImages] = useState<Map<number, CanvasImageSource>>(new Map())
-  const imageCacheRef = useRef<Map<File, CanvasImageSource>>(new Map())
+  // naturalWidth/naturalHeight are the ORIGINAL (pre-downscale) photo
+  // dimensions - zoom values (zoneState.zoom, set by the "fit zone" actions
+  // in PhotoAssembly.tsx from the photo's true size) are always relative to
+  // these, never to source's own (possibly downscaled, see loadImages)
+  // pixel dimensions. Drawing at `source`'s own size * zoom would under-fill
+  // the zone once source is downscaled for memory - keeping the natural
+  // size next to the source decouples "what resolution is decoded" from
+  // "what size this draws at".
+  const [images, setImages] = useState<Map<number, { source: CanvasImageSource; naturalWidth: number; naturalHeight: number }>>(new Map())
+  const imageCacheRef = useRef<Map<File, { source: CanvasImageSource; naturalWidth: number; naturalHeight: number }>>(new Map())
   const lastPhotosKeyRef = useRef<string>('')
   const activeZoneRef = useRef<number | null>(null)
   const lastClickRef = useRef<{ time: number; zone: number | null }>({ time: 0, zone: null })
@@ -76,18 +84,8 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
     drawCanvas()
   }, [template, images, stateVersion, selectedZoneIndex, separatorWidth])
 
-  const getImageSize = (img: CanvasImageSource) => {
-    if (img instanceof HTMLImageElement) {
-      return { width: img.naturalWidth || img.width, height: img.naturalHeight || img.height }
-    }
-    if ('width' in img && 'height' in img) {
-      return { width: img.width as number, height: img.height as number }
-    }
-    return { width: 0, height: 0 }
-  }
-
   const loadImages = async () => {
-    const newImages = new Map<number, CanvasImageSource>()
+    const newImages = new Map<number, { source: CanvasImageSource; naturalWidth: number; naturalHeight: number }>()
     const state = stateManager.getState()
     const photosKey = state.photos.map((file) => `${file.name}-${file.size}-${file.lastModified}`).join('|')
     if (photosKey === lastPhotosKeyRef.current) {
@@ -98,8 +96,8 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
     for (let i = 0; i < state.photos.length; i++) {
       const file = state.photos[i]
 
-      let img = imageCacheRef.current.get(file)
-      if (!img) {
+      let entry = imageCacheRef.current.get(file)
+      if (!entry) {
         if (typeof createImageBitmap === 'function') {
           try {
             // Decoding at the original camera resolution (often 4000-8000px
@@ -108,27 +106,34 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
             // ~16 photos loaded at once - iOS silently kills the WKWebView
             // under memory pressure and reloads it, which looks like the
             // assembly "resetting" to its default template. Decode once at
-            // full size just long enough to downscale, then close it.
+            // full size just long enough to downscale, then close it - but
+            // keep the ORIGINAL dimensions (naturalWidth/Height) around,
+            // since zoom values are always relative to those, not to
+            // whatever resolution the cached bitmap ends up at.
             const fullBitmap = await createImageBitmap(file)
+            const naturalWidth = fullBitmap.width
+            const naturalHeight = fullBitmap.height
             const maxDim = CONSTANTS.ASSEMBLY_IMAGE_MAX_DIM_PX
-            if (fullBitmap.width > maxDim || fullBitmap.height > maxDim) {
-              const scale = maxDim / Math.max(fullBitmap.width, fullBitmap.height)
-              img = await createImageBitmap(fullBitmap, {
-                resizeWidth: Math.round(fullBitmap.width * scale),
-                resizeHeight: Math.round(fullBitmap.height * scale),
+            let source: CanvasImageSource
+            if (naturalWidth > maxDim || naturalHeight > maxDim) {
+              const scale = maxDim / Math.max(naturalWidth, naturalHeight)
+              source = await createImageBitmap(fullBitmap, {
+                resizeWidth: Math.round(naturalWidth * scale),
+                resizeHeight: Math.round(naturalHeight * scale),
                 resizeQuality: 'medium',
               })
               fullBitmap.close()
             } else {
-              img = fullBitmap
+              source = fullBitmap
             }
-            imageCacheRef.current.set(file, img)
+            entry = { source, naturalWidth, naturalHeight }
+            imageCacheRef.current.set(file, entry)
           } catch (error) {
-            img = undefined
+            entry = undefined
           }
         }
 
-        if (!img) {
+        if (!entry) {
           const htmlImg = new Image()
           const dataUrl = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader()
@@ -144,20 +149,20 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
           if (!htmlImg.naturalWidth || !htmlImg.naturalHeight) {
             continue
           }
-          img = htmlImg
-          imageCacheRef.current.set(file, img)
+          entry = { source: htmlImg, naturalWidth: htmlImg.naturalWidth, naturalHeight: htmlImg.naturalHeight }
+          imageCacheRef.current.set(file, entry)
         }
       }
-      newImages.set(i, img)
+      newImages.set(i, entry)
     }
 
     // Evict cached bitmaps for photos no longer placed in any zone (e.g.
     // swapped out), instead of letting the cache grow for the whole session.
     const currentFiles = new Set(state.photos)
-    for (const [cachedFile, cachedImg] of imageCacheRef.current) {
+    for (const [cachedFile, cachedEntry] of imageCacheRef.current) {
       if (!currentFiles.has(cachedFile)) {
-        if (cachedImg && typeof (cachedImg as ImageBitmap).close === 'function') {
-          ;(cachedImg as ImageBitmap).close()
+        if (cachedEntry.source && typeof (cachedEntry.source as ImageBitmap).close === 'function') {
+          ;(cachedEntry.source as ImageBitmap).close()
         }
         imageCacheRef.current.delete(cachedFile)
       }
@@ -169,9 +174,9 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
 
   useEffect(() => {
     return () => {
-      for (const img of imageCacheRef.current.values()) {
-        if (img && typeof (img as ImageBitmap).close === 'function') {
-          ;(img as ImageBitmap).close()
+      for (const entry of imageCacheRef.current.values()) {
+        if (entry.source && typeof (entry.source as ImageBitmap).close === 'function') {
+          ;(entry.source as ImageBitmap).close()
         }
       }
       imageCacheRef.current.clear()
@@ -219,16 +224,18 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
         ctx.clip()
 
         const scale = zoneState.zoom
-        const size = getImageSize(img)
-        const imgWidth = size.width * scale
-        const imgHeight = size.height * scale
+        // Always scale relative to the photo's natural (pre-downscale) size,
+        // never img.source's own pixel dimensions - see the imageCacheRef
+        // comment above for why those can differ.
+        const imgWidth = img.naturalWidth * scale
+        const imgHeight = img.naturalHeight * scale
         const centerX = zoneX + zoneWidth / 2 + zoneState.x
         const centerY = zoneY + zoneHeight / 2 + zoneState.y
         const rotation = (zoneState.rotation || 0) * (Math.PI / 180)
 
         ctx.translate(centerX, centerY)
         ctx.rotate(rotation)
-        ctx.drawImage(img, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight)
+        ctx.drawImage(img.source, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight)
         ctx.restore()
       } else {
         // Empty-zone placeholder fill sits on top of the selection tint above,

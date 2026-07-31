@@ -219,26 +219,32 @@ def smart_mosaic_layout(images: list, total_width: float, total_height: float, g
     num_rows = max(1, min(num_rows, math.ceil(n / 2)))
 
     target_aspect_per_row = total_aspect_sum / num_rows
+
+    # Cut rows at whichever image's cumulative aspect-sum lands closest to
+    # each of the num_rows - 1 ideal boundaries (r * target_aspect_per_row),
+    # rather than a running "reached 80% of target" threshold - a threshold
+    # only controls when a row STARTS, so any drift between rows compounds
+    # over the list and the leftover last row (whatever's left after the
+    # final threshold trigger, or everything if the row-count got capped)
+    # ends up with an aspect-sum far from every other row's. Since row
+    # height is weighted by 1/aspect-sum, that misjudged last row came out
+    # either a sliver or oversized. Comparing against the absolute boundary
+    # keeps every row - including the last - close to target_aspect_per_row.
     rows = []
     current_row = []
-    current_row_aspect = 0
+    overall_cum = 0.0
+    next_boundary_index = 1
 
     for img in images:
-        # No "stop opening new rows past num_rows - 1" cap here on purpose:
-        # num_rows is only an estimate, and capping it forced every image
-        # past that count into the single last row regardless of how many
-        # piled up - with a large tiled image count (target_cell_count) that
-        # last row's aspect-sum could balloon far past every other row's,
-        # collapsing its height to a sliver (row height is weighted by
-        # 1/aspect-sum). Letting the threshold alone decide splits lands
-        # within ~1 row of the estimate and keeps every row's height even.
-        if current_row and current_row_aspect >= target_aspect_per_row * 0.8:
-            rows.append(current_row)
-            current_row = [img]
-            current_row_aspect = img['aspectRatio']
-        else:
-            current_row.append(img)
-            current_row_aspect += img['aspectRatio']
+        prospective_cum = overall_cum + img['aspectRatio']
+        if next_boundary_index < num_rows:
+            boundary = next_boundary_index * target_aspect_per_row
+            if current_row and abs(overall_cum - boundary) <= abs(prospective_cum - boundary):
+                rows.append(current_row)
+                current_row = []
+                next_boundary_index += 1
+        current_row.append(img)
+        overall_cum = prospective_cum
     if current_row:
         rows.append(current_row)
 

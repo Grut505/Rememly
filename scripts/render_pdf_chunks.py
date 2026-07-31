@@ -418,31 +418,48 @@ def generate_cover_mosaic(articles: list, date_from: str, date_to: str, max_phot
 
 
 def _family_outline_text_svg(text: str, baseline_px: float, font_px: float, font_family: str, font_weight,
-                              letter_spacing_em: float, scale_transform: str, outline_px: float) -> str:
-    """Renders a faux-outline pass for the masked family-name text: several
-    filled copies of the text offset around a ring, instead of a single
-    stroked (fill:none, stroke:...) SVG <text>. Chromium's print-to-PDF
-    embeds ANY stroked SVG text as Type 3 (rasterized glyph procedures),
-    regardless of whether the font itself is static/TrueType - confirmed by
-    isolated testing (plain fill embeds as CID TrueType; stroke, or
-    CSS -webkit-text-stroke, both force Type 3 on the same font file).
-    Offsetting filled copies keeps every glyph render as a plain fill,
-    which embeds correctly."""
-    offsets = [
-        (dx, dy)
-        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)]
-    ]
-    layers = ''.join(
-        f'''<text x="{dx * outline_px}" y="{baseline_px + dy * outline_px}" text-anchor="start" dominant-baseline="alphabetic"
+                              letter_spacing_em: float, scale_transform: str, outline_px: float,
+                              mask_id: str, view_box_y: float, width_px: float, height_px: float) -> str:
+    """Renders a faux-outline pass for the masked family-name text as a thin
+    RING only (photo mask stays visible through each glyph's interior),
+    instead of a single stroked (fill:none, stroke:...) SVG <text>.
+
+    Two earlier attempts both broke on Chromium's print-to-PDF pipeline:
+    - stroke (or CSS -webkit-text-stroke) on the same static font gets
+      embedded as Type 3 (rasterized glyph procedures) regardless of the
+      font itself being static/TrueType - confirmed by isolated testing.
+    - 8 solid-filled copies of the glyphs offset around a ring (the
+      previous fix for the above) avoids Type 3, but at outline_px//font
+      size ratios used here, 8 layers of 28%-alpha fill compound to ~93%
+      opacity across almost the whole glyph interior - the photo mask
+      became invisible, just solid-looking text (a real regression).
+
+    This builds an SVG <mask>: white union of 8 offset copies (the
+    "dilated" glyph) with a black copy at the ORIGINAL position punched on
+    top (subtracting the interior) - the visible result is only the ring
+    between the dilated and original outlines. A plain rect painted through
+    this mask gives a crisp thin outline with the interior left fully
+    transparent. Confirmed via isolated pdffonts test: content inside an
+    SVG <mask> isn't embedded as a font at all (0 entries) - not just
+    avoiding Type 3, sidestepping the font-embedding question entirely."""
+    offsets = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+
+    def glyph_at(dx, dy):
+        return f'''<text x="{dx * outline_px}" y="{baseline_px + dy * outline_px}" text-anchor="start" dominant-baseline="alphabetic"
               font-family="{font_family}" font-weight="{font_weight}" font-size="{font_px}"
               letter-spacing="{letter_spacing_em}em"
-              transform="{scale_transform}"
-              fill="rgba(0,0,0,0.28)">
+              transform="{scale_transform}">
           {render_svg_multiline(text, 0, font_px)}
         </text>'''
-        for dx, dy in offsets
-    )
-    return layers
+
+    dilated_layers = ''.join(glyph_at(dx, dy) for dx, dy in offsets)
+    hole_layer = glyph_at(0, 0)
+    return f'''<mask id="{mask_id}" maskUnits="userSpaceOnUse" x="0" y="{view_box_y}" width="{width_px}" height="{height_px}">
+      <rect x="0" y="{view_box_y}" width="{width_px}" height="{height_px}" fill="black" />
+      <g fill="white">{dilated_layers}</g>
+      <g fill="black">{hole_layer}</g>
+    </mask>
+    <rect x="0" y="{view_box_y}" width="{width_px}" height="{height_px}" fill="rgba(0,0,0,0.28)" mask="url(#{mask_id})" />'''
 
 
 def generate_cover_masked_text_html(options: dict, config: dict) -> str:
@@ -556,7 +573,7 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
                  preserveAspectRatio="xMidYMid slice"
                  transform="matrix(0 1 -1 0 {family_mask_width_px} 0)" />
         </g>
-        {_family_outline_text_svg(family_mask_text, family_mask_baseline_px, family_font_px, family_font_family, family_font_weight, family_letter_spacing, family_text_scale_transform, family_outline_px)}
+        {_family_outline_text_svg(family_mask_text, family_mask_baseline_px, family_font_px, family_font_family, family_font_weight, family_letter_spacing, family_text_scale_transform, family_outline_px, f'{family_clip_id}Outline', family_mask_view_box_y, family_mask_width_px, family_mask_view_box_height_px)}
       </svg>'''
 
     fallback_family_block = ''

@@ -16,7 +16,7 @@ import {
   BlurbFormat, BlurbCoverType, BlurbPaperType,
   BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, BLURB_PAPER_LABELS, PAGE_COUNT_MIN, PAGE_COUNT_MAX, PAGE_COUNT_STEP,
   SPINE_FONT_SIZE_MIN_CM, SPINE_FONT_SIZE_MAX_CM,
-  spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm, cmToIn, inToCm,
+  spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm, cmToIn, inToCm, spineTextFitsHeight,
 } from '../../utils/blurbPrintSpec'
 
 const fontOptions = [
@@ -211,8 +211,10 @@ export function Settings() {
   // estimate is driven by the manual page-count slider rather than actual
   // generated pages - simulation only, never affects a real export.
   const previewSpineWidthIn = spineWidthIn(blurbPreviewPageCount, blurbCoverType, blurbPaperType)
-  const previewSpineTextFits = Boolean(blurbSpineText.trim())
+  const previewSpineTextFitsWidth = Boolean(blurbSpineText.trim())
     && previewSpineWidthIn * 2.54 >= blurbSpineFontSizeCm
+  const previewSpineTextFitsHeight = spineTextFitsHeight(blurbSpineText, blurbSpineFontSizeCm, blurbFormat, blurbCoverType)
+  const previewSpineTextFits = previewSpineTextFitsWidth && previewSpineTextFitsHeight
 
   // Blurb only offers Magazine Premium as Softcover - if the user had
   // Hardcover selected and switches format to Magazine Premium, fall back
@@ -1863,9 +1865,14 @@ export function Settings() {
                     <p className="text-xs text-gray-500 mt-1">
                       Recommended for the current simulated page count ({blurbPreviewPageCount} pages): <strong>{formatSpineWidth(cmToIn(recommendedSpineFontSizeCm(previewSpineWidthIn)), blurbMeasurementUnits)}</strong>.
                     </p>
-                    {blurbSpineText.trim() && !previewSpineTextFits && (
+                    {blurbSpineText.trim() && !previewSpineTextFitsWidth && (
                       <p className="text-xs text-amber-600 mt-1">
                         The spine may be too narrow for this text at the current preview page count - you'll be asked to confirm before generating a Blurb export.
+                      </p>
+                    )}
+                    {blurbSpineText.trim() && previewSpineTextFitsWidth && !previewSpineTextFitsHeight && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        This text may be too long to fit along the spine's length at this font size - it could get cut off. Try a shorter text or a smaller font size.
                       </p>
                     )}
                   </div>

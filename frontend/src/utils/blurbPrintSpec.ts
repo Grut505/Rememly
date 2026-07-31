@@ -44,6 +44,22 @@ export const PAGE_COUNT_MIN = 20
 export const PAGE_COUNT_MAX = 550
 export const PAGE_COUNT_STEP = 2
 
+// Trim size (width, height) in inches - mirrors scripts/blurb_print_spec.py's
+// TRIM_SIZES_IN. The spine's usable LENGTH (its "height" once the text is
+// rotated -90deg to run along it) is this trim height, grown by the board
+// for hardcover - not the spine WIDTH (thickness), which is what
+// spineWidthIn() above computes.
+const TRIM_SIZES_IN: Record<BlurbFormat, [number, number]> = {
+  magazine_premium: [8.5, 11.0],
+  standard_portrait: [8.0, 10.0],
+}
+const HARDCOVER_BOARD_GROWTH_IN = 0.25
+
+export function panelHeightIn(format: BlurbFormat, coverType: BlurbCoverType): number {
+  const [, trimH] = TRIM_SIZES_IN[format]
+  return coverType === 'hardcover' ? trimH + HARDCOVER_BOARD_GROWTH_IN : trimH
+}
+
 // K values reverse-engineered from blurb.fr's real calculator (many page
 // counts sampled per paper, fit exactly - see scripts/blurb_print_spec.py
 // for the full methodology note). Confirmed identical for both
@@ -138,4 +154,34 @@ export function recommendedSpineFontSizeCm(spineWidthInches: number): number {
   const raw = spineWidthCm * 0.7
   const clamped = Math.min(SPINE_FONT_SIZE_MAX_CM, Math.max(SPINE_FONT_SIZE_MIN_CM, raw))
   return Math.round(clamped / 0.05) * 0.05
+}
+
+// Rough average character width for the spine's serif font stack ('Palatino
+// Linotype' etc.) - not exact per-glyph metrics (no real text measurement
+// happens at Settings/export-config time, only at the actual Playwright
+// render), but good enough to warn before generating rather than silently
+// clipping. render_pdf_chunks.py uses the same constant so the frontend's
+// warning and the real render's fit check agree.
+export const SPINE_TEXT_AVG_CHAR_WIDTH_EM = 0.5
+
+// Small bottom margin the spine text div is offset by in render_pdf_chunks.py
+// (bottom:0.3cm) - subtracted from the available length so the estimate
+// matches the real render's usable space.
+export const SPINE_TEXT_BOTTOM_MARGIN_CM = 0.3
+
+export function estimateSpineTextLengthCm(text: string, fontSizeCm: number): number {
+  return text.length * fontSizeCm * SPINE_TEXT_AVG_CHAR_WIDTH_EM
+}
+
+// Distinct from spineWidthIn()'s width (thickness) check - this checks
+// whether the text's estimated rendered LENGTH fits within the spine's
+// available length (the panel's trim height, minus the render script's
+// small bottom margin) before it gets clipped by the spine panel's
+// overflow:hidden.
+export function spineTextFitsHeight(
+  text: string, fontSizeCm: number, format: BlurbFormat, coverType: BlurbCoverType
+): boolean {
+  if (!text.trim()) return true
+  const availableLengthCm = inToCm(panelHeightIn(format, coverType)) - SPINE_TEXT_BOTTOM_MARGIN_CM
+  return estimateSpineTextLengthCm(text, fontSizeCm) <= availableLengthCm
 }

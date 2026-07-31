@@ -15,7 +15,7 @@ import {
   BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, BLURB_PAPER_LABELS,
   PAGE_COUNT_MIN, PAGE_COUNT_MAX,
   SPINE_FONT_SIZE_MIN_CM, SPINE_FONT_SIZE_MAX_CM,
-  estimateInteriorPageCount, spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm, cmToIn, inToCm,
+  estimateInteriorPageCount, spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm, cmToIn, inToCm, spineTextFitsHeight,
 } from '../../utils/blurbPrintSpec'
 
 type GenerationMode = 'normal' | 'blurb' | 'both'
@@ -156,9 +156,14 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   // A single line of spine text needs roughly its own font size in width to
   // read at all once rotated onto the spine - matches the render script's
   // same-threshold check.
-  const spineTextFits = Boolean(blurbSettings.spineText.trim())
+  const spineTextFitsWidth = Boolean(blurbSettings.spineText.trim())
     && estimatedSpineWidthIn !== null
     && estimatedSpineWidthIn * 2.54 >= spineFontSizeCm
+  // Separately, the text's estimated rendered LENGTH must fit within the
+  // spine's available length (the panel's trim height) or it gets clipped
+  // by the spine panel's overflow:hidden.
+  const spineTextFitsHeightCheck = spineTextFitsHeight(blurbSettings.spineText, spineFontSizeCm, blurbSettings.format, blurbSettings.coverType)
+  const spineTextFits = spineTextFitsWidth && spineTextFitsHeightCheck
   const recommendedFontSizeCm = estimatedSpineWidthIn !== null
     ? recommendedSpineFontSizeCm(estimatedSpineWidthIn)
     : null
@@ -737,9 +742,14 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                           </p>
                         </div>
                       )}
-                      {blurbSettings.spineText.trim() && !spineTextFits && (
+                      {blurbSettings.spineText.trim() && !spineTextFitsWidth && (
                         <p className="text-xs text-amber-600">
                           The spine may be too narrow for the configured spine text - you'll be asked to confirm before generating.
+                        </p>
+                      )}
+                      {blurbSettings.spineText.trim() && spineTextFitsWidth && !spineTextFitsHeightCheck && (
+                        <p className="text-xs text-amber-600">
+                          This text may be too long to fit along the spine's length at this font size - you'll be asked to confirm before generating.
                         </p>
                       )}
                       <p className="text-[11px] text-gray-400">
@@ -880,7 +890,11 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       <ConfirmDialog
         isOpen={showSpineWarning}
         title="Spine text may not fit"
-        message="The spine is estimated to be too narrow for your spine text at the current font size. If you continue, the cover-wrap PDF will render the spine as color-only, without the text."
+        message={
+          spineTextFitsWidth
+            ? "The spine text is estimated to be too long to fit along the spine's length at the current font size. If you continue, the cover-wrap PDF will render the spine as color-only, without the text."
+            : "The spine is estimated to be too narrow for your spine text at the current font size. If you continue, the cover-wrap PDF will render the spine as color-only, without the text."
+        }
         confirmLabel="Generate anyway"
         cancelLabel="Go back"
         variant="danger"

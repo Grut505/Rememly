@@ -812,11 +812,26 @@ def generate_blurb_cover_html(articles: list, date_from: str, date_to: str, opti
     # Spine text: only rendered if it fits legibly at the requested font size.
     # A single line of text needs roughly its font size in width to read at
     # all once rotated onto the spine - below that, skip it entirely rather
-    # than render illegible/overlapping text.
+    # than render illegible/overlapping text. Separately, the text's
+    # estimated rendered LENGTH must fit within the spine's available length
+    # (the panel's own height) or it would silently overflow past the top of
+    # the spine, clipped by the panel's overflow:hidden - omit it instead,
+    # same failure mode as the width check. 0.5em/char is a rough average for
+    # the spine's serif font stack (no real text measurement happens here,
+    # only at the actual Playwright render below) - kept in sync with
+    # frontend/src/utils/blurbPrintSpec.ts's SPINE_TEXT_AVG_CHAR_WIDTH_EM so
+    # the pre-export warning and this real check agree.
     spine_text = (options.get('blurb_spine_text') or '').strip()
     spine_font_cm = float(options.get('blurb_spine_font_size_cm') or 0.5)
     spine_text_color = options.get('blurb_spine_text_color') or '#000000'
-    spine_fits = bool(spine_text) and spine_w_cm >= spine_font_cm
+    spine_text_avg_char_width_em = 0.5
+    spine_text_length_cm = len(spine_text) * spine_font_cm * spine_text_avg_char_width_em
+    spine_available_length_cm = panel_h_cm - 0.3
+    spine_fits = (
+        bool(spine_text)
+        and spine_w_cm >= spine_font_cm
+        and spine_text_length_cm <= spine_available_length_cm
+    )
     spine_text_html = ''
     if spine_fits:
         # A -90deg rotation with transform-origin "left bottom" shifts the

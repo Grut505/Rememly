@@ -1212,13 +1212,22 @@ body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
 .month-title {{ font-size: 42pt; font-weight: bold; color: #333; margin: 0 0 0.5cm 0; text-shadow: 2px 2px 4px rgba(255,255,255,0.8); }}
 .month-subtitle {{ font-size: 16pt; color: #666; margin: 0; }}
 
-.month-divider-centered .month-title-container-centered {{ position: absolute; top: 8%; left: 0; right: 0; text-align: center; z-index: 5; }}
+/* The mosaic square is vertically centered on the page (top: calc(50% -
+   6cm), i.e. half its own 12cm height above/below center) so the gap above
+   it matches the gap below it exactly, on any page height (blurb formats
+   are shorter than the default) - previously a fixed "top: 32%" only
+   produced equal margins for one specific page height. The title/subtitle
+   band above shares the same height formula, so it exactly fills the white
+   space between the top vegetable border and the mosaic, and centers its
+   own content (flex) within that space instead of sitting at a fixed 8%
+   from the top. */
+.month-divider-centered .month-title-container-centered {{ position: absolute; top: 0; left: 0; right: 0; height: calc(50% - 6cm); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; z-index: 5; }}
 
 .season-decorations {{ position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 3; }}
 .season-item {{ position: absolute; }}
 .season-item img {{ width: 100%; height: 100%; object-fit: contain; }}
 
-.month-mosaic-centered {{ position: absolute; top: 32%; left: 50%; transform: translateX(-50%); width: 12cm; height: 12cm; border-radius: 0.15cm; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }}
+.month-mosaic-centered {{ position: absolute; top: calc(50% - 6cm); left: 50%; transform: translateX(-50%); width: 12cm; height: 12cm; border-radius: 0.15cm; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }}
 .month-mosaic-centered .month-mosaic-cell {{ position: absolute; }}
 .month-mosaic-centered .month-mosaic-cell img {{ width: 100%; height: 100%; object-fit: cover; }}
 """

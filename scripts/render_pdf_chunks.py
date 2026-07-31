@@ -467,12 +467,22 @@ def _family_outline_text_svg(text: str, baseline_px: float, font_px: float, font
 
     dilated_layers = ''.join(glyph_at(dx, dy) for dx, dy in offsets)
     hole_layer = glyph_at(0, 0)
+    # The painted rect below is sized to the SVG's own viewBox, which in turn
+    # is sized to exactly match the wrapping div (overflow:hidden, rotated
+    # -90deg) in generate_cover_masked_text_html - any rect edge landing
+    # exactly ON that shared boundary can leave a hairline of anti-aliased
+    # fill visible past the div's clip after Chromium's print-to-PDF
+    # rasterization, seen as a thin vertical line at family_x_cm on the
+    # printed page. Inset by a tiny epsilon (0.02cm) so the rect's true edge
+    # always falls safely inside the clipped area - imperceptible on the
+    # glyph ring itself, which sits well within the interior.
+    edge_inset_px = 2
     return f'''<mask id="{mask_id}" maskUnits="userSpaceOnUse" x="0" y="{view_box_y}" width="{width_px}" height="{height_px}">
       <rect x="0" y="{view_box_y}" width="{width_px}" height="{height_px}" fill="black" />
       <g fill="white">{dilated_layers}</g>
       <g fill="black">{hole_layer}</g>
     </mask>
-    <rect x="0" y="{view_box_y}" width="{width_px}" height="{height_px}" fill="{outline_color}" mask="url(#{mask_id})" />'''
+    <rect x="{edge_inset_px}" y="{view_box_y + edge_inset_px}" width="{max(1, width_px - 2 * edge_inset_px)}" height="{max(1, height_px - 2 * edge_inset_px)}" fill="{outline_color}" mask="url(#{mask_id})" />'''
 
 
 def generate_cover_masked_text_html(options: dict, config: dict) -> str:

@@ -15,6 +15,7 @@ import json
 import math
 import os
 import random
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -483,6 +484,12 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
     def resolve_font_weight(key, fallback, config_key=None):
         return clamp(resolve_number(key, fallback, config_key), 100, 900)
 
+    def resolve_color(key, fallback='#000000', config_key=None):
+        raw = options.get(key) or config.get(config_key or f'pdf_{key}')
+        if isinstance(raw, str) and re.match(r'^#[0-9a-fA-F]{3,8}$', raw):
+            return raw
+        return fallback
+
     family_mask_image_data_uri = options.get('_family_mask_image_data_uri', '')
     family_mask_enabled = bool(family_mask_image_data_uri)
 
@@ -501,6 +508,8 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
     family_letter_spacing = clamp(family_letter_spacing_val, -0.2, 0.2)
     title_letter_spacing = clamp(resolve_number('cover_title_letter_spacing_em', 0), -0.2, 0.2)
     subtitle_letter_spacing = clamp(resolve_number('cover_subtitle_letter_spacing_em', 0), -0.2, 0.2)
+    title_color = resolve_color('cover_title_color')
+    subtitle_color = resolve_color('cover_subtitle_color')
 
     title_x_cm = clamp(resolve_number('cover_title_x_cm', 8.5), 0, 18)
     title_y_cm = clamp(resolve_number('cover_title_y_cm', 9), 0, 27)
@@ -596,12 +605,12 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
       <rect width="100%" height="100%" fill="#ffffff" />
     </svg>
     {fallback_family_block}
-    <div style="position:absolute; left:{title_x_cm}cm; top:{title_y_cm}cm; max-width:{PAGE_CONTENT_WIDTH_CM}cm; color:#000; font-family: {title_font_family}; font-weight:{title_font_weight}; font-size:{title_font_cm}cm; letter-spacing:{title_letter_spacing}em; z-index:30;">
+    <div style="position:absolute; left:{title_x_cm}cm; top:{title_y_cm}cm; max-width:{PAGE_CONTENT_WIDTH_CM}cm; color:{title_color}; font-family: {title_font_family}; font-weight:{title_font_weight}; font-size:{title_font_cm}cm; letter-spacing:{title_letter_spacing}em; z-index:30;">
       <span style="display:inline-block; transform: scaleX({title_scale_x}) scaleY({title_scale_y}); transform-origin: left top;">
         {render_multiline(cover_title)}
       </span>
     </div>
-    <div style="position:absolute; left:{subtitle_x_cm}cm; top:{subtitle_y_cm}cm; max-width:{PAGE_CONTENT_WIDTH_CM}cm; color:#000; font-family: {subtitle_font_family}; font-weight:{subtitle_font_weight}; font-size:{subtitle_font_cm}cm; letter-spacing:{subtitle_letter_spacing}em; z-index:30;">
+    <div style="position:absolute; left:{subtitle_x_cm}cm; top:{subtitle_y_cm}cm; max-width:{PAGE_CONTENT_WIDTH_CM}cm; color:{subtitle_color}; font-family: {subtitle_font_family}; font-weight:{subtitle_font_weight}; font-size:{subtitle_font_cm}cm; letter-spacing:{subtitle_letter_spacing}em; z-index:30;">
       <span style="display:inline-block; transform: scaleX({subtitle_scale_x}) scaleY({subtitle_scale_y}); transform-origin: left top;">
         {render_multiline(cover_subtitle)}
       </span>
@@ -798,6 +807,7 @@ def generate_blurb_cover_html(articles: list, date_from: str, date_to: str, opti
     # than render illegible/overlapping text.
     spine_text = (options.get('blurb_spine_text') or '').strip()
     spine_font_cm = float(options.get('blurb_spine_font_size_cm') or 0.5)
+    spine_text_color = options.get('blurb_spine_text_color') or '#000000'
     spine_fits = bool(spine_text) and spine_w_cm >= spine_font_cm
     spine_text_html = ''
     if spine_fits:
@@ -809,7 +819,7 @@ def generate_blurb_cover_html(articles: list, date_from: str, date_to: str, opti
         # font metrics. Verified empirically by measuring the rotated box's
         # bounding rect with Playwright.
         spine_left_cm = spine_w_cm / 2 + spine_font_cm * 0.6
-        spine_text_html = f'''<div style="position:absolute; left:{spine_left_cm}cm; bottom:0.3cm; width:{panel_h_cm}cm; white-space:nowrap; transform: rotate(-90deg); transform-origin: left bottom; text-align:center; font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif; font-size:{spine_font_cm}cm; color:#000;">
+        spine_text_html = f'''<div style="position:absolute; left:{spine_left_cm}cm; bottom:0.3cm; width:{panel_h_cm}cm; white-space:nowrap; transform: rotate(-90deg); transform-origin: left bottom; text-align:center; font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif; font-size:{spine_font_cm}cm; color:{spine_text_color};">
       {esc(spine_text)}
     </div>'''
 

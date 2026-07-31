@@ -123,6 +123,12 @@ export function Settings() {
   const [initialCoverSubtitleScaleX, setInitialCoverSubtitleScaleX] = useState(1)
   const [coverSubtitleScaleY, setCoverSubtitleScaleY] = useState(1)
   const [initialCoverSubtitleScaleY, setInitialCoverSubtitleScaleY] = useState(1)
+  const [coverTitleColor, setCoverTitleColor] = useState('#000000')
+  const [initialCoverTitleColor, setInitialCoverTitleColor] = useState('#000000')
+  const [coverSubtitleColor, setCoverSubtitleColor] = useState('#000000')
+  const [initialCoverSubtitleColor, setInitialCoverSubtitleColor] = useState('#000000')
+  const [blurbSpineTextColor, setBlurbSpineTextColor] = useState('#000000')
+  const [initialBlurbSpineTextColor, setInitialBlurbSpineTextColor] = useState('#000000')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [logsLoading, setLogsLoading] = useState(true)
@@ -197,6 +203,9 @@ export function Settings() {
     || coverSubtitleLetterSpacingEm !== initialCoverSubtitleLetterSpacingEm
     || coverSubtitleScaleX !== initialCoverSubtitleScaleX
     || coverSubtitleScaleY !== initialCoverSubtitleScaleY
+    || coverTitleColor !== initialCoverTitleColor
+    || coverSubtitleColor !== initialCoverSubtitleColor
+    || blurbSpineTextColor !== initialBlurbSpineTextColor
 
   // Settings has no real interior content, so the Blurb preview's spine
   // estimate is driven by the manual page-count slider rather than actual
@@ -243,6 +252,7 @@ export function Settings() {
         formatResult, coverTypeResult, paperTypeResult,
         frontBgResult, backBgResult, spineBgResult,
         backStyleResult, spineTextResult, spineFontResult,
+        spineTextColorResult,
       ] = await Promise.all([
         configApi.get('blurb_mode_enabled'),
         configApi.get('blurb_measurement_units'),
@@ -256,6 +266,7 @@ export function Settings() {
         configApi.get('blurb_back_cover_style'),
         configApi.get('blurb_spine_text'),
         configApi.get('blurb_spine_font_size_cm'),
+        configApi.get('blurb_spine_text_color'),
       ])
       const modeValue = modeResult.value === 'true'
       setBlurbModeEnabled(modeValue)
@@ -296,6 +307,9 @@ export function Settings() {
       const spineFontValue = spineFontResult.value ? Number(spineFontResult.value) : 0.5
       setBlurbSpineFontSizeCm(spineFontValue)
       setInitialBlurbSpineFontSizeCm(spineFontValue)
+      const spineTextColorValue = spineTextColorResult.value || '#000000'
+      setBlurbSpineTextColor(spineTextColorValue)
+      setInitialBlurbSpineTextColor(spineTextColorValue)
     } catch {
       // keep defaults (Blurb mode off, inches, 200-photo cap, Magazine Premium/Softcover/white/color)
     }
@@ -329,6 +343,8 @@ export function Settings() {
         titleFontResult,
         subtitleXResult,
         subtitleFontResult,
+        titleColorResult,
+        subtitleColorResult,
       ] = await Promise.all([
         configApi.get('family_name'),
         configApi.get('pdf_cover_title'),
@@ -355,6 +371,8 @@ export function Settings() {
         configApi.get('pdf_cover_title_h_cm'),
         configApi.get('pdf_cover_subtitle_x_cm'),
         configApi.get('pdf_cover_subtitle_h_cm'),
+        configApi.get('pdf_cover_title_color'),
+        configApi.get('pdf_cover_subtitle_color'),
       ])
       const familyValue = familyResult.value || ''
       const titleValue = titleResult.value || ''
@@ -476,6 +494,12 @@ export function Settings() {
       const subtitleFontNum = Number.isFinite(parseFloat(subtitleFontValue)) ? parseFloat(subtitleFontValue) : 0.85
       setCoverSubtitleFontCm(subtitleFontNum)
       setInitialCoverSubtitleFontCm(subtitleFontNum)
+      const titleColorValue = titleColorResult.value || '#000000'
+      setCoverTitleColor(titleColorValue)
+      setInitialCoverTitleColor(titleColorValue)
+      const subtitleColorValue = subtitleColorResult.value || '#000000'
+      setCoverSubtitleColor(subtitleColorValue)
+      setInitialCoverSubtitleColor(subtitleColorValue)
     } catch (error) {
       showToast('Error while loading', 'error')
     } finally {
@@ -523,6 +547,7 @@ export function Settings() {
         configApi.set('blurb_back_cover_style', blurbBackCoverStyle),
         configApi.set('blurb_spine_text', blurbSpineText.trim()),
         configApi.set('blurb_spine_font_size_cm', String(blurbSpineFontSizeCm)),
+        configApi.set('blurb_spine_text_color', blurbSpineTextColor),
         configApi.set('family_name', nextValue),
         configApi.set('pdf_cover_title', nextTitle),
         configApi.set('pdf_cover_subtitle', nextSubtitle),
@@ -548,6 +573,8 @@ export function Settings() {
         configApi.set('pdf_cover_subtitle_scale_y', String(coverSubtitleScaleY)),
         configApi.set('pdf_cover_subtitle_x_cm', String(coverSubtitleXcm)),
         configApi.set('pdf_cover_subtitle_h_cm', String(coverSubtitleFontCm)),
+        configApi.set('pdf_cover_title_color', coverTitleColor),
+        configApi.set('pdf_cover_subtitle_color', coverSubtitleColor),
       ])
       setInitialAutoDateFromPhoto(autoDateFromPhoto)
       setInitialBlurbModeEnabled(blurbModeEnabled)
@@ -563,6 +590,7 @@ export function Settings() {
       setBlurbSpineText(blurbSpineText.trim())
       setInitialBlurbSpineText(blurbSpineText.trim())
       setInitialBlurbSpineFontSizeCm(blurbSpineFontSizeCm)
+      setInitialBlurbSpineTextColor(blurbSpineTextColor)
       setFamilyName(nextValue)
       setInitialFamilyName(nextValue)
       setCoverTitle(nextTitle)
@@ -591,6 +619,8 @@ export function Settings() {
       setInitialCoverSubtitleLetterSpacingEm(coverSubtitleLetterSpacingEm)
       setInitialCoverSubtitleScaleX(coverSubtitleScaleX)
       setInitialCoverSubtitleScaleY(coverSubtitleScaleY)
+      setInitialCoverTitleColor(coverTitleColor)
+      setInitialCoverSubtitleColor(coverSubtitleColor)
       showToast('Configuration saved', 'success')
     } catch (error) {
       showToast('Error while saving', 'error')
@@ -635,6 +665,8 @@ export function Settings() {
           cover_subtitle_scale_y: coverSubtitleScaleY,
           cover_subtitle_x_cm: coverSubtitleXcm,
           cover_subtitle_h_cm: coverSubtitleFontCm,
+          cover_title_color: coverTitleColor,
+          cover_subtitle_color: coverSubtitleColor,
           ...(mode === 'blurb' ? {
             blurb_mode_enabled: true,
             blurb_format: blurbFormat,
@@ -645,6 +677,7 @@ export function Settings() {
             blurb_spine_bg_color: blurbSpineBgColor,
             blurb_back_cover_style: blurbBackCoverStyle,
             blurb_spine_text: blurbSpineText.trim() || undefined,
+            blurb_spine_text_color: blurbSpineTextColor,
             blurb_spine_font_size_cm: blurbSpineFontSizeCm,
             blurb_preview_page_count: blurbPreviewPageCount,
           } : {}),
@@ -993,260 +1026,6 @@ export function Settings() {
                   <p className="text-xs text-gray-500">When creating a new article, use the selected photo's date instead of today's date</p>
                 </div>
               </label>
-            </CollapsibleSection>
-
-            {/* Blurb print-ready mode */}
-            <CollapsibleSection title="Blurb print-ready mode">
-              <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={blurbModeEnabled}
-                  onChange={(e) => setBlurbModeEnabled(e.target.checked)}
-                  className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Enable Blurb mode</span>
-                  <p className="text-xs text-gray-500">Show print-ready cover parameters below and the Normal/Blurb/Both choice in the PDF export flow</p>
-                </div>
-              </label>
-              {blurbModeEnabled && (
-                <div className="mt-3 space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Measurement units</label>
-                    <div className="flex rounded-lg border border-gray-300 overflow-hidden max-w-xs">
-                      <button
-                        type="button"
-                        onClick={() => setBlurbMeasurementUnits('inches')}
-                        className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
-                          blurbMeasurementUnits === 'inches'
-                            ? 'bg-primary-600 text-white'
-                            : 'bg-white text-gray-700 hover:bg-gray-50'
-                        }`}
-                      >
-                        Inches
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBlurbMeasurementUnits('centimeters')}
-                        className={`flex-1 px-3 py-2 text-sm font-medium border-l border-gray-300 transition-colors ${
-                          blurbMeasurementUnits === 'centimeters'
-                            ? 'bg-primary-600 text-white'
-                            : 'bg-white text-gray-700 hover:bg-gray-50'
-                        }`}
-                      >
-                        Centimeters
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Calculations always use RPI Print's inch-based values - centimeters are a rounded display conversion only.
-                    </p>
-                  </div>
-                  <div>
-                    <Input
-                      label="Back cover mosaic max photos"
-                      type="number"
-                      value={String(blurbBackCoverMosaicMaxPhotos)}
-                      onChange={(e) => {
-                        const next = parseInt(e.target.value, 10)
-                        setBlurbBackCoverMosaicMaxPhotos(Number.isFinite(next) ? next : 200)
-                      }}
-                      className="max-w-xs"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Caps how many photos the full-album back-cover mosaic uses. Use -1 for no cap (every photo in the exported date range).
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Book format</label>
-                    <div className="flex gap-2">
-                      {(Object.keys(BLURB_FORMAT_LABELS) as BlurbFormat[]).map((fmt) => (
-                        <button
-                          key={fmt}
-                          type="button"
-                          onClick={() => setBlurbFormat(fmt)}
-                          className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
-                            blurbFormat === fmt
-                              ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
-                              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                          }`}
-                        >
-                          {BLURB_FORMAT_LABELS[fmt]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Cover type</label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setBlurbCoverType('softcover')}
-                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
-                          blurbCoverType === 'softcover'
-                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
-                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        Softcover
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBlurbCoverType('hardcover')}
-                        disabled={blurbFormat === 'magazine_premium'}
-                        title={blurbFormat === 'magazine_premium' ? 'Hardcover is not offered for Magazine Premium' : undefined}
-                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                          blurbCoverType === 'hardcover'
-                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
-                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        Hardcover (ImageWrap)
-                      </button>
-                    </div>
-                    {blurbFormat === 'magazine_premium' && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Blurb only offers Magazine Premium as Softcover.
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Paper type</label>
-                    <select
-                      value={blurbPaperType}
-                      onChange={(e) => setBlurbPaperType(e.target.value as BlurbPaperType)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
-                      {BLURB_PAPER_TYPES.map((paper) => (
-                        <option key={paper} value={paper}>{BLURB_PAPER_LABELS[paper]}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Background colors</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Front</label>
-                        <input type="color" value={blurbFrontBgColor} onChange={(e) => setBlurbFrontBgColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Back</label>
-                        <input type="color" value={blurbBackBgColor} onChange={(e) => setBlurbBackBgColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Spine</label>
-                        <input type="color" value={blurbSpineBgColor} onChange={(e) => setBlurbSpineBgColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Back cover style</label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setBlurbBackCoverStyle('color')}
-                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
-                          blurbBackCoverStyle === 'color'
-                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
-                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        Solid color
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBlurbBackCoverStyle('mosaic')}
-                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
-                          blurbBackCoverStyle === 'mosaic'
-                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
-                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        Full-album mosaic
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Spine text (optional)</label>
-                    <input
-                      type="text"
-                      value={blurbSpineText}
-                      onChange={(e) => setBlurbSpineText(e.target.value)}
-                      placeholder="e.g. family name"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                    <div className="mt-2">
-                      <Slider
-                        label="Font size"
-                        min={blurbMeasurementUnits === 'inches' ? cmToIn(SPINE_FONT_SIZE_MIN_CM) : SPINE_FONT_SIZE_MIN_CM}
-                        max={blurbMeasurementUnits === 'inches' ? cmToIn(SPINE_FONT_SIZE_MAX_CM) : SPINE_FONT_SIZE_MAX_CM}
-                        step={blurbMeasurementUnits === 'inches' ? 0.02 : 0.05}
-                        value={blurbMeasurementUnits === 'inches' ? cmToIn(blurbSpineFontSizeCm) : blurbSpineFontSizeCm}
-                        onChange={(v) => setBlurbSpineFontSizeCm(blurbMeasurementUnits === 'inches' ? inToCm(v) : v)}
-                        formatValue={(v) => blurbMeasurementUnits === 'inches' ? `${v.toFixed(2)}in` : `${v.toFixed(2)}cm`}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Recommended for the current simulated page count ({blurbPreviewPageCount} pages): <strong>{formatSpineWidth(cmToIn(recommendedSpineFontSizeCm(previewSpineWidthIn)), blurbMeasurementUnits)}</strong>.
-                    </p>
-                    {blurbSpineText.trim() && !previewSpineTextFits && (
-                      <p className="text-xs text-amber-600 mt-1">
-                        The spine may be too narrow for this text at the current preview page count - you'll be asked to confirm before generating a Blurb export.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3">
-                    <Slider
-                      label="Simulated page count (Blurb preview only)"
-                      min={PAGE_COUNT_MIN}
-                      max={PAGE_COUNT_MAX}
-                      step={PAGE_COUNT_STEP}
-                      value={blurbPreviewPageCount}
-                      onChange={setBlurbPreviewPageCount}
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Estimated spine width at this page count: <strong>{formatSpineWidth(previewSpineWidthIn, blurbMeasurementUnits)}</strong>. Simulation only - a real Blurb export always uses its own actual generated page count.
-                    </p>
-                  </div>
-
-                  {previewResultMode !== 'blurb' ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => handleOpenCoverPreview('blurb')}
-                      disabled={previewLoadingMode !== null}
-                      fullWidth
-                    >
-                      {previewLoadingMode === 'blurb' ? 'Generating...' : 'Preview (Blurb)'}
-                    </Button>
-                  ) : (
-                    <div className="space-y-2">
-                      <a
-                        href={previewUrl || ''}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-primary-200 bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 transition-colors"
-                      >
-                        Open preview PDF
-                        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                          <path d="M14 3h7v7m0-7L10 14m-4 7h7a2 2 0 002-2v-7"></path>
-                        </svg>
-                      </a>
-                      <button
-                        onClick={handleClosePreview}
-                        className="w-full text-xs text-gray-500 hover:text-gray-700"
-                      >
-                        Close preview
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
             </CollapsibleSection>
 
             {/* Family Name */}
@@ -1632,6 +1411,21 @@ export function Settings() {
                           ))}
                         </select>
                       </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-xs font-medium text-gray-500">
+                            Color
+                          </label>
+                          <button
+                            onClick={() => setCoverTitleColor(initialCoverTitleColor)}
+                            disabled={coverTitleColor === initialCoverTitleColor}
+                            className="text-xs text-gray-500 hover:text-gray-700 disabled:text-gray-300"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                        <input type="color" value={coverTitleColor} onChange={(e) => setCoverTitleColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
+                      </div>
                     </div>
                   </details>
                 </div>
@@ -1814,6 +1608,21 @@ export function Settings() {
                           ))}
                         </select>
                       </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-xs font-medium text-gray-500">
+                            Color
+                          </label>
+                          <button
+                            onClick={() => setCoverSubtitleColor(initialCoverSubtitleColor)}
+                            disabled={coverSubtitleColor === initialCoverSubtitleColor}
+                            className="text-xs text-gray-500 hover:text-gray-700 disabled:text-gray-300"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                        <input type="color" value={coverSubtitleColor} onChange={(e) => setCoverSubtitleColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
+                      </div>
                     </div>
                   </details>
                 </div>
@@ -1850,6 +1659,263 @@ export function Settings() {
                   </div>
                 )}
               </div>
+            </CollapsibleSection>
+
+            {/* Blurb print-ready mode */}
+            <CollapsibleSection title="Blurb print-ready mode">
+              <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={blurbModeEnabled}
+                  onChange={(e) => setBlurbModeEnabled(e.target.checked)}
+                  className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Enable Blurb mode</span>
+                  <p className="text-xs text-gray-500">Show print-ready cover parameters below and the Normal/Blurb/Both choice in the PDF export flow</p>
+                </div>
+              </label>
+              {blurbModeEnabled && (
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Measurement units</label>
+                    <div className="flex rounded-lg border border-gray-300 overflow-hidden max-w-xs">
+                      <button
+                        type="button"
+                        onClick={() => setBlurbMeasurementUnits('inches')}
+                        className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                          blurbMeasurementUnits === 'inches'
+                            ? 'bg-primary-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        Inches
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBlurbMeasurementUnits('centimeters')}
+                        className={`flex-1 px-3 py-2 text-sm font-medium border-l border-gray-300 transition-colors ${
+                          blurbMeasurementUnits === 'centimeters'
+                            ? 'bg-primary-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        Centimeters
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Calculations always use RPI Print's inch-based values - centimeters are a rounded display conversion only.
+                    </p>
+                  </div>
+                  <div>
+                    <Input
+                      label="Back cover mosaic max photos"
+                      type="number"
+                      value={String(blurbBackCoverMosaicMaxPhotos)}
+                      onChange={(e) => {
+                        const next = parseInt(e.target.value, 10)
+                        setBlurbBackCoverMosaicMaxPhotos(Number.isFinite(next) ? next : 200)
+                      }}
+                      className="max-w-xs"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Caps how many photos the full-album back-cover mosaic uses. Use -1 for no cap (every photo in the exported date range).
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Book format</label>
+                    <div className="flex gap-2">
+                      {(Object.keys(BLURB_FORMAT_LABELS) as BlurbFormat[]).map((fmt) => (
+                        <button
+                          key={fmt}
+                          type="button"
+                          onClick={() => setBlurbFormat(fmt)}
+                          className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                            blurbFormat === fmt
+                              ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {BLURB_FORMAT_LABELS[fmt]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Cover type</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setBlurbCoverType('softcover')}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                          blurbCoverType === 'softcover'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Softcover
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBlurbCoverType('hardcover')}
+                        disabled={blurbFormat === 'magazine_premium'}
+                        title={blurbFormat === 'magazine_premium' ? 'Hardcover is not offered for Magazine Premium' : undefined}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                          blurbCoverType === 'hardcover'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Hardcover (ImageWrap)
+                      </button>
+                    </div>
+                    {blurbFormat === 'magazine_premium' && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Blurb only offers Magazine Premium as Softcover.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Paper type</label>
+                    <select
+                      value={blurbPaperType}
+                      onChange={(e) => setBlurbPaperType(e.target.value as BlurbPaperType)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      {BLURB_PAPER_TYPES.map((paper) => (
+                        <option key={paper} value={paper}>{BLURB_PAPER_LABELS[paper]}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Background colors</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Front</label>
+                        <input type="color" value={blurbFrontBgColor} onChange={(e) => setBlurbFrontBgColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Back</label>
+                        <input type="color" value={blurbBackBgColor} onChange={(e) => setBlurbBackBgColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Spine</label>
+                        <input type="color" value={blurbSpineBgColor} onChange={(e) => setBlurbSpineBgColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Back cover style</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setBlurbBackCoverStyle('color')}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                          blurbBackCoverStyle === 'color'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Solid color
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBlurbBackCoverStyle('mosaic')}
+                        className={`flex-1 py-2.5 px-3 rounded-lg border text-sm transition-colors ${
+                          blurbBackCoverStyle === 'mosaic'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Full-album mosaic
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Spine text (optional)</label>
+                    <div className="flex gap-2 items-start">
+                      <input
+                        type="text"
+                        value={blurbSpineText}
+                        onChange={(e) => setBlurbSpineText(e.target.value)}
+                        placeholder="e.g. family name"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                      <input type="color" value={blurbSpineTextColor} onChange={(e) => setBlurbSpineTextColor(e.target.value)} className="h-10 w-12 rounded border border-gray-300" title="Spine text color" />
+                    </div>
+                    <div className="mt-2">
+                      <Slider
+                        label="Font size"
+                        min={blurbMeasurementUnits === 'inches' ? cmToIn(SPINE_FONT_SIZE_MIN_CM) : SPINE_FONT_SIZE_MIN_CM}
+                        max={blurbMeasurementUnits === 'inches' ? cmToIn(SPINE_FONT_SIZE_MAX_CM) : SPINE_FONT_SIZE_MAX_CM}
+                        step={blurbMeasurementUnits === 'inches' ? 0.02 : 0.05}
+                        value={blurbMeasurementUnits === 'inches' ? cmToIn(blurbSpineFontSizeCm) : blurbSpineFontSizeCm}
+                        onChange={(v) => setBlurbSpineFontSizeCm(blurbMeasurementUnits === 'inches' ? inToCm(v) : v)}
+                        formatValue={(v) => blurbMeasurementUnits === 'inches' ? `${v.toFixed(2)}in` : `${v.toFixed(2)}cm`}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Recommended for the current simulated page count ({blurbPreviewPageCount} pages): <strong>{formatSpineWidth(cmToIn(recommendedSpineFontSizeCm(previewSpineWidthIn)), blurbMeasurementUnits)}</strong>.
+                    </p>
+                    {blurbSpineText.trim() && !previewSpineTextFits && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        The spine may be too narrow for this text at the current preview page count - you'll be asked to confirm before generating a Blurb export.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3">
+                    <Slider
+                      label="Simulated page count (Blurb preview only)"
+                      min={PAGE_COUNT_MIN}
+                      max={PAGE_COUNT_MAX}
+                      step={PAGE_COUNT_STEP}
+                      value={blurbPreviewPageCount}
+                      onChange={setBlurbPreviewPageCount}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Estimated spine width at this page count: <strong>{formatSpineWidth(previewSpineWidthIn, blurbMeasurementUnits)}</strong>. Simulation only - a real Blurb export always uses its own actual generated page count.
+                    </p>
+                  </div>
+
+                  {previewResultMode !== 'blurb' ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleOpenCoverPreview('blurb')}
+                      disabled={previewLoadingMode !== null}
+                      fullWidth
+                    >
+                      {previewLoadingMode === 'blurb' ? 'Generating...' : 'Preview (Blurb)'}
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <a
+                        href={previewUrl || ''}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-primary-200 bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 transition-colors"
+                      >
+                        Open preview PDF
+                        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                          <path d="M14 3h7v7m0-7L10 14m-4 7h7a2 2 0 002-2v-7"></path>
+                        </svg>
+                      </a>
+                      <button
+                        onClick={handleClosePreview}
+                        className="w-full text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Close preview
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </CollapsibleSection>
 
             {/* Logs cleanup */}

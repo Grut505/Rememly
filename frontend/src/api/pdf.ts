@@ -27,6 +27,7 @@ export interface PdfOptions {
   cover_title_y_cm?: number
   cover_title_w_cm?: number
   cover_title_h_cm?: number
+  cover_title_color?: string
   cover_subtitle_font_family?: string
   cover_subtitle_font_weight?: number
   cover_subtitle_letter_spacing_em?: number
@@ -36,6 +37,7 @@ export interface PdfOptions {
   cover_subtitle_y_cm?: number
   cover_subtitle_w_cm?: number
   cover_subtitle_h_cm?: number
+  cover_subtitle_color?: string
   preview_solid?: boolean
   auto_merge?: boolean
   clean_chunks?: boolean
@@ -48,6 +50,7 @@ export interface PdfOptions {
   blurb_spine_bg_color?: string
   blurb_back_cover_style?: 'color' | 'mosaic'
   blurb_spine_text?: string
+  blurb_spine_text_color?: string
   blurb_spine_font_size_cm?: number
   blurb_preview_page_count?: number
 }

@@ -29,6 +29,7 @@ interface BlurbSettings {
   spineBgColor: string
   backCoverStyle: 'color' | 'mosaic'
   spineText: string
+  spineTextColor: string
   spineFontSizeCm: number
 }
 
@@ -41,6 +42,7 @@ const DEFAULT_BLURB_SETTINGS: BlurbSettings = {
   spineBgColor: '#ffffff',
   backCoverStyle: 'color',
   spineText: '',
+  spineTextColor: '#000000',
   spineFontSizeCm: 0.5,
 }
 
@@ -114,8 +116,9 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       configApi.get('blurb_spine_bg_color'),
       configApi.get('blurb_back_cover_style'),
       configApi.get('blurb_spine_text'),
+      configApi.get('blurb_spine_text_color'),
       configApi.get('blurb_spine_font_size_cm'),
-    ]).then(([mode, units, format, coverType, paperType, frontBg, backBg, spineBg, backStyle, spineText, spineFontCm]) => {
+    ]).then(([mode, units, format, coverType, paperType, frontBg, backBg, spineBg, backStyle, spineText, spineTextColor, spineFontCm]) => {
       setBlurbModeEnabled(mode.value === 'true')
       setBlurbUnits(units.value === 'centimeters' ? 'centimeters' : 'inches')
       setBlurbSettings({
@@ -127,6 +130,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         spineBgColor: spineBg.value || DEFAULT_BLURB_SETTINGS.spineBgColor,
         backCoverStyle: (backStyle.value === 'mosaic' ? 'mosaic' : 'color'),
         spineText: spineText.value || '',
+        spineTextColor: spineTextColor.value || DEFAULT_BLURB_SETTINGS.spineTextColor,
         spineFontSizeCm: spineFontCm.value ? Number(spineFontCm.value) : DEFAULT_BLURB_SETTINGS.spineFontSizeCm,
       })
       setSpineFontSizeCm(spineFontCm.value ? Number(spineFontCm.value) : DEFAULT_BLURB_SETTINGS.spineFontSizeCm)
@@ -315,6 +319,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         blurb_spine_bg_color: blurbSettings.spineBgColor,
         blurb_back_cover_style: blurbSettings.backCoverStyle,
         blurb_spine_text: blurbSettings.spineText.trim() || undefined,
+        blurb_spine_text_color: blurbSettings.spineTextColor,
         blurb_spine_font_size_cm: spineFontSizeCm,
       }))
     }
@@ -677,15 +682,21 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                             </div>
                           </div>
 
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Spine text</label>
-                            <input
-                              type="text"
-                              value={blurbSettings.spineText}
-                              onChange={(e) => setBlurbSettings((prev) => ({ ...prev, spineText: e.target.value }))}
-                              placeholder="e.g. family name"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
-                            />
+                          <div className="flex gap-2 items-end">
+                            <div className="flex-1">
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Spine text</label>
+                              <input
+                                type="text"
+                                value={blurbSettings.spineText}
+                                onChange={(e) => setBlurbSettings((prev) => ({ ...prev, spineText: e.target.value }))}
+                                placeholder="e.g. family name"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-gray-500 mb-1">Color</label>
+                              <input type="color" value={blurbSettings.spineTextColor} onChange={(e) => setBlurbSettings((prev) => ({ ...prev, spineTextColor: e.target.value }))} className="h-9 w-12 rounded border border-gray-300" />
+                            </div>
                           </div>
 
                           <p className="text-[11px] text-gray-400">

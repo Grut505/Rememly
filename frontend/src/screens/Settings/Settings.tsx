@@ -837,7 +837,14 @@ export function Settings() {
       setPreviewFileId(response.file_id)
       localStorage.setItem('cover_preview_file_id', response.file_id)
 
-      const deadline = Date.now() + 2 * 60 * 1000
+      // The GitHub Actions runner alone (checkout + Python setup + pip
+      // install + `playwright install --with-deps chromium`) commonly takes
+      // 1-3 minutes on a cold runner, before the actual render even starts -
+      // 2 minutes here meant the client gave up with a generic "timed out"
+      // message before a real failure ever had a chance to report back via
+      // pdf/preview-failed, making genuine errors look like no feedback at
+      // all. Matches the workflow's own timeout-minutes: 10 more closely.
+      const deadline = Date.now() + 8 * 60 * 1000
       while (true) {
         const status = await pdfApi.previewStatus(response.file_id)
         if (status.status === 'DONE') break

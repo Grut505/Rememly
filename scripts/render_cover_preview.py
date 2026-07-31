@@ -3,9 +3,14 @@ Renders just the PDF cover page for the Settings "Preview PDF" button.
 
 Reuses generate_cover_html()/generate_blurb_cover_html()/render_html_to_pdf()
 from render_pdf_chunks.py so the preview matches the real book pixel-for-
-pixel, with an empty article list (no real photos fetched) - this naturally
-produces the plain/solid-colour cover fallback rather than the photo mosaic,
-which is what a quick settings preview needs.
+pixel. Uses a bundled bank of small, real, royalty-free test photos
+(tools/test_photos/, sourced from Picsum/Unsplash - see that directory's
+README) instead of the user's real photos, so the preview shows what the
+masked-title front cover and the mosaic back cover actually look like with
+image content, without needing any real album data. render_pdf_chunks'
+fetch_image_bytes() is monkeypatched (see _fetch_test_photo_bytes below) to
+read these local files for the synthetic "articles" list built here -
+nothing about the real export path is touched.
 
 When options.blurb_mode_enabled is set, renders the Blurb print-ready cover
 wrap (front + spine + back) instead of the plain digital cover, at the
@@ -20,6 +25,7 @@ actual generated page count, unaffected by this simulated value.
 import argparse
 import base64
 import json
+import os
 import sys
 import urllib.error
 import urllib.parse
@@ -27,11 +33,45 @@ import urllib.request
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 
+import render_pdf_chunks  # noqa: E402
 import blurb_print_spec  # noqa: E402
 from render_pdf_chunks import (  # noqa: E402
     API_HEADERS, generate_blurb_cover_html, generate_cover_html, render_html_to_pdf,
 )
 from playwright.sync_api import sync_playwright  # noqa: E402
+
+TEST_PHOTOS_DIR = os.path.join(os.path.dirname(__file__), '..', 'tools', 'test_photos')
+TEST_PHOTO_MARKER = 'test-photo:'
+
+
+def _fetch_test_photo_bytes(article: dict, callback_url: str, callback_token: str):
+    """Drop-in replacement for render_pdf_chunks.fetch_image_bytes, used only
+    by this preview script - reads a local file from TEST_PHOTOS_DIR instead
+    of hitting Google Drive/the real callback."""
+    file_id = article.get('image_file_id') or ''
+    if not file_id.startswith(TEST_PHOTO_MARKER):
+        return None
+    filename = file_id[len(TEST_PHOTO_MARKER):]
+    path = os.path.join(TEST_PHOTOS_DIR, filename)
+    try:
+        with open(path, 'rb') as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def build_test_articles() -> list:
+    """One fake 'article' per bundled test photo, consumed the same way
+    generate_cover_mosaic/generate_cover_masked_mosaic/_blurb_back_panel_html
+    consume real articles - only image_file_id is read."""
+    try:
+        filenames = sorted(os.listdir(TEST_PHOTOS_DIR))
+    except OSError:
+        return []
+    return [{'image_file_id': f'{TEST_PHOTO_MARKER}{name}'} for name in filenames if name.lower().endswith(('.jpg', '.jpeg', '.png'))]
+
+
+render_pdf_chunks.fetch_image_bytes = _fetch_test_photo_bytes
 
 
 def resolve_preview_page_count(options: dict) -> int:
@@ -89,10 +129,11 @@ def main():
     args = parser.parse_args()
 
     options, config = fetch_preview_job(args.callback_url, args.callback_token, args.preview_id)
+    articles = build_test_articles()
 
     if options.get('blurb_mode_enabled'):
         cover_html = generate_blurb_cover_html(
-            [], "", "", options, config, args.callback_url, args.callback_token,
+            articles, "", "", options, config, args.callback_url, args.callback_token,
             format_key=options.get('blurb_format') or 'magazine_premium',
             cover_type=options.get('blurb_cover_type') or 'softcover',
             paper_type=options.get('blurb_paper_type') or 'standard',
@@ -100,7 +141,7 @@ def main():
             show_spine_guide=True,
         )
     else:
-        cover_html = generate_cover_html([], "", "", options, config, args.callback_url, args.callback_token)
+        cover_html = generate_cover_html(articles, "", "", options, config, args.callback_url, args.callback_token)
 
     with sync_playwright() as p:
         browser = p.chromium.launch()

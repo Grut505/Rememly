@@ -22,6 +22,7 @@ import urllib.parse
 import urllib.request
 from collections import defaultdict
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -323,10 +324,28 @@ def load_seasonal_images(month_index: int) -> list:
     return images
 
 
+@lru_cache(maxsize=1)
+def _seasonal_target_count() -> int:
+    """The common icon count used for every month's border - the smallest
+    non-empty month's count (see generate_seasonal_fruits) - computed once
+    since tools/images/ doesn't change during a render job."""
+    counts = [len(load_seasonal_images(i)) for i in range(12)]
+    nonzero = [c for c in counts if c > 0]
+    return min(nonzero) if nonzero else 0
+
+
 def generate_seasonal_fruits(month_index: int) -> str:
     images = load_seasonal_images(month_index)
     if not images:
         return ''
+
+    # Every month uses the same icon COUNT (the sparsest month's count) so
+    # the border looks equally dense everywhere, without ever padding a
+    # sparse month by repeating one of its icons - richer months are
+    # randomly trimmed down instead of the sparsest ones being duplicated up.
+    target_count = _seasonal_target_count()
+    if target_count and len(images) > target_count:
+        images = random.sample(images, target_count)
 
     page_width = PAGE_CONTENT_WIDTH_CM
     page_height = PAGE_CONTENT_HEIGHT_CM
@@ -334,10 +353,14 @@ def generate_seasonal_fruits(month_index: int) -> str:
     ideal_size = min(2.2, perimeter / len(images) * 0.8)
     img_size = max(1.4, ideal_size)
 
-    pagination_reserve = 4.0
+    # The page number used to sit bottom-right, so the bottom edge reserved
+    # space there - now that it's centered at the bottom (see build_page_css),
+    # that reservation just left a dead bottom-right gap with no icons at
+    # all. Icons may still render behind the (centered, z-index:10) page
+    # number, same as before on the right edge - it stays legible on top.
     top_length = page_width
     right_length = page_height - 5
-    bottom_length = page_width - pagination_reserve
+    bottom_length = page_width
     left_length = page_height - 5
     total_length = top_length + right_length + bottom_length + left_length
 
@@ -352,14 +375,14 @@ def generate_seasonal_fruits(month_index: int) -> str:
         spacing = (page_width - img_size) / (top_count - 1) if top_count > 1 else (page_width - img_size) / 2
         positions.append({'x': i * spacing if top_count > 1 else spacing, 'y': 0.1, 'size': img_size})
 
-    start_y, end_y = 2.5, page_height - pagination_reserve - 1
+    start_y, end_y = 2.5, page_height - 5
     for i in range(right_count):
         spacing = (end_y - start_y - img_size) / (right_count - 1) if right_count > 1 else 0
         y = start_y + (i * spacing if right_count > 1 else (end_y - start_y - img_size) / 2)
         positions.append({'x': page_width - img_size - 0.1, 'y': y, 'size': img_size})
 
     for i in range(bottom_count):
-        available_width = page_width - pagination_reserve - img_size
+        available_width = page_width - img_size
         spacing = available_width / (bottom_count - 1) if bottom_count > 1 else available_width / 2
         positions.append({'x': i * spacing if bottom_count > 1 else spacing, 'y': page_height - img_size - 0.1, 'size': img_size})
 
@@ -950,7 +973,7 @@ def generate_month_divider(month_articles: list, month_year_label: str, month_in
       <p class="month-subtitle">{article_count} souvenir{plural}</p>
     </div>
     <div class="month-mosaic-centered">{mosaic_html}</div>
-    <div class="page-number">{current_page} / {total_pages}</div>
+    <div class="page-number">{current_page}</div>
   </div>'''
 
     return f'''
@@ -961,7 +984,7 @@ def generate_month_divider(month_articles: list, month_year_label: str, month_in
       <h2 class="month-title">{esc(month_year_label)}</h2>
       <p class="month-subtitle">{article_count} souvenir{plural}</p>
     </div>
-    <div class="page-number">{current_page} / {total_pages}</div>
+    <div class="page-number">{current_page}</div>
   </div>'''
 
 
@@ -1020,7 +1043,7 @@ def generate_month_chunk_html(month_articles: list, month_year_label: str, month
         pages_html += render_article(month_articles[i], callback_url, callback_token)
         if i + 1 < len(month_articles):
             pages_html += render_article(month_articles[i + 1], callback_url, callback_token)
-        pages_html += f'\n    <div class="page-number">{current_page} / {total_pages}</div>\n  </div>\n'
+        pages_html += f'\n    <div class="page-number">{current_page}</div>\n  </div>\n'
 
     return f'''<!doctype html>
 <html>
@@ -1176,11 +1199,11 @@ body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
 .article-date {{ font-size: 11pt; color: #3366cc; font-weight: 500; }}
 .article-text {{ font-size: 13pt; line-height: 1.4; }}
 
-.page-number {{ text-align: right; font-size: 10pt; color: #666; padding-top: 0.3cm; }}
-.articles-page .page-number {{ margin-top: auto; align-self: flex-end; }}
+.page-number {{ text-align: center; font-size: 10pt; color: #666; padding-top: 0.3cm; }}
+.articles-page .page-number {{ margin-top: auto; align-self: center; }}
 
 .month-divider {{ page-break-before: always; position: relative; height: {PAGE_CONTENT_HEIGHT_CM}cm; overflow: hidden; }}
-.month-divider .page-number {{ position: absolute; bottom: 0; right: 0; z-index: 10; }}
+.month-divider .page-number {{ position: absolute; bottom: 0; left: 0; right: 0; z-index: 10; }}
 .month-mosaic-bg {{ position: absolute; top: 0; left: 0; right: 0; bottom: 0; opacity: 0.15; }}
 .month-mosaic-cell {{ position: absolute; overflow: hidden; }}
 .month-mosaic-cell img {{ width: 100%; height: 100%; object-fit: cover; }}

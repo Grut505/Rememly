@@ -4,6 +4,7 @@ import { Input } from '../../ui/Input'
 import { Slider } from '../../ui/Slider'
 import { Spinner } from '../../ui/Spinner'
 import { CollapsibleSection } from '../../ui/CollapsibleSection'
+import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { useUiStore } from '../../state/uiStore'
 import { AppHeader } from '../../ui/AppHeader'
 import { configApi } from '../../api/config'
@@ -28,6 +29,46 @@ const fontWeightOptions = [
   { value: 700, label: 'Bold (700)' },
   { value: 800, label: 'Extra Bold (800)' },
 ]
+
+// A named, saveable snapshot of the "PDF cover page" section's STYLE only
+// (fonts/colors/sizes/positions for family name, title, subtitle) -
+// deliberately excludes the text content itself (family name, title,
+// subtitle strings), which stays whatever the current book's is when a
+// style is restored. Stored as a single JSON blob under one config key -
+// the generic key-value config store needs no schema change for this.
+interface CoverStylePresetValues {
+  familyFontCm: number
+  familyScaleX: number
+  familyScaleY: number
+  familyOutlinePx: number
+  familyOutlineColor: string
+  familyXcm: number
+  familyLetterSpacingEm: number
+  familyFontFamily: string
+  familyFontWeight: number
+  coverTitleXcm: number
+  coverTitleFontCm: number
+  coverTitleFontFamily: string
+  coverTitleFontWeight: number
+  coverTitleLetterSpacingEm: number
+  coverTitleScaleX: number
+  coverTitleScaleY: number
+  coverTitleColor: string
+  coverSubtitleXcm: number
+  coverSubtitleFontCm: number
+  coverSubtitleFontFamily: string
+  coverSubtitleFontWeight: number
+  coverSubtitleLetterSpacingEm: number
+  coverSubtitleScaleX: number
+  coverSubtitleScaleY: number
+  coverSubtitleColor: string
+}
+
+interface CoverStylePreset {
+  id: string
+  name: string
+  values: CoverStylePresetValues
+}
 
 export function Settings() {
   const { showToast, setUnsavedChanges } = useUiStore()
@@ -125,6 +166,10 @@ export function Settings() {
   const [initialBlurbSpineFontFamily, setInitialBlurbSpineFontFamily] = useState('palatino')
   const [familyOutlineColor, setFamilyOutlineColor] = useState('#000000')
   const [initialFamilyOutlineColor, setInitialFamilyOutlineColor] = useState('#000000')
+  const [coverStylePresets, setCoverStylePresets] = useState<CoverStylePreset[]>([])
+  const [selectedPresetId, setSelectedPresetId] = useState('')
+  const [newPresetName, setNewPresetName] = useState('')
+  const [deletePresetId, setDeletePresetId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [logsLoading, setLogsLoading] = useState(true)
@@ -227,6 +272,7 @@ export function Settings() {
     loadConfig()
     loadAutoDateSetting()
     loadBlurbSettings()
+    loadCoverStylePresets()
     loadLogsRange()
     loadFamileoLogsRange()
     loadUsers()
@@ -317,6 +363,96 @@ export function Settings() {
     } catch {
       // keep defaults (Blurb mode off, inches, 200-photo cap, Magazine Premium/Softcover/white/color)
     }
+  }
+
+  const loadCoverStylePresets = async () => {
+    try {
+      const result = await configApi.get('pdf_cover_style_presets')
+      if (result.value) {
+        setCoverStylePresets(JSON.parse(result.value))
+      }
+    } catch {
+      // keep defaults (no saved styles yet)
+    }
+  }
+
+  const captureCoverStyleValues = (): CoverStylePresetValues => ({
+    familyFontCm, familyScaleX, familyScaleY, familyOutlinePx, familyOutlineColor,
+    familyXcm, familyLetterSpacingEm, familyFontFamily, familyFontWeight,
+    coverTitleXcm, coverTitleFontCm, coverTitleFontFamily, coverTitleFontWeight,
+    coverTitleLetterSpacingEm, coverTitleScaleX, coverTitleScaleY, coverTitleColor,
+    coverSubtitleXcm, coverSubtitleFontCm, coverSubtitleFontFamily, coverSubtitleFontWeight,
+    coverSubtitleLetterSpacingEm, coverSubtitleScaleX, coverSubtitleScaleY, coverSubtitleColor,
+  })
+
+  const applyCoverStyleValues = (values: CoverStylePresetValues) => {
+    setFamilyFontCm(values.familyFontCm)
+    setFamilyScaleX(values.familyScaleX)
+    setFamilyScaleY(values.familyScaleY)
+    setFamilyOutlinePx(values.familyOutlinePx)
+    setFamilyOutlineColor(values.familyOutlineColor)
+    setFamilyXcm(values.familyXcm)
+    setFamilyLetterSpacingEm(values.familyLetterSpacingEm)
+    setFamilyFontFamily(values.familyFontFamily)
+    setFamilyFontWeight(values.familyFontWeight)
+    setCoverTitleXcm(values.coverTitleXcm)
+    setCoverTitleFontCm(values.coverTitleFontCm)
+    setCoverTitleFontFamily(values.coverTitleFontFamily)
+    setCoverTitleFontWeight(values.coverTitleFontWeight)
+    setCoverTitleLetterSpacingEm(values.coverTitleLetterSpacingEm)
+    setCoverTitleScaleX(values.coverTitleScaleX)
+    setCoverTitleScaleY(values.coverTitleScaleY)
+    setCoverTitleColor(values.coverTitleColor)
+    setCoverSubtitleXcm(values.coverSubtitleXcm)
+    setCoverSubtitleFontCm(values.coverSubtitleFontCm)
+    setCoverSubtitleFontFamily(values.coverSubtitleFontFamily)
+    setCoverSubtitleFontWeight(values.coverSubtitleFontWeight)
+    setCoverSubtitleLetterSpacingEm(values.coverSubtitleLetterSpacingEm)
+    setCoverSubtitleScaleX(values.coverSubtitleScaleX)
+    setCoverSubtitleScaleY(values.coverSubtitleScaleY)
+    setCoverSubtitleColor(values.coverSubtitleColor)
+  }
+
+  const persistCoverStylePresets = async (presets: CoverStylePreset[]) => {
+    setCoverStylePresets(presets)
+    try {
+      await configApi.set('pdf_cover_style_presets', JSON.stringify(presets))
+    } catch {
+      showToast('Error while saving styles', 'error')
+    }
+  }
+
+  const handleSaveCoverStylePreset = async () => {
+    const name = newPresetName.trim()
+    if (!name) return
+    const preset: CoverStylePreset = { id: crypto.randomUUID(), name, values: captureCoverStyleValues() }
+    await persistCoverStylePresets([...coverStylePresets, preset])
+    setNewPresetName('')
+    setSelectedPresetId(preset.id)
+    showToast('Style saved', 'success')
+  }
+
+  const handleRestoreCoverStylePreset = () => {
+    const preset = coverStylePresets.find((p) => p.id === selectedPresetId)
+    if (!preset) return
+    applyCoverStyleValues(preset.values)
+    showToast('Style restored - click Save to apply it', 'success')
+  }
+
+  const handleRenameCoverStylePreset = async () => {
+    const preset = coverStylePresets.find((p) => p.id === selectedPresetId)
+    if (!preset) return
+    const nextName = window.prompt('Rename this style', preset.name)?.trim()
+    if (!nextName || nextName === preset.name) return
+    await persistCoverStylePresets(
+      coverStylePresets.map((p) => (p.id === preset.id ? { ...p, name: nextName } : p))
+    )
+  }
+
+  const handleDeleteCoverStylePreset = async () => {
+    await persistCoverStylePresets(coverStylePresets.filter((p) => p.id !== deletePresetId))
+    if (selectedPresetId === deletePresetId) setSelectedPresetId('')
+    setDeletePresetId(null)
   }
 
   const loadConfig = async () => {
@@ -1046,6 +1182,64 @@ export function Settings() {
             {/* Family Name */}
             <CollapsibleSection title="PDF cover page">
               <div className="space-y-4">
+                <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-3 space-y-2">
+                  <label className="block text-xs font-medium text-gray-700">Saved styles</label>
+                  <p className="text-[11px] text-gray-500">
+                    Saves the font/color/size/position of family name, title and subtitle below - not their text, which stays whatever the current book's is.
+                  </p>
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedPresetId}
+                      onChange={(e) => setSelectedPresetId(e.target.value)}
+                      className="flex-1 px-2 py-1.5 border border-gray-300 rounded-md text-xs text-gray-700 bg-white"
+                    >
+                      <option value="">Select a saved style...</option>
+                      {coverStylePresets.map((preset) => (
+                        <option key={preset.id} value={preset.id}>{preset.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleRestoreCoverStylePreset}
+                      disabled={!selectedPresetId}
+                      className="flex-1 px-2 py-1.5 rounded-md border border-gray-300 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Restore
+                    </button>
+                    <button
+                      onClick={handleRenameCoverStylePreset}
+                      disabled={!selectedPresetId}
+                      className="flex-1 px-2 py-1.5 rounded-md border border-gray-300 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Rename
+                    </button>
+                    <button
+                      onClick={() => setDeletePresetId(selectedPresetId)}
+                      disabled={!selectedPresetId}
+                      className="flex-1 px-2 py-1.5 rounded-md border border-red-200 text-xs text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                  <div className="flex gap-2 pt-2 border-t border-gray-200">
+                    <input
+                      type="text"
+                      value={newPresetName}
+                      onChange={(e) => setNewPresetName(e.target.value)}
+                      placeholder="New style name..."
+                      className="flex-1 px-2 py-1.5 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    <button
+                      onClick={handleSaveCoverStylePreset}
+                      disabled={!newPresetName.trim()}
+                      className="px-3 py-1.5 rounded-md bg-primary-600 text-white text-xs font-medium hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Save current as...
+                    </button>
+                  </div>
+                </div>
+
                 <details className="rounded-md border border-gray-100 bg-gray-50/70 px-3 py-2">
                   <summary className="text-xs text-gray-600 cursor-pointer select-none">Family name settings</summary>
                   <div className="mt-3 space-y-3">
@@ -2187,6 +2381,17 @@ export function Settings() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={deletePresetId !== null}
+        title="Delete this style?"
+        message="This removes the saved style permanently. It won't affect the currently active title/subtitle/family name settings."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleDeleteCoverStylePreset}
+        onCancel={() => setDeletePresetId(null)}
+      />
 
     </div>
   )

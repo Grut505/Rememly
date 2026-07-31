@@ -418,9 +418,21 @@ def generate_cover_mosaic(articles: list, date_from: str, date_to: str, max_phot
   </div>'''
 
 
+def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+    hex_color = (hex_color or '').lstrip('#')
+    if len(hex_color) == 3:
+        hex_color = ''.join(c * 2 for c in hex_color)
+    try:
+        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+    except (ValueError, IndexError):
+        r, g, b = 0, 0, 0
+    return f'rgba({r},{g},{b},{alpha})'
+
+
 def _family_outline_text_svg(text: str, baseline_px: float, font_px: float, font_family: str, font_weight,
                               letter_spacing_em: float, scale_transform: str, outline_px: float,
-                              mask_id: str, view_box_y: float, width_px: float, height_px: float) -> str:
+                              mask_id: str, view_box_y: float, width_px: float, height_px: float,
+                              outline_color: str) -> str:
     """Renders a faux-outline pass for the masked family-name text as a thin
     RING only (photo mask stays visible through each glyph's interior),
     instead of a single stroked (fill:none, stroke:...) SVG <text>.
@@ -460,7 +472,7 @@ def _family_outline_text_svg(text: str, baseline_px: float, font_px: float, font
       <g fill="white">{dilated_layers}</g>
       <g fill="black">{hole_layer}</g>
     </mask>
-    <rect x="0" y="{view_box_y}" width="{width_px}" height="{height_px}" fill="rgba(0,0,0,0.28)" mask="url(#{mask_id})" />'''
+    <rect x="0" y="{view_box_y}" width="{width_px}" height="{height_px}" fill="{outline_color}" mask="url(#{mask_id})" />'''
 
 
 def generate_cover_masked_text_html(options: dict, config: dict) -> str:
@@ -562,6 +574,7 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
         family_outline_px = None
     if family_outline_px is None:
         family_outline_px = clamp(family_font_px * 0.007, 0.8, 2.2)
+    family_outline_color = _hex_to_rgba(resolve_color('cover_family_outline_color'), 0.28)
 
     family_text_scale_transform = (
         f'translate(0 {family_mask_baseline_px}) scale({family_scale_x} {family_scale_y}) '
@@ -589,7 +602,7 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
                  preserveAspectRatio="xMidYMid slice"
                  transform="matrix(0 1 -1 0 {family_mask_width_px} 0)" />
         </g>
-        {_family_outline_text_svg(family_mask_text, family_mask_baseline_px, family_font_px, family_font_family, family_font_weight, family_letter_spacing, family_text_scale_transform, family_outline_px, f'{family_clip_id}Outline', family_mask_view_box_y, family_mask_width_px, family_mask_view_box_height_px)}
+        {_family_outline_text_svg(family_mask_text, family_mask_baseline_px, family_font_px, family_font_family, family_font_weight, family_letter_spacing, family_text_scale_transform, family_outline_px, f'{family_clip_id}Outline', family_mask_view_box_y, family_mask_width_px, family_mask_view_box_height_px, family_outline_color)}
       </svg>'''
 
     fallback_family_block = ''
@@ -765,15 +778,10 @@ def _blurb_back_panel_html(articles: list, options: dict, callback_url: str, cal
 
 def generate_blurb_cover_html(articles: list, date_from: str, date_to: str, options: dict, config: dict,
                                callback_url: str, callback_token: str, format_key: str, cover_type: str,
-                               paper_type: str, page_count: int, show_spine_guide: bool = False) -> str:
+                               paper_type: str, page_count: int) -> str:
     """Assembles the print-ready cover wrap (back panel | spine | front
     panel, one flat canvas) per blurb_print_spec's geometry, reusing the
-    existing front-cover mosaic/masked-title generators for the front panel.
-
-    show_spine_guide draws a dashed outline around the spine panel - a
-    preview-only visual aid (the spine is otherwise indistinguishable from
-    the front/back panels when all three use the same white default
-    background). Never enabled for the real export's cover-wrap file."""
+    existing front-cover mosaic/masked-title generators for the front panel."""
     bleed_in = blurb_print_spec.BLEED_IN[cover_type]
     panel_w_in, panel_h_in = blurb_print_spec.panel_dimensions_in(format_key, cover_type)
     spine_w_in = blurb_print_spec.spine_width_in(page_count, cover_type, paper_type)
@@ -842,13 +850,11 @@ def generate_blurb_cover_html(articles: list, date_from: str, date_to: str, opti
         # font metrics. Verified empirically by measuring the rotated box's
         # bounding rect with Playwright.
         spine_left_cm = spine_w_cm / 2 + spine_font_cm * 0.6
-        spine_text_html = f'''<div style="position:absolute; left:{spine_left_cm}cm; bottom:0.3cm; width:{panel_h_cm}cm; white-space:nowrap; transform: rotate(-90deg); transform-origin: left bottom; text-align:center; font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif; font-size:{spine_font_cm}cm; color:{spine_text_color};">
+        spine_font_family_key = options.get('blurb_spine_font_family') or 'palatino'
+        spine_font_family = FONT_FAMILIES.get(spine_font_family_key, FONT_FAMILIES['palatino'])
+        spine_text_html = f'''<div style="position:absolute; left:{spine_left_cm}cm; bottom:0.3cm; width:{panel_h_cm}cm; white-space:nowrap; transform: rotate(-90deg); transform-origin: left bottom; text-align:center; font-family: {spine_font_family}; font-size:{spine_font_cm}cm; color:{spine_text_color};">
       {esc(spine_text)}
     </div>'''
-
-    spine_guide_html = ''
-    if show_spine_guide:
-        spine_guide_html = f'<div style="position:absolute; left:{spine_x_cm}cm; top:0; width:{spine_w_cm}cm; height:{full_h_cm}cm; border:2px dashed #ff0000; box-sizing:border-box; pointer-events:none;"></div>'
 
     return f'''<!doctype html>
 <html>
@@ -878,7 +884,6 @@ body {{ font-family: Arial, sans-serif; }}
         {front_inner_html}
       </div>
     </div>
-    {spine_guide_html}
   </div>
 </body>
 </html>'''

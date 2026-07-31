@@ -15,19 +15,11 @@ import { pdfApi } from '../../api/pdf'
 import {
   BlurbFormat, BlurbCoverType, BlurbPaperType,
   BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, BLURB_PAPER_LABELS, PAGE_COUNT_MIN, PAGE_COUNT_MAX, PAGE_COUNT_STEP,
-  SPINE_FONT_SIZE_MIN_CM, SPINE_FONT_SIZE_MAX_CM,
+  SPINE_FONT_SIZE_MIN_CM, SPINE_FONT_SIZE_MAX_CM, COVER_FONT_OPTIONS,
   spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm, cmToIn, inToCm, spineTextFitsHeight,
 } from '../../utils/blurbPrintSpec'
 
-const fontOptions = [
-  { value: 'garamond', label: 'Garamond' },
-  { value: 'palatino', label: 'Palatino' },
-  { value: 'baskerville', label: 'Baskerville' },
-  { value: 'didot', label: 'Didot' },
-  { value: 'caslon', label: 'Caslon' },
-  { value: 'georgia', label: 'Georgia' },
-  { value: 'optima', label: 'Optima' },
-]
+const fontOptions = COVER_FONT_OPTIONS
 
 const fontWeightOptions = [
   { value: 400, label: 'Regular (400)' },
@@ -129,6 +121,10 @@ export function Settings() {
   const [initialCoverSubtitleColor, setInitialCoverSubtitleColor] = useState('#000000')
   const [blurbSpineTextColor, setBlurbSpineTextColor] = useState('#000000')
   const [initialBlurbSpineTextColor, setInitialBlurbSpineTextColor] = useState('#000000')
+  const [blurbSpineFontFamily, setBlurbSpineFontFamily] = useState('palatino')
+  const [initialBlurbSpineFontFamily, setInitialBlurbSpineFontFamily] = useState('palatino')
+  const [familyOutlineColor, setFamilyOutlineColor] = useState('#000000')
+  const [initialFamilyOutlineColor, setInitialFamilyOutlineColor] = useState('#000000')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [logsLoading, setLogsLoading] = useState(true)
@@ -206,6 +202,8 @@ export function Settings() {
     || coverTitleColor !== initialCoverTitleColor
     || coverSubtitleColor !== initialCoverSubtitleColor
     || blurbSpineTextColor !== initialBlurbSpineTextColor
+    || blurbSpineFontFamily !== initialBlurbSpineFontFamily
+    || familyOutlineColor !== initialFamilyOutlineColor
 
   // Settings has no real interior content, so the Blurb preview's spine
   // estimate is driven by the manual page-count slider rather than actual
@@ -254,7 +252,7 @@ export function Settings() {
         formatResult, coverTypeResult, paperTypeResult,
         frontBgResult, backBgResult, spineBgResult,
         backStyleResult, spineTextResult, spineFontResult,
-        spineTextColorResult,
+        spineTextColorResult, spineFontFamilyResult,
       ] = await Promise.all([
         configApi.get('blurb_mode_enabled'),
         configApi.get('blurb_measurement_units'),
@@ -269,6 +267,7 @@ export function Settings() {
         configApi.get('blurb_spine_text'),
         configApi.get('blurb_spine_font_size_cm'),
         configApi.get('blurb_spine_text_color'),
+        configApi.get('blurb_spine_font_family'),
       ])
       const modeValue = modeResult.value === 'true'
       setBlurbModeEnabled(modeValue)
@@ -312,6 +311,9 @@ export function Settings() {
       const spineTextColorValue = spineTextColorResult.value || '#000000'
       setBlurbSpineTextColor(spineTextColorValue)
       setInitialBlurbSpineTextColor(spineTextColorValue)
+      const spineFontFamilyValue = spineFontFamilyResult.value || 'palatino'
+      setBlurbSpineFontFamily(spineFontFamilyValue)
+      setInitialBlurbSpineFontFamily(spineFontFamilyValue)
     } catch {
       // keep defaults (Blurb mode off, inches, 200-photo cap, Magazine Premium/Softcover/white/color)
     }
@@ -347,6 +349,7 @@ export function Settings() {
         subtitleFontResult,
         titleColorResult,
         subtitleColorResult,
+        familyOutlineColorResult,
       ] = await Promise.all([
         configApi.get('family_name'),
         configApi.get('pdf_cover_title'),
@@ -375,6 +378,7 @@ export function Settings() {
         configApi.get('pdf_cover_subtitle_h_cm'),
         configApi.get('pdf_cover_title_color'),
         configApi.get('pdf_cover_subtitle_color'),
+        configApi.get('pdf_cover_family_outline_color'),
       ])
       const familyValue = familyResult.value || ''
       const titleValue = titleResult.value || ''
@@ -502,6 +506,9 @@ export function Settings() {
       const subtitleColorValue = subtitleColorResult.value || '#000000'
       setCoverSubtitleColor(subtitleColorValue)
       setInitialCoverSubtitleColor(subtitleColorValue)
+      const familyOutlineColorValue = familyOutlineColorResult.value || '#000000'
+      setFamilyOutlineColor(familyOutlineColorValue)
+      setInitialFamilyOutlineColor(familyOutlineColorValue)
     } catch (error) {
       showToast('Error while loading', 'error')
     } finally {
@@ -550,6 +557,7 @@ export function Settings() {
         configApi.set('blurb_spine_text', blurbSpineText.trim()),
         configApi.set('blurb_spine_font_size_cm', String(blurbSpineFontSizeCm)),
         configApi.set('blurb_spine_text_color', blurbSpineTextColor),
+        configApi.set('blurb_spine_font_family', blurbSpineFontFamily),
         configApi.set('family_name', nextValue),
         configApi.set('pdf_cover_title', nextTitle),
         configApi.set('pdf_cover_subtitle', nextSubtitle),
@@ -577,6 +585,7 @@ export function Settings() {
         configApi.set('pdf_cover_subtitle_h_cm', String(coverSubtitleFontCm)),
         configApi.set('pdf_cover_title_color', coverTitleColor),
         configApi.set('pdf_cover_subtitle_color', coverSubtitleColor),
+        configApi.set('pdf_cover_family_outline_color', familyOutlineColor),
       ])
       setInitialAutoDateFromPhoto(autoDateFromPhoto)
       setInitialBlurbModeEnabled(blurbModeEnabled)
@@ -593,6 +602,7 @@ export function Settings() {
       setInitialBlurbSpineText(blurbSpineText.trim())
       setInitialBlurbSpineFontSizeCm(blurbSpineFontSizeCm)
       setInitialBlurbSpineTextColor(blurbSpineTextColor)
+      setInitialBlurbSpineFontFamily(blurbSpineFontFamily)
       setFamilyName(nextValue)
       setInitialFamilyName(nextValue)
       setCoverTitle(nextTitle)
@@ -623,6 +633,7 @@ export function Settings() {
       setInitialCoverSubtitleScaleY(coverSubtitleScaleY)
       setInitialCoverTitleColor(coverTitleColor)
       setInitialCoverSubtitleColor(coverSubtitleColor)
+      setInitialFamilyOutlineColor(familyOutlineColor)
       showToast('Configuration saved', 'success')
     } catch (error) {
       showToast('Error while saving', 'error')
@@ -669,6 +680,7 @@ export function Settings() {
           cover_subtitle_h_cm: coverSubtitleFontCm,
           cover_title_color: coverTitleColor,
           cover_subtitle_color: coverSubtitleColor,
+          cover_family_outline_color: familyOutlineColor,
           ...(mode === 'blurb' ? {
             blurb_mode_enabled: true,
             blurb_format: blurbFormat,
@@ -680,6 +692,7 @@ export function Settings() {
             blurb_back_cover_style: blurbBackCoverStyle,
             blurb_spine_text: blurbSpineText.trim() || undefined,
             blurb_spine_text_color: blurbSpineTextColor,
+            blurb_spine_font_family: blurbSpineFontFamily,
             blurb_spine_font_size_cm: blurbSpineFontSizeCm,
             blurb_preview_page_count: blurbPreviewPageCount,
           } : {}),
@@ -1141,6 +1154,21 @@ export function Settings() {
                         onChange={setFamilyOutlinePx}
                         formatValue={(v) => `${v.toFixed(1)}px`}
                       />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-medium text-gray-500">
+                          Outline color
+                        </label>
+                        <button
+                          onClick={() => setFamilyOutlineColor(initialFamilyOutlineColor)}
+                          disabled={familyOutlineColor === initialFamilyOutlineColor}
+                          className="text-xs text-gray-500 hover:text-gray-700 disabled:text-gray-300"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                      <input type="color" value={familyOutlineColor} onChange={(e) => setFamilyOutlineColor(e.target.value)} className="w-full h-9 rounded border border-gray-300" />
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
@@ -1850,6 +1878,18 @@ export function Settings() {
                         className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                       />
                       <input type="color" value={blurbSpineTextColor} onChange={(e) => setBlurbSpineTextColor(e.target.value)} className="h-10 w-12 rounded border border-gray-300" title="Spine text color" />
+                    </div>
+                    <div className="mt-2">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Spine text font</label>
+                      <select
+                        value={blurbSpineFontFamily}
+                        onChange={(e) => setBlurbSpineFontFamily(e.target.value)}
+                        className="w-full px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700 bg-white"
+                      >
+                        {fontOptions.map((font) => (
+                          <option key={font.value} value={font.value}>{font.label}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="mt-2">
                       <Slider

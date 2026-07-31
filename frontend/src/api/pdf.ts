@@ -18,6 +18,7 @@ export interface PdfOptions {
   cover_family_scale_x?: number
   cover_family_scale_y?: number
   cover_family_outline_px?: number
+  cover_family_outline_color?: string
   cover_title_font_family?: string
   cover_title_font_weight?: number
   cover_title_letter_spacing_em?: number
@@ -51,6 +52,7 @@ export interface PdfOptions {
   blurb_back_cover_style?: 'color' | 'mosaic'
   blurb_spine_text?: string
   blurb_spine_text_color?: string
+  blurb_spine_font_family?: string
   blurb_spine_font_size_cm?: number
   blurb_preview_page_count?: number
 }

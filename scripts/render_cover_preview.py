@@ -138,7 +138,6 @@ def main():
             cover_type=options.get('blurb_cover_type') or 'softcover',
             paper_type=options.get('blurb_paper_type') or 'standard',
             page_count=resolve_preview_page_count(options),
-            show_spine_guide=True,
         )
     else:
         cover_html = generate_cover_html(articles, "", "", options, config, args.callback_url, args.callback_token)

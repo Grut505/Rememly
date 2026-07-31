@@ -12,7 +12,7 @@ import { pdfApi } from '../../api/pdf'
 import { configApi } from '../../api/config'
 import {
   BlurbFormat, BlurbCoverType, BlurbPaperType,
-  BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, BLURB_PAPER_LABELS,
+  BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, BLURB_PAPER_LABELS, COVER_FONT_OPTIONS,
   PAGE_COUNT_MIN, PAGE_COUNT_MAX,
   SPINE_FONT_SIZE_MIN_CM, SPINE_FONT_SIZE_MAX_CM,
   estimateInteriorPageCount, spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm, cmToIn, inToCm, spineTextFitsHeight,
@@ -30,6 +30,7 @@ interface BlurbSettings {
   backCoverStyle: 'color' | 'mosaic'
   spineText: string
   spineTextColor: string
+  spineFontFamily: string
   spineFontSizeCm: number
 }
 
@@ -43,6 +44,7 @@ const DEFAULT_BLURB_SETTINGS: BlurbSettings = {
   backCoverStyle: 'color',
   spineText: '',
   spineTextColor: '#000000',
+  spineFontFamily: 'palatino',
   spineFontSizeCm: 0.5,
 }
 
@@ -117,8 +119,9 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       configApi.get('blurb_back_cover_style'),
       configApi.get('blurb_spine_text'),
       configApi.get('blurb_spine_text_color'),
+      configApi.get('blurb_spine_font_family'),
       configApi.get('blurb_spine_font_size_cm'),
-    ]).then(([mode, units, format, coverType, paperType, frontBg, backBg, spineBg, backStyle, spineText, spineTextColor, spineFontCm]) => {
+    ]).then(([mode, units, format, coverType, paperType, frontBg, backBg, spineBg, backStyle, spineText, spineTextColor, spineFontFamily, spineFontCm]) => {
       setBlurbModeEnabled(mode.value === 'true')
       setBlurbUnits(units.value === 'centimeters' ? 'centimeters' : 'inches')
       setBlurbSettings({
@@ -131,6 +134,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         backCoverStyle: (backStyle.value === 'mosaic' ? 'mosaic' : 'color'),
         spineText: spineText.value || '',
         spineTextColor: spineTextColor.value || DEFAULT_BLURB_SETTINGS.spineTextColor,
+        spineFontFamily: spineFontFamily.value || DEFAULT_BLURB_SETTINGS.spineFontFamily,
         spineFontSizeCm: spineFontCm.value ? Number(spineFontCm.value) : DEFAULT_BLURB_SETTINGS.spineFontSizeCm,
       })
       setSpineFontSizeCm(spineFontCm.value ? Number(spineFontCm.value) : DEFAULT_BLURB_SETTINGS.spineFontSizeCm)
@@ -325,6 +329,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         blurb_back_cover_style: blurbSettings.backCoverStyle,
         blurb_spine_text: blurbSettings.spineText.trim() || undefined,
         blurb_spine_text_color: blurbSettings.spineTextColor,
+        blurb_spine_font_family: blurbSettings.spineFontFamily,
         blurb_spine_font_size_cm: spineFontSizeCm,
       }))
     }
@@ -702,6 +707,18 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                               <label className="block text-[11px] text-gray-500 mb-1">Color</label>
                               <input type="color" value={blurbSettings.spineTextColor} onChange={(e) => setBlurbSettings((prev) => ({ ...prev, spineTextColor: e.target.value }))} className="h-9 w-12 rounded border border-gray-300" />
                             </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Spine text font</label>
+                            <select
+                              value={blurbSettings.spineFontFamily}
+                              onChange={(e) => setBlurbSettings((prev) => ({ ...prev, spineFontFamily: e.target.value }))}
+                              className="w-full px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-700 bg-white"
+                            >
+                              {COVER_FONT_OPTIONS.map((font) => (
+                                <option key={font.value} value={font.value}>{font.label}</option>
+                              ))}
+                            </select>
                           </div>
 
                           <p className="text-[11px] text-gray-400">

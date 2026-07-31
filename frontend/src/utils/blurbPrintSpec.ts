@@ -4,6 +4,19 @@
 // The Python module remains authoritative for the actual generated PDF;
 // if these two ever drift, the render step is the source of truth.
 
+// Mirrors render_pdf_chunks.py's FONT_FAMILIES dict keys - shared between
+// Settings (family/title/subtitle/spine font pickers) and PdfGenerateModal
+// (spine font override) so the list can't drift between the two.
+export const COVER_FONT_OPTIONS = [
+  { value: 'garamond', label: 'Garamond' },
+  { value: 'palatino', label: 'Palatino' },
+  { value: 'baskerville', label: 'Baskerville' },
+  { value: 'didot', label: 'Didot' },
+  { value: 'caslon', label: 'Caslon' },
+  { value: 'georgia', label: 'Georgia' },
+  { value: 'optima', label: 'Optima' },
+]
+
 export type BlurbFormat = 'magazine_premium' | 'standard_portrait'
 export type BlurbCoverType = 'softcover' | 'hardcover'
 export type BlurbPaperType =

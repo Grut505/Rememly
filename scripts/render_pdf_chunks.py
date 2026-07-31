@@ -537,7 +537,14 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
     subtitle_scale_x = clamp(resolve_number('cover_subtitle_scale_x', 1), 0.6, 3)
     subtitle_scale_y = clamp(resolve_number('cover_subtitle_scale_y', 1), 0.6, 3)
 
-    family_mask_width_px = max(1, round(2770 * family_scale_x))
+    # Must match generate_cover_masked_mosaic's page_height_cm exactly (same
+    # formula) - that function builds the actual mosaic image at that size,
+    # and a mismatch here means the built image gets silently cropped
+    # ("slice") to fit this box, misaligning the mosaic with the glyph
+    # shapes (previously hardcoded to 2770 = the old default 27.7cm page
+    # height * 100 - wrong for anything whose page height differs, like a
+    # Blurb front panel, which uses the panel's own height here instead).
+    family_mask_width_px = max(1, round(PAGE_CONTENT_HEIGHT_CM * 100 * family_scale_x))
     family_mask_height_px = max(1, round(family_font_px * family_scale_y))
     family_mask_width_cm = family_mask_width_px / 100
     family_mask_height_cm = family_mask_height_px / 100
@@ -798,7 +805,8 @@ def generate_blurb_cover_html(articles: list, date_from: str, date_to: str, opti
         articles, date_from, date_to, options, config, callback_url, callback_token, panel_w_cm, panel_h_cm
     )
     back_inner_html = _blurb_back_panel_html(
-        articles, options, callback_url, callback_token, panel_w_cm, panel_h_cm, mosaic_max_photos
+        articles, options, callback_url, callback_token,
+        panel_w_cm - 2 * safe_zone_cm, panel_h_cm - 2 * safe_zone_cm, mosaic_max_photos
     )
 
     # Spine text: only rendered if it fits legibly at the requested font size.

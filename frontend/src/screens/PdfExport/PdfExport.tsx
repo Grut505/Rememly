@@ -42,6 +42,7 @@ export function PdfExport() {
   const [deleteBulk, setDeleteBulk] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [cleanupJobId, setCleanupJobId] = useState<string | null>(null)
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null)
 
   // Cancel state
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null)
@@ -218,6 +219,37 @@ export function PdfExport() {
     } catch {
       return `${from} → ${to}`
     }
+  }
+
+  const describePdfOptions = (pdf: PdfListItem): Array<[string, string]> => {
+    if (!pdf.options_json) return []
+    let options: Record<string, unknown>
+    try {
+      options = JSON.parse(pdf.options_json)
+    } catch {
+      return []
+    }
+    const rows: Array<[string, string]> = []
+    const push = (label: string, value: unknown) => {
+      if (value === undefined || value === null || value === '') return
+      rows.push([label, String(value)])
+    }
+    push('Cover style', options.cover_style)
+    push('Family name', options.family_name)
+    push('Cover title', options.cover_title)
+    push('Cover subtitle', options.cover_subtitle)
+    push('Mosaic layout', options.mosaic_layout)
+    push('Seasonal fruits', options.show_seasonal_fruits === undefined ? undefined : (options.show_seasonal_fruits ? 'On' : 'Off'))
+    push('Max mosaic photos', options.max_mosaic_photos === 0 ? 'All' : options.max_mosaic_photos)
+    if (options.blurb_mode_enabled) {
+      push('Blurb format', options.blurb_format)
+      push('Blurb cover type', options.blurb_cover_type)
+      push('Blurb paper type', options.blurb_paper_type)
+      push('Blurb back cover', options.blurb_back_cover_style)
+      push('Spine text', options.blurb_spine_text)
+      push('Spine font size', options.blurb_spine_font_size_cm !== undefined ? `${options.blurb_spine_font_size_cm}cm` : undefined)
+    }
+    return rows
   }
 
   const isMergeInProgress = (pdf: PdfListItem) => {
@@ -840,8 +872,17 @@ export function PdfExport() {
                           </div>
                         )}
                       </div>
-                      {(pdf.pdf_url || (!pdf.pdf_url && pdf.status === 'DONE') || pdf.status === 'ERROR' || pdf.status === 'CANCELLED' || pdf.is_blurb) && (
-                        <div className="flex justify-end flex-wrap gap-1 mt-2">
+                      <div className="flex justify-between items-center flex-wrap gap-1 mt-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setExpandedJobId(expandedJobId === pdf.job_id ? null : pdf.job_id)
+                          }}
+                          className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                        >
+                          {expandedJobId === pdf.job_id ? 'Hide details' : 'Show details'}
+                        </button>
+                        <div className="flex flex-wrap gap-1">
                           {pdf.pdf_url && (
                             <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">
                               Merged
@@ -866,6 +907,20 @@ export function PdfExport() {
                             <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
                               Blurb
                             </span>
+                          )}
+                        </div>
+                      </div>
+                      {expandedJobId === pdf.job_id && (
+                        <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-600 space-y-1">
+                          {describePdfOptions(pdf).length > 0 ? (
+                            describePdfOptions(pdf).map(([label, value]) => (
+                              <p key={label}>
+                                <span className="text-gray-400">{label}: </span>
+                                <span className="text-gray-700">{value}</span>
+                              </p>
+                            ))
+                          ) : (
+                            <p className="text-gray-400">No generation details recorded for this PDF.</p>
                           )}
                         </div>
                       )}

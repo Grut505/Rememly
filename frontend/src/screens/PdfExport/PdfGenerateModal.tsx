@@ -12,6 +12,7 @@ import { pdfApi } from '../../api/pdf'
 import { configApi } from '../../api/config'
 import {
   BlurbFormat, BlurbCoverType, BlurbPaperType,
+  BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, BLURB_PAPER_LABELS,
   PAGE_COUNT_MIN, PAGE_COUNT_MAX,
   SPINE_FONT_SIZE_MIN_CM, SPINE_FONT_SIZE_MAX_CM,
   estimateInteriorPageCount, spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm, cmToIn, inToCm,
@@ -65,9 +66,11 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   // Step state
   const [step, setStep] = useState<Step>('dates')
 
-  // Date selection
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  // Date selection - defaults to the current year (Jan 1 - Dec 31), still
+  // freely editable by the user.
+  const currentYear = new Date().getFullYear()
+  const [startDate, setStartDate] = useState(`${currentYear}-01-01`)
+  const [endDate, setEndDate] = useState(`${currentYear}-12-31`)
 
   // Preview data
   const [loading, setLoading] = useState(false)
@@ -97,6 +100,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const [spineFontSizeCm, setSpineFontSizeCm] = useState(DEFAULT_BLURB_SETTINGS.spineFontSizeCm)
   const [generationMode, setGenerationMode] = useState<GenerationMode>('normal')
   const [showSpineWarning, setShowSpineWarning] = useState(false)
+  const [showBlurbOverrides, setShowBlurbOverrides] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -130,6 +134,15 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       // keep defaults (Blurb mode off)
     })
   }, [])
+
+  // Blurb only offers Magazine Premium as Softcover - if the user overrides
+  // format to Magazine Premium while Hardcover is selected, fall back to
+  // Softcover rather than sending an invalid combination.
+  useEffect(() => {
+    if (blurbSettings.format === 'magazine_premium' && blurbSettings.coverType === 'hardcover') {
+      setBlurbSettings((prev) => ({ ...prev, coverType: 'softcover' }))
+    }
+  }, [blurbSettings.format, blurbSettings.coverType])
 
   const estimatedPageCount = estimateInteriorPageCount(monthCounts.map((m) => m.activeCount))
   const pageCountInRange = estimatedPageCount >= PAGE_COUNT_MIN && estimatedPageCount <= PAGE_COUNT_MAX
@@ -549,6 +562,139 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                     Blurb parameters (format, cover type, paper, colors, spine text) come from Settings.
                     {generationMode === 'both' && ' "Both" creates two independent jobs - a normal album and a Blurb book - from this same date range.'}
                   </p>
+
+                  {includesBlurb && (
+                    <div className="rounded-lg border border-gray-200 bg-white p-3">
+                      <button
+                        onClick={() => setShowBlurbOverrides((v) => !v)}
+                        className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                      >
+                        {showBlurbOverrides ? 'Hide' : 'Override'} Settings parameters for this export
+                      </button>
+                      {showBlurbOverrides && (
+                        <div className="mt-3 space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Format</label>
+                            <div className="flex gap-2">
+                              {(Object.keys(BLURB_FORMAT_LABELS) as BlurbFormat[]).map((format) => (
+                                <button
+                                  key={format}
+                                  onClick={() => setBlurbSettings((prev) => ({ ...prev, format }))}
+                                  className={`flex-1 py-2 px-2 rounded-lg border text-xs transition-colors ${
+                                    blurbSettings.format === format
+                                      ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                                      : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {BLURB_FORMAT_LABELS[format]}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Cover type</label>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setBlurbSettings((prev) => ({ ...prev, coverType: 'softcover' }))}
+                                className={`flex-1 py-2 px-2 rounded-lg border text-xs transition-colors ${
+                                  blurbSettings.coverType === 'softcover'
+                                    ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                                    : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                Softcover
+                              </button>
+                              <button
+                                onClick={() => setBlurbSettings((prev) => ({ ...prev, coverType: 'hardcover' }))}
+                                disabled={blurbSettings.format === 'magazine_premium'}
+                                title={blurbSettings.format === 'magazine_premium' ? 'Blurb does not offer Magazine Premium as Hardcover' : undefined}
+                                className={`flex-1 py-2 px-2 rounded-lg border text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                                  blurbSettings.coverType === 'hardcover'
+                                    ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                                    : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                Hardcover (ImageWrap)
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Paper type</label>
+                            <select
+                              value={blurbSettings.paperType}
+                              onChange={(e) => setBlurbSettings((prev) => ({ ...prev, paperType: e.target.value as BlurbPaperType }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            >
+                              {BLURB_PAPER_TYPES.map((paper) => (
+                                <option key={paper} value={paper}>{BLURB_PAPER_LABELS[paper]}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Back cover style</label>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setBlurbSettings((prev) => ({ ...prev, backCoverStyle: 'color' }))}
+                                className={`flex-1 py-2 px-2 rounded-lg border text-xs transition-colors ${
+                                  blurbSettings.backCoverStyle === 'color'
+                                    ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                                    : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                Solid color
+                              </button>
+                              <button
+                                onClick={() => setBlurbSettings((prev) => ({ ...prev, backCoverStyle: 'mosaic' }))}
+                                className={`flex-1 py-2 px-2 rounded-lg border text-xs transition-colors ${
+                                  blurbSettings.backCoverStyle === 'mosaic'
+                                    ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                                    : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                Full-album mosaic
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Background colors</label>
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <label className="block text-[11px] text-gray-500 mb-1">Front</label>
+                                <input type="color" value={blurbSettings.frontBgColor} onChange={(e) => setBlurbSettings((prev) => ({ ...prev, frontBgColor: e.target.value }))} className="w-full h-8 rounded border border-gray-300" />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] text-gray-500 mb-1">Back</label>
+                                <input type="color" value={blurbSettings.backBgColor} onChange={(e) => setBlurbSettings((prev) => ({ ...prev, backBgColor: e.target.value }))} className="w-full h-8 rounded border border-gray-300" />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] text-gray-500 mb-1">Spine</label>
+                                <input type="color" value={blurbSettings.spineBgColor} onChange={(e) => setBlurbSettings((prev) => ({ ...prev, spineBgColor: e.target.value }))} className="w-full h-8 rounded border border-gray-300" />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Spine text</label>
+                            <input
+                              type="text"
+                              value={blurbSettings.spineText}
+                              onChange={(e) => setBlurbSettings((prev) => ({ ...prev, spineText: e.target.value }))}
+                              placeholder="e.g. family name"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            />
+                          </div>
+
+                          <p className="text-[11px] text-gray-400">
+                            Changes here apply to this export only - Settings itself is unchanged.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {includesBlurb && (
                     <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-1">

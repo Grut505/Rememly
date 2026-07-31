@@ -83,6 +83,7 @@ export interface PdfListItem {
   chunks_folder_url?: string
   error_message?: string
   is_blurb?: boolean
+  options_json?: string
 }
 
 export interface PdfListResponse {

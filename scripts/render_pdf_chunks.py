@@ -988,7 +988,7 @@ def generate_month_divider(month_articles: list, month_year_label: str, month_in
   </div>'''
 
 
-def render_article(article: dict, callback_url: str, callback_token: str) -> str:
+def render_article(article: dict, callback_url: str, callback_token: str, mirrored: bool = False) -> str:
     date_str = format_datetime_fr(article.get('date', ''))
     image_html = ''
     is_portrait = False
@@ -1004,9 +1004,10 @@ def render_article(article: dict, callback_url: str, callback_token: str) -> str
     text_html = esc(article.get('texte', ''))
 
     if is_portrait:
+        portrait_class = 'portrait mirrored' if mirrored else 'portrait'
         return f'''
     <div class="article">
-      <div class="article-content portrait">
+      <div class="article-content {portrait_class}">
         <div class="article-image">{image_html}</div>
         <div class="article-right">
           <div class="article-date">{date_str}</div>
@@ -1036,13 +1037,21 @@ def generate_month_chunk_html(month_articles: list, month_year_label: str, month
         options, callback_url, callback_token,
     )
 
+    # Mirrors portrait photos to the right (text to the left) on odd pages -
+    # a Blurb-only look (only ever sent by the frontend alongside
+    # blurb_mode_enabled, see PdfGenerateModal) so a real photo-book spread
+    # can keep photos consistently near the outer edge/away from the
+    # binding rather than always on the same side.
+    mirror_odd_pages = bool(options.get('blurb_mirror_odd_pages'))
+
     pages_html = ''
     for i in range(0, len(month_articles), 2):
         current_page += 1
+        mirrored = mirror_odd_pages and current_page % 2 == 1
         pages_html += '\n  <div class="articles-page">\n'
-        pages_html += render_article(month_articles[i], callback_url, callback_token)
+        pages_html += render_article(month_articles[i], callback_url, callback_token, mirrored=mirrored)
         if i + 1 < len(month_articles):
-            pages_html += render_article(month_articles[i + 1], callback_url, callback_token)
+            pages_html += render_article(month_articles[i + 1], callback_url, callback_token, mirrored=mirrored)
         pages_html += f'\n    <div class="page-number">{current_page}</div>\n  </div>\n'
 
     return f'''<!doctype html>
@@ -1195,6 +1204,14 @@ body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
 .article-content.portrait .article-image {{ flex-shrink: 0; display: flex; align-items: stretch; margin-right: 0.4cm; }}
 .article-content.portrait .article-image img {{ height: 100%; max-width: 10cm; object-fit: contain; object-position: left top; }}
 .article-content.portrait .article-right {{ flex: 1; display: flex; flex-direction: column; justify-content: {'center' if BLURB_MODE_ACTIVE else 'flex-start'}; gap: 0.3cm; padding: 0.3cm 0.3cm 0.3cm 0; }}
+
+/* Mirrored (blurb_mirror_odd_pages, odd pages only): photo on the right,
+   caption on the left - swap the image's gap margin and the caption's
+   padding side to match rather than just reversing visual order, which
+   alone would leave the old margin/padding on the wrong sides. */
+.article-content.portrait.mirrored {{ flex-direction: row-reverse; }}
+.article-content.portrait.mirrored .article-image {{ margin-right: 0; margin-left: 0.4cm; }}
+.article-content.portrait.mirrored .article-right {{ padding: 0.3cm 0 0.3cm 0.3cm; }}
 
 .article-date {{ font-size: 11pt; color: #3366cc; font-weight: 500; }}
 .article-text {{ font-size: 13pt; line-height: 1.4; }}

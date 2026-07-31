@@ -96,6 +96,8 @@ export function Settings() {
   const [initialBlurbSpineBgColor, setInitialBlurbSpineBgColor] = useState('#ffffff')
   const [blurbBackCoverStyle, setBlurbBackCoverStyle] = useState<'color' | 'mosaic'>('color')
   const [initialBlurbBackCoverStyle, setInitialBlurbBackCoverStyle] = useState<'color' | 'mosaic'>('color')
+  const [blurbMirrorOddPages, setBlurbMirrorOddPages] = useState(false)
+  const [initialBlurbMirrorOddPages, setInitialBlurbMirrorOddPages] = useState(false)
   const [blurbSpineText, setBlurbSpineText] = useState('')
   const [initialBlurbSpineText, setInitialBlurbSpineText] = useState('')
   const [blurbSpineFontSizeCm, setBlurbSpineFontSizeCm] = useState(0.5)
@@ -217,6 +219,7 @@ export function Settings() {
     || blurbBackBgColor !== initialBlurbBackBgColor
     || blurbSpineBgColor !== initialBlurbSpineBgColor
     || blurbBackCoverStyle !== initialBlurbBackCoverStyle
+    || blurbMirrorOddPages !== initialBlurbMirrorOddPages
     || blurbSpineText !== initialBlurbSpineText
     || blurbSpineFontSizeCm !== initialBlurbSpineFontSizeCm
     || familyName.trim() !== initialFamilyName.trim()
@@ -299,6 +302,7 @@ export function Settings() {
         frontBgResult, backBgResult, spineBgResult,
         backStyleResult, spineTextResult, spineFontResult,
         spineTextColorResult, spineFontFamilyResult,
+        mirrorOddPagesResult,
       ] = await Promise.all([
         configApi.get('blurb_mode_enabled'),
         configApi.get('blurb_measurement_units'),
@@ -314,6 +318,7 @@ export function Settings() {
         configApi.get('blurb_spine_font_size_cm'),
         configApi.get('blurb_spine_text_color'),
         configApi.get('blurb_spine_font_family'),
+        configApi.get('blurb_mirror_odd_pages'),
       ])
       const modeValue = modeResult.value === 'true'
       setBlurbModeEnabled(modeValue)
@@ -348,6 +353,9 @@ export function Settings() {
       const backStyleValue: 'color' | 'mosaic' = backStyleResult.value === 'mosaic' ? 'mosaic' : 'color'
       setBlurbBackCoverStyle(backStyleValue)
       setInitialBlurbBackCoverStyle(backStyleValue)
+      const mirrorOddPagesValue = mirrorOddPagesResult.value === 'true'
+      setBlurbMirrorOddPages(mirrorOddPagesValue)
+      setInitialBlurbMirrorOddPages(mirrorOddPagesValue)
       const spineTextValue = spineTextResult.value || ''
       setBlurbSpineText(spineTextValue)
       setInitialBlurbSpineText(spineTextValue)
@@ -690,6 +698,7 @@ export function Settings() {
         configApi.set('blurb_back_bg_color', blurbBackBgColor),
         configApi.set('blurb_spine_bg_color', blurbSpineBgColor),
         configApi.set('blurb_back_cover_style', blurbBackCoverStyle),
+        configApi.set('blurb_mirror_odd_pages', String(blurbMirrorOddPages)),
         configApi.set('blurb_spine_text', blurbSpineText.trim()),
         configApi.set('blurb_spine_font_size_cm', String(blurbSpineFontSizeCm)),
         configApi.set('blurb_spine_text_color', blurbSpineTextColor),
@@ -734,6 +743,7 @@ export function Settings() {
       setInitialBlurbBackBgColor(blurbBackBgColor)
       setInitialBlurbSpineBgColor(blurbSpineBgColor)
       setInitialBlurbBackCoverStyle(blurbBackCoverStyle)
+      setInitialBlurbMirrorOddPages(blurbMirrorOddPages)
       setBlurbSpineText(blurbSpineText.trim())
       setInitialBlurbSpineText(blurbSpineText.trim())
       setInitialBlurbSpineFontSizeCm(blurbSpineFontSizeCm)
@@ -2067,6 +2077,19 @@ export function Settings() {
                       </button>
                     </div>
                   </div>
+
+                  <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={blurbMirrorOddPages}
+                      onChange={(e) => setBlurbMirrorOddPages(e.target.checked)}
+                      className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Mirror portrait photos on odd pages</span>
+                      <p className="text-xs text-gray-500">On odd interior pages, position vertical photos on the right of their zone with the caption on the left, instead of always on the left</p>
+                    </div>
+                  </label>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Spine text (optional)</label>

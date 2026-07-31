@@ -50,6 +50,7 @@ export interface PdfOptions {
   blurb_back_bg_color?: string
   blurb_spine_bg_color?: string
   blurb_back_cover_style?: 'color' | 'mosaic'
+  blurb_mirror_odd_pages?: boolean
   blurb_spine_text?: string
   blurb_spine_text_color?: string
   blurb_spine_font_family?: string

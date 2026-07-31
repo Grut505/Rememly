@@ -28,6 +28,7 @@ interface BlurbSettings {
   backBgColor: string
   spineBgColor: string
   backCoverStyle: 'color' | 'mosaic'
+  mirrorOddPages: boolean
   spineText: string
   spineTextColor: string
   spineFontFamily: string
@@ -42,6 +43,7 @@ const DEFAULT_BLURB_SETTINGS: BlurbSettings = {
   backBgColor: '#ffffff',
   spineBgColor: '#ffffff',
   backCoverStyle: 'color',
+  mirrorOddPages: false,
   spineText: '',
   spineTextColor: '#000000',
   spineFontFamily: 'palatino',
@@ -117,11 +119,12 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       configApi.get('blurb_back_bg_color'),
       configApi.get('blurb_spine_bg_color'),
       configApi.get('blurb_back_cover_style'),
+      configApi.get('blurb_mirror_odd_pages'),
       configApi.get('blurb_spine_text'),
       configApi.get('blurb_spine_text_color'),
       configApi.get('blurb_spine_font_family'),
       configApi.get('blurb_spine_font_size_cm'),
-    ]).then(([mode, units, format, coverType, paperType, frontBg, backBg, spineBg, backStyle, spineText, spineTextColor, spineFontFamily, spineFontCm]) => {
+    ]).then(([mode, units, format, coverType, paperType, frontBg, backBg, spineBg, backStyle, mirrorOddPages, spineText, spineTextColor, spineFontFamily, spineFontCm]) => {
       setBlurbModeEnabled(mode.value === 'true')
       setBlurbUnits(units.value === 'centimeters' ? 'centimeters' : 'inches')
       setBlurbSettings({
@@ -132,6 +135,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         backBgColor: backBg.value || DEFAULT_BLURB_SETTINGS.backBgColor,
         spineBgColor: spineBg.value || DEFAULT_BLURB_SETTINGS.spineBgColor,
         backCoverStyle: (backStyle.value === 'mosaic' ? 'mosaic' : 'color'),
+        mirrorOddPages: mirrorOddPages.value === 'true',
         spineText: spineText.value || '',
         spineTextColor: spineTextColor.value || DEFAULT_BLURB_SETTINGS.spineTextColor,
         spineFontFamily: spineFontFamily.value || DEFAULT_BLURB_SETTINGS.spineFontFamily,
@@ -327,6 +331,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         blurb_back_bg_color: blurbSettings.backBgColor,
         blurb_spine_bg_color: blurbSettings.spineBgColor,
         blurb_back_cover_style: blurbSettings.backCoverStyle,
+        blurb_mirror_odd_pages: blurbSettings.mirrorOddPages,
         blurb_spine_text: blurbSettings.spineText.trim() || undefined,
         blurb_spine_text_color: blurbSettings.spineTextColor,
         blurb_spine_font_family: blurbSettings.spineFontFamily,
@@ -673,6 +678,16 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                               </button>
                             </div>
                           </div>
+
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={blurbSettings.mirrorOddPages}
+                              onChange={(e) => setBlurbSettings((prev) => ({ ...prev, mirrorOddPages: e.target.checked }))}
+                              className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
+                            <span className="text-xs font-medium text-gray-700">Mirror portrait photos on odd pages</span>
+                          </label>
 
                           <div>
                             <label className="block text-xs font-medium text-gray-700 mb-1">Background colors</label>

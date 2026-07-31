@@ -69,14 +69,17 @@ const HARDCOVER_SPINE_TABLE_PT: Record<BlurbPaperType, Array<[number, number, nu
 const POINTS_PER_INCH = 72
 
 export function softcoverSpineWidthIn(pageCount: number, paperType: BlurbPaperType): number {
-  const k = SOFTCOVER_SPINE_DIVISOR_K[paperType]
+  // Falls back to "standard" for a paperType saved before the 2026-07-31
+  // rename (e.g. "100# Text, Gloss") rather than computing NaN - Settings
+  // can carry an old value from D1 config until it's re-saved.
+  const k = SOFTCOVER_SPINE_DIVISOR_K[paperType] ?? SOFTCOVER_SPINE_DIVISOR_K.standard
   const n = Math.ceil((pageCount * 16) / k)
   const points = Math.floor(n * (72 / 16))
   return points / POINTS_PER_INCH
 }
 
 export function hardcoverSpineWidthIn(pageCount: number, paperType: BlurbPaperType): number {
-  const table = HARDCOVER_SPINE_TABLE_PT[paperType]
+  const table = HARDCOVER_SPINE_TABLE_PT[paperType] ?? HARDCOVER_SPINE_TABLE_PT.standard
   for (const [lo, hi, points] of table) {
     if (pageCount >= lo && pageCount <= hi) return points / POINTS_PER_INCH
   }

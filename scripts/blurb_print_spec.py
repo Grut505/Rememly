@@ -101,14 +101,17 @@ def inch_to_cm(value_in: float) -> float:
 
 
 def softcover_spine_width_in(page_count: int, paper_type: str) -> float:
-    k = SOFTCOVER_SPINE_DIVISOR_K[paper_type]
+    # Falls back to "standard" for a paper_type saved before the 2026-07-31
+    # rename (e.g. "100# Text, Gloss") rather than raising KeyError - a job
+    # can carry an old value from D1 config until Settings is re-saved.
+    k = SOFTCOVER_SPINE_DIVISOR_K.get(paper_type, SOFTCOVER_SPINE_DIVISOR_K["standard"])
     n = (page_count * 16 + k - 1) // k
     points = math.floor(n * (72.0 / 16.0))
     return points / POINTS_PER_INCH
 
 
 def hardcover_spine_width_in(page_count: int, paper_type: str) -> float:
-    table = HARDCOVER_SPINE_TABLE_PT[paper_type]
+    table = HARDCOVER_SPINE_TABLE_PT.get(paper_type, HARDCOVER_SPINE_TABLE_PT["standard"])
     for lo, hi, points in table:
         if lo <= page_count <= hi:
             return points / POINTS_PER_INCH

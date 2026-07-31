@@ -9,6 +9,8 @@ convert to centimeters for the rest of the render pipeline, which is
 cm-based throughout.
 """
 
+import math
+
 INCH_TO_CM = 2.54
 
 # Trim size (width, height) in inches, portrait orientation, for each
@@ -49,37 +51,46 @@ PAGE_COUNT_MIN = 20
 PAGE_COUNT_MAX = 550
 PAGE_COUNT_STEP = 2
 
-# Softcover spine width: spineWidthInPoints = ceil((pageCount * 16) / K) * (72 / 16)
-# K is paper-type-specific - it is NOT a universal constant. Verified by
-# switching paper type on RPI's widget and reading the displayed formula.
+# Softcover spine width: spineWidthInPoints = floor(ceil((pageCount * 16) / K) * (72 / 16))
+# K is paper-type-specific. These 4 paper names and K values are Blurb's own
+# real consumer catalog (blurb.fr's "Type de papier" select on the book size
+# calculator), NOT the generic RPI Print API docs' fictional-sounding paper
+# names ("100# Text, Gloss" etc.) - reverse-engineered by driving the real
+# calculator at many page counts and fitting K, then confirmed exact via
+# `pdffonts`/pikepdf measurement of a real generated cover. Verified
+# identical for both magazine_premium and standard_portrait (Magazine
+# Premium only offers "Standard" paper - no paper choice in Blurb's UI - but
+# the underlying formula/K is the same one used here). The final floor() to
+# a whole point is REQUIRED - without it, spine width comes out ~0.5pt too
+# wide for every odd-numbered tier, which is exactly why previously
+# generated covers failed Blurb's real dimension check even though they
+# looked "close enough".
 SOFTCOVER_SPINE_DIVISOR_K = {
-    "100# Text, Gloss": 400,
-    "100# Text, Dull": 360,
-    "100# Text, Eggshell": 250,
-    "70# Text, Uncoated": 410,
+    "standard": 450,
+    "premium-matte": 336,
+    "pro-uncoated-paper": 288,
+    "pro-medium-gloss-paper": 288,
 }
 
-# Hardcover spine width: a page-count-range lookup table. The spine-width
-# tiers themselves (in points) are identical across paper types; only the
-# page-count range boundaries shift, since thinner paper fits more pages
-# into the same physical thickness tier. Each entry: (min_pages, max_pages, spine_width_pt).
+# Hardcover (Blurb calls this "lithowrap"/"Couverture rigide imprimée" -
+# image printed directly on the board, matching our single-file cover-wrap
+# approach, as opposed to "hardcover"/"Couverture rigide, jaquette" which
+# needs a separate dust-jacket file) spine width: a page-count-range lookup
+# table carried over unchanged from the generic RPI Print API docs. NOT yet
+# re-verified against blurb.fr's real calculator the way softcover was
+# (2026-07-31) - only softcover was blocking real uploads so far. Re-keyed
+# to the real paper names above; the same table is reused for all 4 papers
+# as a placeholder since only the old generic "100# Text, Gloss" table was
+# ever measured, and only for Magazine Premium/Standard Portrait Softcover.
+_HARDCOVER_SPINE_TABLE_PT_UNVERIFIED = [
+    (20, 60, 19.152), (62, 130, 31.896), (132, 200, 44.64), (202, 270, 57.384),
+    (272, 340, 70.128), (342, 410, 82.872), (412, 480, 95.76), (482, 550, 108.36),
+]
 HARDCOVER_SPINE_TABLE_PT = {
-    "100# Text, Gloss": [
-        (20, 60, 19.152), (62, 130, 31.896), (132, 200, 44.64), (202, 270, 57.384),
-        (272, 340, 70.128), (342, 410, 82.872), (412, 480, 95.76), (482, 550, 108.36),
-    ],
-    "100# Text, Dull": [
-        (20, 54, 19.152), (56, 118, 31.896), (120, 182, 44.64), (184, 246, 57.384),
-        (248, 310, 70.128), (312, 374, 82.872), (376, 438, 95.76), (440, 502, 108.36),
-    ],
-    "100# Text, Eggshell": [
-        (20, 38, 19.152), (40, 82, 31.896), (84, 126, 44.64), (128, 170, 57.384),
-        (172, 214, 70.128), (216, 258, 82.872), (260, 302, 95.76), (304, 346, 108.36),
-    ],
-    "70# Text, Uncoated": [
-        (24, 60, 19.152), (62, 132, 31.896), (134, 204, 44.64), (206, 276, 57.384),
-        (278, 348, 70.128), (350, 420, 82.872), (422, 492, 95.76), (494, 564, 108.36),
-    ],
+    "standard": _HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
+    "premium-matte": _HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
+    "pro-uncoated-paper": _HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
+    "pro-medium-gloss-paper": _HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
 }
 
 POINTS_PER_INCH = 72.0
@@ -91,7 +102,8 @@ def inch_to_cm(value_in: float) -> float:
 
 def softcover_spine_width_in(page_count: int, paper_type: str) -> float:
     k = SOFTCOVER_SPINE_DIVISOR_K[paper_type]
-    points = ((page_count * 16 + k - 1) // k) * (72.0 / 16.0)
+    n = (page_count * 16 + k - 1) // k
+    points = math.floor(n * (72.0 / 16.0))
     return points / POINTS_PER_INCH
 
 

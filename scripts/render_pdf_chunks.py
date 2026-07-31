@@ -1260,7 +1260,7 @@ def main():
     blurb_mode = bool(options.get('blurb_mode_enabled'))
     blurb_format = options.get('blurb_format') or 'magazine_premium'
     blurb_cover_type = options.get('blurb_cover_type') or 'softcover'
-    blurb_paper_type = options.get('blurb_paper_type') or '100# Text, Gloss'
+    blurb_paper_type = options.get('blurb_paper_type') or 'standard'
 
     if blurb_mode:
         trim_w_in, trim_h_in = blurb_print_spec.TRIM_SIZES_IN[blurb_format]

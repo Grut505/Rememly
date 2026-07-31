@@ -34,7 +34,7 @@ interface BlurbSettings {
 const DEFAULT_BLURB_SETTINGS: BlurbSettings = {
   format: 'magazine_premium',
   coverType: 'softcover',
-  paperType: '100# Text, Gloss',
+  paperType: 'standard',
   frontBgColor: '#ffffff',
   backBgColor: '#ffffff',
   spineBgColor: '#ffffff',

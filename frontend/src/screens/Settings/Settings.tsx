@@ -14,7 +14,7 @@ import { useImageLoader } from '../../hooks/useImageLoader'
 import { pdfApi } from '../../api/pdf'
 import {
   BlurbFormat, BlurbCoverType, BlurbPaperType,
-  BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, PAGE_COUNT_MIN, PAGE_COUNT_MAX, PAGE_COUNT_STEP,
+  BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, BLURB_PAPER_LABELS, PAGE_COUNT_MIN, PAGE_COUNT_MAX, PAGE_COUNT_STEP,
   SPINE_FONT_SIZE_MIN_CM, SPINE_FONT_SIZE_MAX_CM,
   spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm,
 } from '../../utils/blurbPrintSpec'
@@ -1120,7 +1120,7 @@ export function Settings() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                     >
                       {BLURB_PAPER_TYPES.map((paper) => (
-                        <option key={paper} value={paper}>{paper}</option>
+                        <option key={paper} value={paper}>{BLURB_PAPER_LABELS[paper]}</option>
                       ))}
                     </select>
                   </div>

@@ -95,7 +95,7 @@ def main():
             [], "", "", options, config, args.callback_url, args.callback_token,
             format_key=options.get('blurb_format') or 'magazine_premium',
             cover_type=options.get('blurb_cover_type') or 'softcover',
-            paper_type=options.get('blurb_paper_type') or '100# Text, Gloss',
+            paper_type=options.get('blurb_paper_type') or 'standard',
             page_count=resolve_preview_page_count(options),
             show_spine_guide=True,
         )

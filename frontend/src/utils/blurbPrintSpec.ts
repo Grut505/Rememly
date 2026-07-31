@@ -7,58 +7,71 @@
 export type BlurbFormat = 'magazine_premium' | 'standard_portrait'
 export type BlurbCoverType = 'softcover' | 'hardcover'
 export type BlurbPaperType =
-  | '100# Text, Gloss'
-  | '100# Text, Dull'
-  | '100# Text, Eggshell'
-  | '70# Text, Uncoated'
+  | 'standard'
+  | 'premium-matte'
+  | 'pro-uncoated-paper'
+  | 'pro-medium-gloss-paper'
 
 export const BLURB_FORMAT_LABELS: Record<BlurbFormat, string> = {
   magazine_premium: 'Magazine Premium (8.5" × 11")',
   standard_portrait: 'Standard Portrait (8" × 10")',
 }
 
+// Blurb's own real paper catalog (blurb.fr's book size calculator "Type de
+// papier" select), NOT the generic RPI Print API docs' paper names this
+// used to list - see SOFTCOVER_SPINE_DIVISOR_K below. Magazine Premium only
+// ever offers "standard" in Blurb's own UI (no paper choice), but the
+// formula/K is the same for both formats.
 export const BLURB_PAPER_TYPES: BlurbPaperType[] = [
-  '100# Text, Gloss',
-  '100# Text, Dull',
-  '100# Text, Eggshell',
-  '70# Text, Uncoated',
+  'standard',
+  'premium-matte',
+  'pro-uncoated-paper',
+  'pro-medium-gloss-paper',
 ]
+
+export const BLURB_PAPER_LABELS: Record<BlurbPaperType, string> = {
+  standard: 'Standard',
+  'premium-matte': 'Premium (mat / satiné)',
+  'pro-uncoated-paper': 'Mohawk Superfine (coquille d’œuf)',
+  'pro-medium-gloss-paper': 'Mohawk proPhoto perle',
+}
 
 export const PAGE_COUNT_MIN = 20
 export const PAGE_COUNT_MAX = 550
 export const PAGE_COUNT_STEP = 2
 
+// K values reverse-engineered from blurb.fr's real calculator (many page
+// counts sampled per paper, fit exactly - see scripts/blurb_print_spec.py
+// for the full methodology note). Confirmed identical for both
+// magazine_premium and standard_portrait.
 const SOFTCOVER_SPINE_DIVISOR_K: Record<BlurbPaperType, number> = {
-  '100# Text, Gloss': 400,
-  '100# Text, Dull': 360,
-  '100# Text, Eggshell': 250,
-  '70# Text, Uncoated': 410,
+  standard: 450,
+  'premium-matte': 336,
+  'pro-uncoated-paper': 288,
+  'pro-medium-gloss-paper': 288,
 }
 
+// Hardcover ("lithowrap"/"Couverture rigide imprimée" in Blurb's UI) spine
+// table - NOT yet re-verified against the real calculator the way softcover
+// was (2026-07-31); carried over unchanged from the old generic RPI docs
+// table and reused for all 4 real paper names as a placeholder.
+const HARDCOVER_SPINE_TABLE_PT_UNVERIFIED: Array<[number, number, number]> = [
+  [20, 60, 19.152], [62, 130, 31.896], [132, 200, 44.64], [202, 270, 57.384],
+  [272, 340, 70.128], [342, 410, 82.872], [412, 480, 95.76], [482, 550, 108.36],
+]
 const HARDCOVER_SPINE_TABLE_PT: Record<BlurbPaperType, Array<[number, number, number]>> = {
-  '100# Text, Gloss': [
-    [20, 60, 19.152], [62, 130, 31.896], [132, 200, 44.64], [202, 270, 57.384],
-    [272, 340, 70.128], [342, 410, 82.872], [412, 480, 95.76], [482, 550, 108.36],
-  ],
-  '100# Text, Dull': [
-    [20, 54, 19.152], [56, 118, 31.896], [120, 182, 44.64], [184, 246, 57.384],
-    [248, 310, 70.128], [312, 374, 82.872], [376, 438, 95.76], [440, 502, 108.36],
-  ],
-  '100# Text, Eggshell': [
-    [20, 38, 19.152], [40, 82, 31.896], [84, 126, 44.64], [128, 170, 57.384],
-    [172, 214, 70.128], [216, 258, 82.872], [260, 302, 95.76], [304, 346, 108.36],
-  ],
-  '70# Text, Uncoated': [
-    [24, 60, 19.152], [62, 132, 31.896], [134, 204, 44.64], [206, 276, 57.384],
-    [278, 348, 70.128], [350, 420, 82.872], [422, 492, 95.76], [494, 564, 108.36],
-  ],
+  standard: HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
+  'premium-matte': HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
+  'pro-uncoated-paper': HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
+  'pro-medium-gloss-paper': HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
 }
 
 const POINTS_PER_INCH = 72
 
 export function softcoverSpineWidthIn(pageCount: number, paperType: BlurbPaperType): number {
   const k = SOFTCOVER_SPINE_DIVISOR_K[paperType]
-  const points = Math.ceil((pageCount * 16) / k) * (72 / 16)
+  const n = Math.ceil((pageCount * 16) / k)
+  const points = Math.floor(n * (72 / 16))
   return points / POINTS_PER_INCH
 }
 

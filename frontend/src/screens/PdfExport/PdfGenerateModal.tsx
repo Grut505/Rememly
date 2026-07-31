@@ -175,8 +175,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
 
   const reset = () => {
     setStep('dates')
-    setStartDate('')
-    setEndDate('')
+    setStartDate(`${currentYear}-01-01`)
+    setEndDate(`${currentYear}-12-31`)
     setMonthCounts([])
     setTotalArticles(0)
     setError(null)

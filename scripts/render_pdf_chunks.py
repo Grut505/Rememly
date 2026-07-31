@@ -781,7 +781,7 @@ def generate_blurb_cover_html(articles: list, date_from: str, date_to: str, opti
     # than render illegible/overlapping text.
     spine_text = (options.get('blurb_spine_text') or '').strip()
     spine_font_cm = float(options.get('blurb_spine_font_size_cm') or 0.5)
-    spine_fits = bool(spine_text) and spine_w_cm >= max(spine_font_cm, 0.3)
+    spine_fits = bool(spine_text) and spine_w_cm >= spine_font_cm
     spine_text_html = ''
     if spine_fits:
         # A -90deg rotation with transform-origin "left bottom" shifts the

@@ -16,7 +16,7 @@ import {
   BlurbFormat, BlurbCoverType, BlurbPaperType,
   BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, BLURB_PAPER_LABELS, PAGE_COUNT_MIN, PAGE_COUNT_MAX, PAGE_COUNT_STEP,
   SPINE_FONT_SIZE_MIN_CM, SPINE_FONT_SIZE_MAX_CM,
-  spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm,
+  spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm, cmToIn, inToCm,
 } from '../../utils/blurbPrintSpec'
 
 const fontOptions = [
@@ -203,7 +203,7 @@ export function Settings() {
   // generated pages - simulation only, never affects a real export.
   const previewSpineWidthIn = spineWidthIn(blurbPreviewPageCount, blurbCoverType, blurbPaperType)
   const previewSpineTextFits = Boolean(blurbSpineText.trim())
-    && previewSpineWidthIn * 2.54 >= Math.max(blurbSpineFontSizeCm, 0.3)
+    && previewSpineWidthIn * 2.54 >= blurbSpineFontSizeCm
 
   // Blurb only offers Magazine Premium as Softcover - if the user had
   // Hardcover selected and switches format to Magazine Premium, fall back
@@ -1183,16 +1183,16 @@ export function Settings() {
                     <div className="mt-2">
                       <Slider
                         label="Font size"
-                        min={SPINE_FONT_SIZE_MIN_CM}
-                        max={SPINE_FONT_SIZE_MAX_CM}
-                        step={0.05}
-                        value={blurbSpineFontSizeCm}
-                        onChange={setBlurbSpineFontSizeCm}
-                        formatValue={(v) => `${v.toFixed(2)}cm`}
+                        min={blurbMeasurementUnits === 'inches' ? cmToIn(SPINE_FONT_SIZE_MIN_CM) : SPINE_FONT_SIZE_MIN_CM}
+                        max={blurbMeasurementUnits === 'inches' ? cmToIn(SPINE_FONT_SIZE_MAX_CM) : SPINE_FONT_SIZE_MAX_CM}
+                        step={blurbMeasurementUnits === 'inches' ? 0.02 : 0.05}
+                        value={blurbMeasurementUnits === 'inches' ? cmToIn(blurbSpineFontSizeCm) : blurbSpineFontSizeCm}
+                        onChange={(v) => setBlurbSpineFontSizeCm(blurbMeasurementUnits === 'inches' ? inToCm(v) : v)}
+                        formatValue={(v) => blurbMeasurementUnits === 'inches' ? `${v.toFixed(2)}in` : `${v.toFixed(2)}cm`}
                       />
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      Recommended for the current simulated page count ({blurbPreviewPageCount} pages): <strong>{recommendedSpineFontSizeCm(previewSpineWidthIn).toFixed(2)}cm</strong>.
+                      Recommended for the current simulated page count ({blurbPreviewPageCount} pages): <strong>{formatSpineWidth(cmToIn(recommendedSpineFontSizeCm(previewSpineWidthIn)), blurbMeasurementUnits)}</strong>.
                     </p>
                     {blurbSpineText.trim() && !previewSpineTextFits && (
                       <p className="text-xs text-amber-600 mt-1">

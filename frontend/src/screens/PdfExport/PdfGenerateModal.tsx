@@ -14,7 +14,7 @@ import {
   BlurbFormat, BlurbCoverType, BlurbPaperType,
   PAGE_COUNT_MIN, PAGE_COUNT_MAX,
   SPINE_FONT_SIZE_MIN_CM, SPINE_FONT_SIZE_MAX_CM,
-  estimateInteriorPageCount, spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm,
+  estimateInteriorPageCount, spineWidthIn, formatSpineWidth, recommendedSpineFontSizeCm, cmToIn, inToCm,
 } from '../../utils/blurbPrintSpec'
 
 type GenerationMode = 'normal' | 'blurb' | 'both'
@@ -141,7 +141,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   // same-threshold check.
   const spineTextFits = Boolean(blurbSettings.spineText.trim())
     && estimatedSpineWidthIn !== null
-    && estimatedSpineWidthIn * 2.54 >= Math.max(spineFontSizeCm, 0.3)
+    && estimatedSpineWidthIn * 2.54 >= spineFontSizeCm
   const recommendedFontSizeCm = estimatedSpineWidthIn !== null
     ? recommendedSpineFontSizeCm(estimatedSpineWidthIn)
     : null
@@ -567,16 +567,16 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                         <div className="pt-1">
                           <Slider
                             label="Spine font size (this export)"
-                            min={SPINE_FONT_SIZE_MIN_CM}
-                            max={SPINE_FONT_SIZE_MAX_CM}
-                            step={0.05}
-                            value={spineFontSizeCm}
-                            onChange={setSpineFontSizeCm}
-                            formatValue={(v) => `${v.toFixed(2)}cm`}
+                            min={blurbUnits === 'inches' ? cmToIn(SPINE_FONT_SIZE_MIN_CM) : SPINE_FONT_SIZE_MIN_CM}
+                            max={blurbUnits === 'inches' ? cmToIn(SPINE_FONT_SIZE_MAX_CM) : SPINE_FONT_SIZE_MAX_CM}
+                            step={blurbUnits === 'inches' ? 0.02 : 0.05}
+                            value={blurbUnits === 'inches' ? cmToIn(spineFontSizeCm) : spineFontSizeCm}
+                            onChange={(v) => setSpineFontSizeCm(blurbUnits === 'inches' ? inToCm(v) : v)}
+                            formatValue={(v) => blurbUnits === 'inches' ? `${v.toFixed(2)}in` : `${v.toFixed(2)}cm`}
                           />
                           <p className="text-xs text-gray-500 mt-1">
                             From Settings by default, adjustable for this export only.
-                            {recommendedFontSizeCm !== null && <> Recommended for this page count: <strong>{recommendedFontSizeCm.toFixed(2)}cm</strong>.</>}
+                            {recommendedFontSizeCm !== null && <> Recommended for this page count: <strong>{formatSpineWidth(cmToIn(recommendedFontSizeCm), blurbUnits)}</strong>.</>}
                           </p>
                         </div>
                       )}

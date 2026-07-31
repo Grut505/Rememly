@@ -106,7 +106,17 @@ export function formatSpineWidth(widthIn: number, units: 'inches' | 'centimeters
   return `${widthIn.toFixed(3)} in`
 }
 
-export const SPINE_FONT_SIZE_MIN_CM = 0.2
+export const CM_PER_INCH = 2.54
+
+export function cmToIn(cm: number): number {
+  return cm / CM_PER_INCH
+}
+
+export function inToCm(inches: number): number {
+  return inches * CM_PER_INCH
+}
+
+export const SPINE_FONT_SIZE_MIN_CM = 0.05
 export const SPINE_FONT_SIZE_MAX_CM = 2.5
 
 // A recommended font size that comfortably fits within the spine at a given

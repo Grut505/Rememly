@@ -224,7 +224,15 @@ def smart_mosaic_layout(images: list, total_width: float, total_height: float, g
     current_row_aspect = 0
 
     for img in images:
-        if current_row and current_row_aspect >= target_aspect_per_row * 0.8 and len(rows) < num_rows - 1:
+        # No "stop opening new rows past num_rows - 1" cap here on purpose:
+        # num_rows is only an estimate, and capping it forced every image
+        # past that count into the single last row regardless of how many
+        # piled up - with a large tiled image count (target_cell_count) that
+        # last row's aspect-sum could balloon far past every other row's,
+        # collapsing its height to a sliver (row height is weighted by
+        # 1/aspect-sum). Letting the threshold alone decide splits lands
+        # within ~1 row of the estimate and keeps every row's height even.
+        if current_row and current_row_aspect >= target_aspect_per_row * 0.8:
             rows.append(current_row)
             current_row = [img]
             current_row_aspect = img['aspectRatio']

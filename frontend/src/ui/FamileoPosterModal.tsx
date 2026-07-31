@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { famileoApi } from '../api/famileo'
 import { articlesService } from '../services/articles.service'
-import { apiClient } from '../api/client'
+import { apiClient, ApiError } from '../api/client'
 import { usersApi, DeclaredUser } from '../api/users'
 
 interface FamileoPosterModalProps {
@@ -188,6 +188,30 @@ export function FamileoPosterModal({
       })
   }, [isOpen, imageUrl, imageFileId])
 
+  // The backend auto-triggers a ~2min GitHub Actions cookie refresh whenever
+  // it detects an expired Famileo session (see FAMILEO_SESSION in
+  // workers/src/routes/famileo.ts) - without this, a single expired-session
+  // hiccup mid-post surfaced a raw "Session Famileo expirée" error and forced
+  // the user to manually retry the whole send. Poll famileo/status the same
+  // way FamileoBrowser's waitForSessionValid does, then retry the failed
+  // step once automatically.
+  const waitForFamileoSession = async () => {
+    const maxAttempts = 20
+    for (let i = 0; i < maxAttempts; i++) {
+      setProgressLabel('Session Famileo expirée. Rafraîchissement en cours…')
+      try {
+        const status = await famileoApi.status({ validate: 'true' })
+        if (status.valid) return true
+      } catch {
+        // keep waiting - status itself can transiently fail during the refresh
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+    }
+    return false
+  }
+
+  const isFamileoSessionError = (err: unknown) => err instanceof ApiError && err.code === 'FAMILEO_SESSION'
+
   const handlePost = async () => {
     if (selectionMode === 'all' && families.length === 0) {
       setPostError('No families available.')
@@ -233,57 +257,68 @@ export function FamileoPosterModal({
         const finalPublishedAt = isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString()
         const finalAuthorEmail = override ? override.author : baseAuthor
 
-        if (base64) {
-          setProgressLabel(`Uploading image · ${family ? family.name : 'Unknown family'}`)
+        const sendToFamily = async () => {
+          if (base64) {
+            setProgressLabel(`Uploading image · ${family ? family.name : 'Unknown family'}`)
+            setProgressStep((prev) => prev + 1)
+          }
+          let imageKey = ''
+          if (base64) {
+            const presign = await famileoApi.presignImage({
+              author_email: finalAuthorEmail || undefined,
+            })
+            const presignObj = JSON.parse(presign.raw)
+            const upload = await famileoApi.uploadImage({
+              presign: presignObj,
+              image_base64: base64,
+              mime_type: 'image/jpeg',
+              filename: 'Untitled.jpg',
+              author_email: finalAuthorEmail || undefined,
+            })
+            imageKey = upload.key || ''
+          }
+
+          setProgressLabel(`Creating post · ${family ? family.name : 'Unknown family'}`)
           setProgressStep((prev) => prev + 1)
-        }
-        let imageKey = ''
-        if (base64) {
-          const presign = await famileoApi.presignImage({
+          const response = await famileoApi.createPost({
+            text: finalText,
+            published_at: finalPublishedAt,
+            family_id: famileoId,
+            image_key: imageKey || undefined,
+            is_full_page: override ? override.fullPage : isFullPage,
             author_email: finalAuthorEmail || undefined,
           })
-          const presignObj = JSON.parse(presign.raw)
-          const upload = await famileoApi.uploadImage({
-            presign: presignObj,
-            image_base64: base64,
-            mime_type: 'image/jpeg',
-            filename: 'Untitled.jpg',
-            author_email: finalAuthorEmail || undefined,
-          })
-          imageKey = upload.key || ''
+          const body = response && typeof response.body === 'string' ? response.body : ''
+          let famileoPostId: string | undefined
+          if (body) {
+            try {
+              const parsed = JSON.parse(body)
+              famileoPostId =
+                parsed?.id ||
+                parsed?.post_id ||
+                parsed?.wall_post_id ||
+                parsed?.familyPost?.wall_post_id ||
+                parsed?.data?.id ||
+                parsed?.data?.post_id
+            } catch {
+              // ignore non-json body
+            }
+          }
+          if (articleId) {
+            if (famileoPostId) {
+              console.log('Famileo post created:', famileoPostId)
+            }
+            await articlesService.markFamileoPosted(articleId, famileoPostId)
+          }
         }
 
-        setProgressLabel(`Creating post · ${family ? family.name : 'Unknown family'}`)
-        setProgressStep((prev) => prev + 1)
-        const response = await famileoApi.createPost({
-          text: finalText,
-          published_at: finalPublishedAt,
-          family_id: famileoId,
-          image_key: imageKey || undefined,
-          is_full_page: override ? override.fullPage : isFullPage,
-          author_email: finalAuthorEmail || undefined,
-        })
-        const body = response && typeof response.body === 'string' ? response.body : ''
-        let famileoPostId: string | undefined
-        if (body) {
-          try {
-            const parsed = JSON.parse(body)
-            famileoPostId =
-              parsed?.id ||
-              parsed?.post_id ||
-              parsed?.wall_post_id ||
-              parsed?.familyPost?.wall_post_id ||
-              parsed?.data?.id ||
-              parsed?.data?.post_id
-          } catch {
-            // ignore non-json body
+        try {
+          await sendToFamily()
+        } catch (err) {
+          if (!isFamileoSessionError(err) || !(await waitForFamileoSession())) {
+            throw err
           }
-        }
-        if (articleId) {
-          if (famileoPostId) {
-            console.log('Famileo post created:', famileoPostId)
-          }
-          await articlesService.markFamileoPosted(articleId, famileoPostId)
+          await sendToFamily()
         }
       }
       setPostResult(`Post created for ${targetFamilies.length} ${targetFamilies.length > 1 ? 'families' : 'family'}.`)

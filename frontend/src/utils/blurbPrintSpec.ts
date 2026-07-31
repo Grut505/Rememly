@@ -9,6 +9,7 @@ export type BlurbCoverType = 'softcover' | 'hardcover'
 export type BlurbPaperType =
   | 'standard'
   | 'premium-matte'
+  | 'premium-satin'
   | 'pro-uncoated-paper'
   | 'pro-medium-gloss-paper'
 
@@ -17,22 +18,25 @@ export const BLURB_FORMAT_LABELS: Record<BlurbFormat, string> = {
   standard_portrait: 'Standard Portrait (8" × 10")',
 }
 
-// Blurb's own real paper catalog (blurb.fr's book size calculator "Type de
-// papier" select), NOT the generic RPI Print API docs' paper names this
-// used to list - see SOFTCOVER_SPINE_DIVISOR_K below. Magazine Premium only
-// ever offers "standard" in Blurb's own UI (no paper choice), but the
-// formula/K is the same for both formats.
+// Blurb's own real paper catalog, keyed/labeled to match blurb.fr's real
+// upload tool's "Type de papier" select exactly (5 entries there - not the
+// public booksize_calculator, which combines mat/satin into one option) so
+// the label the user picks here is the same wording they see on Blurb's
+// own site. Magazine Premium only ever offers "standard" in Blurb's own UI
+// (no paper choice), but the formula/K is the same for both formats.
 export const BLURB_PAPER_TYPES: BlurbPaperType[] = [
   'standard',
   'premium-matte',
+  'premium-satin',
   'pro-uncoated-paper',
   'pro-medium-gloss-paper',
 ]
 
 export const BLURB_PAPER_LABELS: Record<BlurbPaperType, string> = {
   standard: 'Standard',
-  'premium-matte': 'Premium (mat / satiné)',
-  'pro-uncoated-paper': 'Mohawk Superfine (coquille d’œuf)',
+  'premium-matte': 'Premium mat',
+  'premium-satin': 'Premium satiné',
+  'pro-uncoated-paper': 'Mohawk Superfine finition en coquille d’œuf',
   'pro-medium-gloss-paper': 'Mohawk proPhoto perle',
 }
 
@@ -43,10 +47,14 @@ export const PAGE_COUNT_STEP = 2
 // K values reverse-engineered from blurb.fr's real calculator (many page
 // counts sampled per paper, fit exactly - see scripts/blurb_print_spec.py
 // for the full methodology note). Confirmed identical for both
-// magazine_premium and standard_portrait.
+// magazine_premium and standard_portrait. "premium-satin" is not
+// independently verified - the public calculator only exposes one combined
+// "Premium (mat ou satiné)" option, so it's assumed to share premium-matte's
+// K until proven otherwise.
 const SOFTCOVER_SPINE_DIVISOR_K: Record<BlurbPaperType, number> = {
   standard: 450,
   'premium-matte': 336,
+  'premium-satin': 336,
   'pro-uncoated-paper': 288,
   'pro-medium-gloss-paper': 288,
 }
@@ -54,7 +62,7 @@ const SOFTCOVER_SPINE_DIVISOR_K: Record<BlurbPaperType, number> = {
 // Hardcover ("lithowrap"/"Couverture rigide imprimée" in Blurb's UI) spine
 // table - NOT yet re-verified against the real calculator the way softcover
 // was (2026-07-31); carried over unchanged from the old generic RPI docs
-// table and reused for all 4 real paper names as a placeholder.
+// table and reused for all 5 real paper names as a placeholder.
 const HARDCOVER_SPINE_TABLE_PT_UNVERIFIED: Array<[number, number, number]> = [
   [20, 60, 19.152], [62, 130, 31.896], [132, 200, 44.64], [202, 270, 57.384],
   [272, 340, 70.128], [342, 410, 82.872], [412, 480, 95.76], [482, 550, 108.36],
@@ -62,6 +70,7 @@ const HARDCOVER_SPINE_TABLE_PT_UNVERIFIED: Array<[number, number, number]> = [
 const HARDCOVER_SPINE_TABLE_PT: Record<BlurbPaperType, Array<[number, number, number]>> = {
   standard: HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
   'premium-matte': HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
+  'premium-satin': HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
   'pro-uncoated-paper': HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
   'pro-medium-gloss-paper': HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
 }

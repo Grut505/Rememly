@@ -65,9 +65,14 @@ PAGE_COUNT_STEP = 2
 # wide for every odd-numbered tier, which is exactly why previously
 # generated covers failed Blurb's real dimension check even though they
 # looked "close enough".
+# "premium-satin" is not independently verified - the public calculator
+# only exposes one combined "Premium (mat ou satiné)" option (Blurb's real
+# upload tool splits it into "Premium mat"/"Premium satiné"), so it's
+# assumed to share premium-matte's K until proven otherwise.
 SOFTCOVER_SPINE_DIVISOR_K = {
     "standard": 450,
     "premium-matte": 336,
+    "premium-satin": 336,
     "pro-uncoated-paper": 288,
     "pro-medium-gloss-paper": 288,
 }
@@ -89,6 +94,7 @@ _HARDCOVER_SPINE_TABLE_PT_UNVERIFIED = [
 HARDCOVER_SPINE_TABLE_PT = {
     "standard": _HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
     "premium-matte": _HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
+    "premium-satin": _HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
     "pro-uncoated-paper": _HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
     "pro-medium-gloss-paper": _HARDCOVER_SPINE_TABLE_PT_UNVERIFIED,
 }

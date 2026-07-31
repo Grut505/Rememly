@@ -334,6 +334,20 @@ def _seasonal_target_count() -> int:
     return min(nonzero) if nonzero else 0
 
 
+def _seasonal_icon_size_cm() -> float:
+    """Icon size used for every seasonal border - not cached (unlike
+    _seasonal_target_count) since it depends on the mutable page-dimension
+    globals, which do change (once) per job between Blurb and normal mode."""
+    target_count = _seasonal_target_count()
+    if not target_count:
+        return 0.0
+    page_width = PAGE_CONTENT_WIDTH_CM
+    page_height = PAGE_CONTENT_HEIGHT_CM
+    perimeter = 2 * (page_width + page_height - 4)
+    ideal_size = min(2.2, perimeter / target_count * 0.8)
+    return max(1.4, ideal_size)
+
+
 def generate_seasonal_fruits(month_index: int) -> str:
     images = load_seasonal_images(month_index)
     if not images:
@@ -349,25 +363,24 @@ def generate_seasonal_fruits(month_index: int) -> str:
 
     page_width = PAGE_CONTENT_WIDTH_CM
     page_height = PAGE_CONTENT_HEIGHT_CM
-    perimeter = 2 * (page_width + page_height - 4)
-    ideal_size = min(2.2, perimeter / len(images) * 0.8)
-    img_size = max(1.4, ideal_size)
+    img_size = _seasonal_icon_size_cm()
 
-    # The page number used to sit bottom-right, so the bottom edge reserved
-    # space there - now that it's centered at the bottom (see build_page_css),
-    # that reservation just left a dead bottom-right gap with no icons at
-    # all. Icons may still render behind the (centered, z-index:10) page
-    # number, same as before on the right edge - it stays legible on top.
     top_length = page_width
     right_length = page_height - 5
     bottom_length = page_width
     left_length = page_height - 5
     total_length = top_length + right_length + bottom_length + left_length
 
+    # left_count mirrors right_count's exact formula (both edges are the
+    # same length) so the two sides always get the same number of icons -
+    # left_count previously absorbed top/right/bottom's combined rounding
+    # remainder instead, which could leave it visibly lighter or heavier
+    # than the right side. The remainder now goes to the bottom row
+    # instead, which has more icons to begin with and hides it better.
     top_count = round(len(images) * top_length / total_length)
     right_count = round(len(images) * right_length / total_length)
-    bottom_count = round(len(images) * bottom_length / total_length)
-    left_count = len(images) - top_count - right_count - bottom_count
+    left_count = round(len(images) * left_length / total_length)
+    bottom_count = max(0, len(images) - top_count - right_count - left_count)
 
     positions = []
 
@@ -973,7 +986,6 @@ def generate_month_divider(month_articles: list, month_year_label: str, month_in
       <p class="month-subtitle">{article_count} souvenir{plural}</p>
     </div>
     <div class="month-mosaic-centered">{mosaic_html}</div>
-    <div class="page-number">{current_page}</div>
   </div>'''
 
     return f'''
@@ -984,7 +996,6 @@ def generate_month_divider(month_articles: list, month_year_label: str, month_in
       <h2 class="month-title">{esc(month_year_label)}</h2>
       <p class="month-subtitle">{article_count} souvenir{plural}</p>
     </div>
-    <div class="page-number">{current_page}</div>
   </div>'''
 
 
@@ -1165,6 +1176,13 @@ def build_page_css() -> str:
     margin_right_cm = PAGE_MARGIN_CM + PAGE_BLEED_CM
     margin_top_cm = PAGE_MARGIN_CM + PAGE_BLEED_CM
     margin_bottom_cm = PAGE_MARGIN_CM + PAGE_BLEED_CM
+    # Bottom edge of the top seasonal-fruit row (0.1cm inset + the shared
+    # icon size, see _seasonal_icon_size_cm) - the centered month-title
+    # band starts here rather than at the page's own top edge, so the gap
+    # from the fruit row to the title matches the gap from the subtitle to
+    # the mosaic exactly, instead of the title's centering silently eating
+    # into space the fruit row already occupies.
+    top_fruit_band_bottom_cm = 0.1 + _seasonal_icon_size_cm()
     return _font_face_css() + f"""
 @page {{ size: {page_width_cm}cm {page_height_cm}cm; margin-top: {margin_top_cm}cm; margin-right: {margin_right_cm}cm; margin-bottom: {margin_bottom_cm}cm; margin-left: {margin_left_cm}cm; }}
 * {{ box-sizing: border-box; }}
@@ -1220,7 +1238,6 @@ body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
 .articles-page .page-number {{ margin-top: auto; align-self: center; }}
 
 .month-divider {{ page-break-before: always; position: relative; height: {PAGE_CONTENT_HEIGHT_CM}cm; overflow: hidden; }}
-.month-divider .page-number {{ position: absolute; bottom: 0; left: 0; right: 0; z-index: 10; }}
 .month-mosaic-bg {{ position: absolute; top: 0; left: 0; right: 0; bottom: 0; opacity: 0.15; }}
 .month-mosaic-cell {{ position: absolute; overflow: hidden; }}
 .month-mosaic-cell img {{ width: 100%; height: 100%; object-fit: cover; }}
@@ -1234,11 +1251,12 @@ body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
    it matches the gap below it exactly, on any page height (blurb formats
    are shorter than the default) - previously a fixed "top: 32%" only
    produced equal margins for one specific page height. The title/subtitle
-   band above shares the same height formula, so it exactly fills the white
-   space between the top vegetable border and the mosaic, and centers its
-   own content (flex) within that space instead of sitting at a fixed 8%
-   from the top. */
-.month-divider-centered .month-title-container-centered {{ position: absolute; top: 0; left: 0; right: 0; height: calc(50% - 6cm); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; z-index: 5; }}
+   band starts right below the top fruit row (not the bare page edge) and
+   ends at the mosaic's top, then centers its own content (flex) within
+   that space - so the gap from the fruit row to the title top equals the
+   gap from the subtitle bottom to the mosaic top, instead of the band
+   including the fruit row's own height as if it were free whitespace. */
+.month-divider-centered .month-title-container-centered {{ position: absolute; top: {top_fruit_band_bottom_cm}cm; left: 0; right: 0; height: calc(50% - 6cm - {top_fruit_band_bottom_cm}cm); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; z-index: 5; }}
 
 .season-decorations {{ position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 3; }}
 .season-item {{ position: absolute; }}

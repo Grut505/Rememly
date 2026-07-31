@@ -1098,6 +1098,12 @@ def _font_face_css() -> str:
 PAGE_MARGIN_CM = 1.0
 PAGE_CONTENT_WIDTH_CM = 19.0
 PAGE_CONTENT_HEIGHT_CM = 27.7
+# Blurb mode's interior pages are noticeably shorter than the default (e.g.
+# magazine_premium's ~25.9cm content height vs. 27.7cm) - a couple of layout
+# choices only make sense to change there (see build_page_css()'s use of
+# this flag), not for the default format which was never reported to have
+# the same issue.
+BLURB_MODE_ACTIVE = False
 # Bleed added to the physical page on 3 sides (top, bottom, right) when
 # Blurb mode is on - RPI/Blurb's real spec for interior "guts" pages: bleed
 # on every edge except the inner/binding one. We always treat the same
@@ -1111,11 +1117,13 @@ PAGE_CONTENT_HEIGHT_CM = 27.7
 PAGE_BLEED_CM = 0.0
 
 
-def set_page_dimensions(content_width_cm: float, content_height_cm: float, bleed_cm: float = 0.0) -> None:
-    global PAGE_CONTENT_WIDTH_CM, PAGE_CONTENT_HEIGHT_CM, PAGE_BLEED_CM
+def set_page_dimensions(content_width_cm: float, content_height_cm: float, bleed_cm: float = 0.0,
+                        blurb_mode: bool = False) -> None:
+    global PAGE_CONTENT_WIDTH_CM, PAGE_CONTENT_HEIGHT_CM, PAGE_BLEED_CM, BLURB_MODE_ACTIVE
     PAGE_CONTENT_WIDTH_CM = content_width_cm
     PAGE_CONTENT_HEIGHT_CM = content_height_cm
     PAGE_BLEED_CM = bleed_cm
+    BLURB_MODE_ACTIVE = blurb_mode
 
 
 def build_page_css() -> str:
@@ -1149,16 +1157,21 @@ body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
 .article-content {{ flex: 1; display: flex; overflow: hidden; }}
 
 .article-content.landscape {{ flex-direction: column; align-items: stretch; }}
-.article-content.landscape .article-image {{ width: 100%; display: flex; justify-content: center; }}
-.article-content.landscape .article-image img {{ width: 100%; max-height: 9.5cm; object-fit: contain; object-position: center top; }}
-.article-content.landscape .article-bottom {{ display: flex; flex-direction: row; align-items: center; gap: 0.5cm; padding: 0.3cm; }}
+/* The image is the flexible side (flex plus min-height:0 lets it shrink
+   below its own natural size) and the caption is flex-shrink:0, so a long
+   caption always gets its full natural height first and the image takes
+   whatever space is left (up to its 9.5cm cap) - instead of the fixed-size
+   image pushing the caption past the box, clipped by overflow:hidden. */
+.article-content.landscape .article-image {{ width: 100%; display: flex; justify-content: center; flex: 1 1 auto; min-height: 0; }}
+.article-content.landscape .article-image img {{ width: 100%; height: 100%; max-height: 9.5cm; object-fit: contain; object-position: center top; }}
+.article-content.landscape .article-bottom {{ display: flex; flex-direction: row; align-items: center; gap: 0.5cm; padding: 0.3cm; flex-shrink: 0; }}
 .article-content.landscape .article-date {{ flex-shrink: 0; }}
 .article-content.landscape .article-text {{ flex: 1; }}
 
 .article-content.portrait {{ flex-direction: row; align-items: stretch; }}
 .article-content.portrait .article-image {{ flex-shrink: 0; display: flex; align-items: stretch; margin-right: 0.4cm; }}
 .article-content.portrait .article-image img {{ height: 100%; max-width: 10cm; object-fit: contain; object-position: left top; }}
-.article-content.portrait .article-right {{ flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.3cm; padding: 0.3cm 0.3cm 0.3cm 0; }}
+.article-content.portrait .article-right {{ flex: 1; display: flex; flex-direction: column; justify-content: {'center' if BLURB_MODE_ACTIVE else 'flex-start'}; gap: 0.3cm; padding: 0.3cm 0.3cm 0.3cm 0; }}
 
 .article-date {{ font-size: 11pt; color: #3366cc; font-weight: 500; }}
 .article-text {{ font-size: 13pt; line-height: 1.4; }}
@@ -1353,7 +1366,7 @@ def main():
         # match our content file to any real product and silently guessed
         # the wrong one.
         guts_bleed_cm = blurb_print_spec.inch_to_cm(blurb_print_spec.BLEED_IN[blurb_cover_type])
-        set_page_dimensions(content_w_cm, content_h_cm, bleed_cm=guts_bleed_cm)
+        set_page_dimensions(content_w_cm, content_h_cm, bleed_cm=guts_bleed_cm, blurb_mode=True)
 
     try:
         by_month = defaultdict(list)

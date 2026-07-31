@@ -587,16 +587,17 @@ def generate_cover_masked_text_html(options: dict, config: dict) -> str:
         family_mask_svg = f'''
       <svg width="{family_mask_width_cm}cm" height="{family_mask_height_cm}cm" viewBox="0 {family_mask_view_box_y} {family_mask_width_px} {family_mask_view_box_height_px}" xmlns="http://www.w3.org/2000/svg" style="display:block;">
         <defs>
-          <clipPath id="{family_clip_id}">
+          <mask id="{family_clip_id}" maskUnits="userSpaceOnUse" x="0" y="{family_mask_view_box_y}" width="{family_mask_width_px}" height="{family_mask_view_box_height_px}">
+            <rect x="0" y="{family_mask_view_box_y}" width="{family_mask_width_px}" height="{family_mask_view_box_height_px}" fill="black" />
             <text x="0" y="{family_mask_baseline_px}" text-anchor="start" dominant-baseline="alphabetic"
                   font-family="{family_font_family}" font-weight="{family_font_weight}" font-size="{family_font_px}"
                   letter-spacing="{family_letter_spacing}em"
-                  transform="{family_text_scale_transform}">
+                  transform="{family_text_scale_transform}" fill="white">
               {render_svg_multiline(family_mask_text, 0, family_font_px)}
             </text>
-          </clipPath>
+          </mask>
         </defs>
-        <g clip-path="url(#{family_clip_id})">
+        <g mask="url(#{family_clip_id})">
           <image x="0" y="0" width="{family_mask_height_px}" height="{family_mask_width_px}"
                  href="{family_mask_image_data_uri}"
                  preserveAspectRatio="xMidYMid slice"

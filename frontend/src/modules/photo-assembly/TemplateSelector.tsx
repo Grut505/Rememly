@@ -1,9 +1,36 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LayoutTemplate, loadAllLayouts, TOTAL_LAYOUT_COUNT } from './layoutRegistry'
+import { LayoutTemplate, loadLayoutsFor, AVAILABLE_COUNTS, availableRatios, aspectRatioForLabel } from './layoutRegistry'
 
 interface TemplateSelectorProps {
   selectedTemplateId: string
   onSelect: (template: LayoutTemplate) => void
+}
+
+type Orientation = 'landscape' | 'portrait' | 'square'
+
+// Maps the file-name-style ratio keys used by layoutIndex (e.g. "16x9") to
+// their human-readable display label (e.g. "16:9"), in the order they
+// should appear in the Ratio filter.
+const RATIO_DISPLAY: Array<{ key: string; label: string }> = [
+  { key: '1x1', label: '1:1' },
+  { key: '1x1.44', label: '1:1.44' },
+  { key: '1x0.54', label: '1:0.54' },
+  { key: '4x3', label: '4:3' },
+  { key: '3x4', label: '3:4' },
+  { key: '4x5', label: '4:5' },
+  { key: '16x9', label: '16:9' },
+  { key: '9x16', label: '9:16' },
+  { key: '3x2', label: '3:2' },
+  { key: '2x3', label: '2:3' },
+]
+
+// 1:1.44 and 1:0.54 are the two aspect ratios Famileo accepts for postcards
+const FAMILEO_RATIO_KEYS = ['1x1.44', '1x0.54']
+
+const getOrientation = (ratio: number): Orientation => {
+  if (ratio > 1.05) return 'landscape'
+  if (ratio < 0.95) return 'portrait'
+  return 'square'
 }
 
 export function TemplateSelector({
@@ -11,100 +38,47 @@ export function TemplateSelector({
   onSelect,
 }: TemplateSelectorProps) {
   const [layouts, setLayouts] = useState<LayoutTemplate[] | null>(null)
-  const [loadProgress, setLoadProgress] = useState({ loaded: 0, total: TOTAL_LAYOUT_COUNT })
-  const [activeCount, setActiveCount] = useState<number | 'all'>('all')
-  const [activeRatio, setActiveRatio] = useState<string | 'all'>('all')
-  const [activeOrientation, setActiveOrientation] = useState<'landscape' | 'portrait' | 'square' | 'all'>('all')
+  const [loading, setLoading] = useState(false)
+  const [activeCount, setActiveCount] = useState<number | null>(null)
+  const [activeRatio, setActiveRatio] = useState<string | null>(null)
+  const [activeOrientation, setActiveOrientation] = useState<Orientation | null>(null)
   const [filtersExpanded, setFiltersExpanded] = useState(true)
 
+  const allRatioKeys = useMemo(() => availableRatios(), [])
+
+  const ratioKeysForOrientation = useMemo(() => {
+    if (!activeOrientation) return []
+    return RATIO_DISPLAY
+      .filter((entry) => allRatioKeys.includes(entry.key))
+      .filter((entry) => getOrientation(aspectRatioForLabel(entry.key)) === activeOrientation)
+  }, [allRatioKeys, activeOrientation])
+
+  const handleOrientationChange = (orientation: Orientation) => {
+    setActiveOrientation((prev) => (prev === orientation ? null : orientation))
+    // Drop a ratio selection that no longer matches the newly chosen
+    // orientation, rather than silently keeping a mismatched filter.
+    if (activeRatio && getOrientation(aspectRatioForLabel(activeRatio)) !== orientation) {
+      setActiveRatio(null)
+    }
+  }
+
   useEffect(() => {
+    if (!activeCount || !activeRatio) {
+      setLayouts(null)
+      return
+    }
     let cancelled = false
-    loadAllLayouts((loaded, total) => {
-      if (!cancelled) setLoadProgress({ loaded, total })
-    }).then((loaded) => {
-      if (!cancelled) setLayouts(loaded)
+    setLoading(true)
+    loadLayoutsFor(activeCount, activeRatio).then((loaded) => {
+      if (!cancelled) {
+        setLayouts(loaded)
+        setLoading(false)
+      }
     })
     return () => {
       cancelled = true
     }
-  }, [])
-
-  const ratioPresets = [
-    { label: '1:1', value: 1 },
-    { label: '1:1.44', value: 1 / 1.44 },
-    { label: '1:0.54', value: 1 / 0.54 },
-    { label: '4:3', value: 4 / 3 },
-    { label: '3:4', value: 3 / 4 },
-    { label: '16:9', value: 16 / 9 },
-    { label: '9:16', value: 9 / 16 },
-    { label: '3:2', value: 3 / 2 },
-    { label: '2:3', value: 2 / 3 },
-  ]
-
-  const getRatioLabel = (ratio: number) => {
-    const preset = ratioPresets.find((item) => Math.abs(item.value - ratio) < 0.01)
-    return preset ? preset.label : ratio.toFixed(2)
-  }
-
-  // 1:1.44 and 1:0.54 are the two aspect ratios Famileo accepts for postcards
-  const FAMILEO_RATIO_LABELS = ['1:1.44', '1:0.54']
-  const isFamileoRatio = (ratio: number) => FAMILEO_RATIO_LABELS.includes(getRatioLabel(ratio))
-
-  const getOrientation = (ratio: number): 'landscape' | 'portrait' | 'square' => {
-    if (ratio > 1.05) return 'landscape'
-    if (ratio < 0.95) return 'portrait'
-    return 'square'
-  }
-
-  const counts = useMemo(
-    () => Array.from(new Set((layouts || []).map((layout) => layout.zones.length))).sort((a, b) => a - b),
-    [layouts]
-  )
-
-  const ratios = useMemo(() => {
-    const all = layouts || []
-    const relevant = activeOrientation === 'all'
-      ? all
-      : all.filter((layout) => getOrientation(layout.aspectRatio) === activeOrientation)
-    const labels = Array.from(new Set(relevant.map((layout) => getRatioLabel(layout.aspectRatio))))
-    const presetOrder = ratioPresets.map((preset) => preset.label)
-    return labels.sort((a, b) => {
-      const aIndex = presetOrder.indexOf(a)
-      const bIndex = presetOrder.indexOf(b)
-      if (aIndex === -1 && bIndex === -1) return a.localeCompare(b)
-      if (aIndex === -1) return 1
-      if (bIndex === -1) return -1
-      return aIndex - bIndex
-    })
-  }, [layouts, activeOrientation])
-
-  const handleOrientationChange = (orientation: typeof activeOrientation) => {
-    setActiveOrientation(orientation)
-    // Drop a specific ratio selection that no longer matches the chosen
-    // orientation, rather than silently showing an empty grid.
-    if (activeRatio !== 'all' && orientation !== 'all') {
-      const preset = ratioPresets.find((p) => p.label === activeRatio)
-      if (!preset || getOrientation(preset.value) !== orientation) {
-        setActiveRatio('all')
-      }
-    }
-  }
-
-  const visibleLayouts = useMemo(() => {
-    return (layouts || []).filter((layout) => {
-      const countMatch = activeCount === 'all' || layout.zones.length === activeCount
-      const ratioMatch = activeRatio === 'all' || getRatioLabel(layout.aspectRatio) === activeRatio
-      const orientationMatch = activeOrientation === 'all' || getOrientation(layout.aspectRatio) === activeOrientation
-      return countMatch && ratioMatch && orientationMatch
-    })
-  }, [activeCount, activeRatio, activeOrientation, layouts])
-
-  const orientationOptions: Array<{ value: typeof activeOrientation; label: string }> = [
-    { value: 'all', label: 'Toutes' },
-    { value: 'landscape', label: 'Paysage' },
-    { value: 'portrait', label: 'Portrait' },
-    { value: 'square', label: 'Carré' },
-  ]
+  }, [activeCount, activeRatio])
 
   return (
     <div className="p-4 flex flex-col gap-2 h-[70vh] sm:h-[70vh]">
@@ -129,7 +103,11 @@ export function TemplateSelector({
               Orientation
             </h3>
             <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto flex-nowrap pb-0.5">
-              {orientationOptions.map((option) => (
+              {([
+                { value: 'landscape' as const, label: 'Paysage' },
+                { value: 'portrait' as const, label: 'Portrait' },
+                { value: 'square' as const, label: 'Carré' },
+              ]).map((option) => (
                 <button
                   key={option.value}
                   onClick={() => handleOrientationChange(option.value)}
@@ -150,32 +128,25 @@ export function TemplateSelector({
               Ratio
             </h3>
             <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto flex-nowrap pb-0.5">
-              <button
-                onClick={() => setActiveRatio('all')}
-                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
-                  activeRatio === 'all'
-                    ? 'bg-primary-600 text-white border-primary-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-                }`}
-              >
-                Tous
-              </button>
-              {ratios.map((ratio) => {
-                const famileo = FAMILEO_RATIO_LABELS.includes(ratio)
+              {!activeOrientation && (
+                <span className="text-xs text-gray-400 italic py-1">Choisissez d'abord une orientation</span>
+              )}
+              {ratioKeysForOrientation.map(({ key, label }) => {
+                const famileo = FAMILEO_RATIO_KEYS.includes(key)
                 return (
                   <button
-                    key={ratio}
-                    onClick={() => setActiveRatio(ratio)}
+                    key={key}
+                    onClick={() => setActiveRatio((prev) => (prev === key ? null : key))}
                     title={famileo ? 'Compatible Famileo postcard format' : undefined}
                     className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors flex items-center gap-1 ${
-                      activeRatio === ratio
+                      activeRatio === key
                         ? 'bg-primary-600 text-white border-primary-600'
                         : famileo
                         ? 'bg-purple-50 text-purple-700 border-purple-300 hover:border-purple-400'
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    {ratio}
+                    {label}
                     {famileo && <span aria-hidden="true">✉️</span>}
                   </button>
                 )
@@ -188,20 +159,10 @@ export function TemplateSelector({
               Photos
             </h3>
             <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto flex-nowrap pb-0.5">
-              <button
-                onClick={() => setActiveCount('all')}
-                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
-                  activeCount === 'all'
-                    ? 'bg-primary-600 text-white border-primary-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-                }`}
-              >
-                Toutes
-              </button>
-              {counts.map((count) => (
+              {AVAILABLE_COUNTS.map((count) => (
                 <button
                   key={count}
-                  onClick={() => setActiveCount(count)}
+                  onClick={() => setActiveCount((prev) => (prev === count ? null : count))}
                   className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
                     activeCount === count
                       ? 'bg-primary-600 text-white border-primary-600'
@@ -216,66 +177,72 @@ export function TemplateSelector({
         </div>
       )}
 
-      {layouts === null && (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-sm text-gray-500">
-          <div>Loading layouts... {loadProgress.loaded} / {loadProgress.total}</div>
-          <div className="w-40 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary-600 transition-all"
-              style={{ width: `${loadProgress.total ? (loadProgress.loaded / loadProgress.total) * 100 : 0}%` }}
-            />
-          </div>
+      {(!activeOrientation || !activeRatio || !activeCount) && (
+        <div className="flex-1 flex items-center justify-center text-sm text-gray-500 text-center px-4">
+          {!activeOrientation
+            ? 'Sélectionnez une orientation, un ratio et un nombre de photos pour afficher les mises en page.'
+            : !activeRatio
+            ? 'Sélectionnez un ratio.'
+            : 'Sélectionnez un nombre de photos.'}
         </div>
       )}
 
-      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 overflow-y-auto pr-1 flex-1 content-start">
-        {visibleLayouts.map((template) => {
-          const famileo = isFamileoRatio(template.aspectRatio)
-          return (
-            <button
-              key={template.id}
-              onClick={() => onSelect(template)}
-              title={template.name}
-              className={`border-2 rounded-lg p-1 transition-colors touch-manipulation relative ${
-                template.id === selectedTemplateId
-                  ? 'border-primary-600 bg-primary-50'
-                  : famileo
-                  ? 'border-purple-300 bg-purple-50/40 hover:border-purple-400'
-                  : 'border-gray-300 hover:border-gray-400'
-              }`}
-            >
-              {famileo && (
-                <span
-                  className="absolute top-0.5 right-0.5 z-10 text-[9px]"
-                  title="Compatible Famileo postcard format"
-                  aria-hidden="true"
-                >
-                  ✉️
-                </span>
-              )}
-              <div className="w-full bg-gray-100 rounded overflow-hidden border border-gray-200">
-                <div
-                  className="relative w-full"
-                  style={{ aspectRatio: `${template.aspectRatio}` }}
-                >
-                  {template.zones.map((zone, index) => (
-                    <div
-                      key={`${template.id}-${index}`}
-                      className="absolute border border-gray-400 bg-white/70"
-                      style={{
-                        left: `${zone.x}%`,
-                        top: `${zone.y}%`,
-                        width: `${zone.width}%`,
-                        height: `${zone.height}%`,
-                      }}
-                    />
-                  ))}
+      {activeOrientation && activeRatio && activeCount && loading && (
+        <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
+          Chargement des mises en page...
+        </div>
+      )}
+
+      {activeOrientation && activeRatio && activeCount && !loading && layouts && (
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 overflow-y-auto pr-1 flex-1 content-start">
+          {layouts.map((template) => {
+            const famileo = FAMILEO_RATIO_KEYS.includes(activeRatio)
+            return (
+              <button
+                key={template.id}
+                onClick={() => onSelect(template)}
+                title={template.name}
+                className={`border-2 rounded-lg p-1 transition-colors touch-manipulation relative ${
+                  template.id === selectedTemplateId
+                    ? 'border-primary-600 bg-primary-50'
+                    : famileo
+                    ? 'border-purple-300 bg-purple-50/40 hover:border-purple-400'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+              >
+                {famileo && (
+                  <span
+                    className="absolute top-0.5 right-0.5 z-10 text-[9px]"
+                    title="Compatible Famileo postcard format"
+                    aria-hidden="true"
+                  >
+                    ✉️
+                  </span>
+                )}
+                <div className="w-full bg-gray-100 rounded overflow-hidden border border-gray-200">
+                  <div
+                    className="relative w-full"
+                    style={{ aspectRatio: `${template.aspectRatio}` }}
+                  >
+                    {template.zones.map((zone, index) => (
+                      <div
+                        key={`${template.id}-${index}`}
+                        className="absolute border border-gray-400 bg-white/70"
+                        style={{
+                          left: `${zone.x}%`,
+                          top: `${zone.y}%`,
+                          width: `${zone.width}%`,
+                          height: `${zone.height}%`,
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </button>
-          )
-        })}
-      </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

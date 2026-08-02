@@ -75,6 +75,16 @@ export function ZoneController({
     onUpdate()
   }
 
+  const handleBringForward = () => {
+    stateManager.bringZoneForward(zoneIndex)
+    onUpdate()
+  }
+
+  const handleSendBackward = () => {
+    stateManager.sendZoneBackward(zoneIndex)
+    onUpdate()
+  }
+
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 shadow-lg z-20 app-safe-x app-safe-bottom">
       <div className="max-w-mobile mx-auto">
@@ -180,6 +190,30 @@ export function ZoneController({
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"></path>
               <path d="M21 3v5h-5"></path>
+            </svg>
+          </button>
+          <button
+            onClick={handleBringForward}
+            disabled={!stateManager.canBringZoneForward(zoneIndex)}
+            className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Bring forward"
+            aria-label="Bring forward"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <rect x="9" y="9" width="11" height="11" rx="1"></rect>
+              <path d="M5 15V6a1 1 0 0 1 1-1h9"></path>
+            </svg>
+          </button>
+          <button
+            onClick={handleSendBackward}
+            disabled={!stateManager.canSendZoneBackward(zoneIndex)}
+            className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Send backward"
+            aria-label="Send backward"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <rect x="4" y="4" width="11" height="11" rx="1"></rect>
+              <path d="M9.5 15h9a1 1 0 0 0 1-1V6"></path>
             </svg>
           </button>
           <button

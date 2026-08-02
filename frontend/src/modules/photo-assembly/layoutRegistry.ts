@@ -1,4 +1,5 @@
 import defaultLayoutData from './layouts/grid-1x1-1x1.json'
+import { LAYOUT_INDEX } from './layoutIndex'
 
 export interface LayoutZone {
   x: number
@@ -28,50 +29,53 @@ function normalize(data: Partial<LayoutTemplate>): LayoutTemplate {
 
 // A single, tiny layout imported eagerly (bundled directly, no extra
 // request) so the Assembly screen always has something to render
-// synchronously on mount - every other layout (400+ files, growing) loads
-// lazily via loadAllLayouts() only once the layout picker is actually
-// opened, instead of parsing the whole registry just to view/edit an
-// already-assembled photo.
+// synchronously on mount.
 export const DEFAULT_LAYOUT: LayoutTemplate = normalize(defaultLayoutData as Partial<LayoutTemplate>)
 
 // Non-eager: each matched file becomes its own dynamic import instead of
-// being inlined into whichever chunk imports this module.
+// being inlined into whichever chunk imports this module. With 4000+
+// layouts, even lazily loading ALL of them (as this used to do) means
+// thousands of dynamic imports every time the picker opens - LAYOUT_INDEX
+// (ratio/count only, no geometry, cheap enough to bundle eagerly) lets
+// callers filter down to the handful of files that actually match a given
+// orientation/ratio/photo-count combination BEFORE importing anything.
 const lazyModules = import.meta.glob('./layouts/*.json') as Record<string, () => Promise<{ default: Partial<LayoutTemplate> }>>
 
-export const TOTAL_LAYOUT_COUNT = Object.keys(lazyModules).length
+// Every distinct photo count that has at least one layout - for populating
+// the "Photos" filter.
+export const AVAILABLE_COUNTS: number[] = Array.from(new Set(LAYOUT_INDEX.map((e) => e.count))).sort((a, b) => a - b)
 
-let cachedLayouts: LayoutTemplate[] | null = null
-let inFlight: Promise<LayoutTemplate[]> | null = null
+// Every distinct ratio label (optionally narrowed to a given orientation
+// bucket) - for populating the "Ratio" filter.
+export function availableRatios(): string[] {
+  return Array.from(new Set(LAYOUT_INDEX.map((e) => e.ratio)))
+}
 
-export async function loadAllLayouts(onProgress?: (loaded: number, total: number) => void): Promise<LayoutTemplate[]> {
-  if (cachedLayouts) return cachedLayouts
-  if (inFlight) return inFlight
+export function aspectRatioForLabel(ratio: string): number {
+  const entry = LAYOUT_INDEX.find((e) => e.ratio === ratio)
+  return entry ? entry.aspectRatio : 1
+}
 
-  const entries = Object.values(lazyModules)
-  let loaded = 0
-  inFlight = Promise.all(
-    entries.map((load) =>
-      load().finally(() => {
-        loaded += 1
-        onProgress?.(loaded, entries.length)
-      })
-    )
+const cache = new Map<string, LayoutTemplate>()
+
+/** Loads only the layouts matching an exact photo count + ratio label -
+ * orientation/"all" filtering happens one level up, on the ratio label
+ * itself, since every ratio label maps to exactly one orientation. */
+export async function loadLayoutsFor(count: number, ratio: string): Promise<LayoutTemplate[]> {
+  const matches = LAYOUT_INDEX.filter((e) => e.count === count && e.ratio === ratio)
+  const results = await Promise.all(
+    matches.map(async (entry) => {
+      const cached = cache.get(entry.path)
+      if (cached) return cached
+      const loader = lazyModules[entry.path]
+      if (!loader) return null
+      const mod = await loader()
+      const layout = normalize(mod.default || {})
+      cache.set(entry.path, layout)
+      return layout
+    })
   )
-    .then((modules) => {
-      const layouts = modules
-        .map((mod) => normalize(mod.default || {}))
-        .filter((layout) => layout.id && layout.zones.length > 0)
-        .sort((a, b) => {
-          const countDiff = a.zones.length - b.zones.length
-          if (countDiff !== 0) return countDiff
-          return a.name.localeCompare(b.name)
-        })
-      cachedLayouts = layouts
-      return layouts
-    })
-    .finally(() => {
-      inFlight = null
-    })
-
-  return inFlight
+  return results
+    .filter((layout): layout is LayoutTemplate => !!layout && !!layout.id && layout.zones.length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name))
 }

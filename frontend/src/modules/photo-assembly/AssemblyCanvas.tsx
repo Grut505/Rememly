@@ -218,7 +218,7 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
     const state = stateManager.getState()
     const effectiveRects = getAllEffectiveRects(template.zones, state.zoneStates)
 
-    template.zones.forEach((_zone, index) => {
+    stateManager.getDrawOrder().forEach((index) => {
       const zoneState = state.zoneStates[index]
       const img = images.get(zoneState.photoIndex)
       const rect = effectiveRects[index]
@@ -364,18 +364,26 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
     const width = canvas.width
     const height = canvas.height
     const list = rects || getEffectiveRects()
-    return list.findIndex((rect) => {
+    // Test topmost-drawn zone first, so a tap on an area where two zones
+    // overlap picks whichever one is actually visible there.
+    const topToBottom = [...stateManager.getDrawOrder()].reverse()
+    for (const index of topToBottom) {
+      const rect = list[index]
+      if (!rect) continue
       const zoneX = (rect.x / 100) * width
       const zoneY = (rect.y / 100) * height
       const zoneWidth = (rect.width / 100) * width
       const zoneHeight = (rect.height / 100) * height
-      return (
+      if (
         point.x >= zoneX &&
         point.x <= zoneX + zoneWidth &&
         point.y >= zoneY &&
         point.y <= zoneY + zoneHeight
-      )
-    })
+      ) {
+        return index
+      }
+    }
+    return -1
   }
 
   // editScale converts a desired on-screen pixel size to canvas units - see
@@ -694,7 +702,7 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
       // Sequential and awaited (not Promise.all) so at most one full-
       // resolution bitmap is decoded at a time, regardless of zone count -
       // this is the same crash this function exists to avoid re-introducing.
-      for (let index = 0; index < template.zones.length; index++) {
+      for (const index of stateManager.getDrawOrder()) {
         const rect = effectiveRects[index]
         const zoneState = state.zoneStates[index]
         const file = zoneState.photoIndex >= 0 ? state.photos[zoneState.photoIndex] : undefined

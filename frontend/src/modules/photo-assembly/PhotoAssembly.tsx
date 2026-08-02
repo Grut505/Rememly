@@ -41,7 +41,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   const [stateVersion, setStateVersion] = useState(0)
   const [isLayoutModalOpen, setIsLayoutModalOpen] = useState(false)
   const [separatorWidth, setSeparatorWidth] = useState(4)
-  const [showOuterBorder, setShowOuterBorder] = useState(true)
+  const [showOuterBorder, setShowOuterBorder] = useState(false)
   const [pendingZoneIndex, setPendingZoneIndex] = useState<number | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showAddPhotoMenu, setShowAddPhotoMenu] = useState(false)

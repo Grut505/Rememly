@@ -31,6 +31,10 @@ export interface ZoneState {
   // in %, same convention as LayoutZone) - set once the user drags an edge
   // handle to resize a block. Undefined means "use the template's zone as-is".
   rect?: { x: number; y: number; width: number; height: number }
+  // Draw/stacking order among zones (lower = further back). Undefined means
+  // "use this zone's array index" - only set once the user nudges a zone
+  // forward/backward, matters when zones visually overlap.
+  zIndex?: number
 }
 
 export interface PdfJob {

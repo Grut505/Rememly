@@ -66,18 +66,60 @@ export class StateManager {
   }
 
   // Swaps the PHOTO placement (photoIndex/zoom/x/y/rotation) between two
-  // zones, but not each zone's own `rect` - that's the block's shape at that
-  // position, which stays put regardless of which photo ends up in it.
+  // zones, but not each zone's own `rect` or `zIndex` - those belong to the
+  // block's shape/stacking position, which stay put regardless of which
+  // photo ends up there.
   swapZoneStates(a: number, b: number): void {
     if (a === b) return
     if (a < 0 || b < 0) return
     if (a >= this.state.zoneStates.length || b >= this.state.zoneStates.length) return
     const zoneA = this.state.zoneStates[a]
     const zoneB = this.state.zoneStates[b]
-    const { rect: rectA, ...placementA } = zoneA
-    const { rect: rectB, ...placementB } = zoneB
-    this.state.zoneStates[a] = { ...placementB, rect: rectA }
-    this.state.zoneStates[b] = { ...placementA, rect: rectB }
+    const { rect: rectA, zIndex: zIndexA, ...placementA } = zoneA
+    const { rect: rectB, zIndex: zIndexB, ...placementB } = zoneB
+    this.state.zoneStates[a] = { ...placementB, rect: rectA, zIndex: zIndexA }
+    this.state.zoneStates[b] = { ...placementA, rect: rectB, zIndex: zIndexB }
+  }
+
+  // Zones are drawn back-to-front in this order (lower zIndex = further
+  // back); zones without an explicit zIndex default to their own array
+  // index, i.e. the original template/draw order.
+  getDrawOrder(): number[] {
+    return this.state.zoneStates
+      .map((zone, index) => ({ index, z: zone.zIndex ?? index }))
+      .sort((a, b) => a.z - b.z || a.index - b.index)
+      .map((entry) => entry.index)
+  }
+
+  private normalizeZIndices(order: number[]): void {
+    order.forEach((zoneIndex, position) => {
+      this.state.zoneStates[zoneIndex].zIndex = position
+    })
+  }
+
+  canBringZoneForward(zoneIndex: number): boolean {
+    const order = this.getDrawOrder()
+    return order.indexOf(zoneIndex) < order.length - 1
+  }
+
+  canSendZoneBackward(zoneIndex: number): boolean {
+    return this.getDrawOrder().indexOf(zoneIndex) > 0
+  }
+
+  bringZoneForward(zoneIndex: number): void {
+    const order = this.getDrawOrder()
+    const pos = order.indexOf(zoneIndex)
+    if (pos === -1 || pos === order.length - 1) return
+    ;[order[pos], order[pos + 1]] = [order[pos + 1], order[pos]]
+    this.normalizeZIndices(order)
+  }
+
+  sendZoneBackward(zoneIndex: number): void {
+    const order = this.getDrawOrder()
+    const pos = order.indexOf(zoneIndex)
+    if (pos <= 0) return
+    ;[order[pos], order[pos - 1]] = [order[pos - 1], order[pos]]
+    this.normalizeZIndices(order)
   }
 
   removePhotoFromZone(zoneIndex: number): void {

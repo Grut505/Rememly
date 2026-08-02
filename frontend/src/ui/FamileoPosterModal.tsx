@@ -153,13 +153,19 @@ export function FamileoPosterModal({
   }
   const baseDateLocal = toLocalInputValue(baseDate)
 
+  // Famileo has nothing to show for a family with neither a photo nor any
+  // text - the photo is shared across all families (set once for the whole
+  // article), text is set per-family below.
+  const articleHasPhoto = Boolean(imageFileId || extractFileId(imageUrl || ''))
+  const hasContentFor = (familyText: string) => articleHasPhoto || Boolean(familyText && familyText.trim())
+
   const allOverride = familyOverrides.all
   const canPost = selectionMode === 'all'
-    ? Boolean(allOverride && allOverride.text.length <= 300 && families.length > 0)
+    ? Boolean(allOverride && allOverride.text.length <= 300 && families.length > 0 && hasContentFor(allOverride.text))
     : selectedFamilyIds.length > 0 &&
       selectedFamilyIds.every((id) => {
         const value = familyOverrides[id]?.text || ''
-        return value.length <= 300
+        return value.length <= 300 && hasContentFor(value)
       })
   const availableFamilies = families.filter((family) => !selectedFamilyIds.includes(String(family.famileo_id)))
 
@@ -363,6 +369,10 @@ export function FamileoPosterModal({
           continue
         }
         if (!finalText || !finalText.trim()) {
+          if (!articleHasPhoto) {
+            failures.push({ name: familyName, message: 'No photo and no text - nothing to post.' })
+            continue
+          }
           finalText = '\u200b'
         }
         const dateValue = override ? override.date : publishedAt
@@ -703,7 +713,9 @@ export function FamileoPosterModal({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Text (optional, max 300)</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Text {articleHasPhoto ? '(optional, max 300)' : '(required - no photo, max 300)'}
+                  </label>
                   <textarea
                     value={override.text}
                     onChange={(e) => {
@@ -722,6 +734,9 @@ export function FamileoPosterModal({
                   <div className="text-xs text-gray-500 mt-1">
                     {override.text.length}/300
                   </div>
+                  {!hasContentFor(override.text) && (
+                    <div className="text-xs text-amber-600 mt-1">No photo - please add some text to send this family a post.</div>
+                  )}
                 </div>
                 <div>
                   <DatePicker

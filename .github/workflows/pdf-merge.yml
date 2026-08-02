@@ -131,7 +131,11 @@ jobs:
               file_id = payload.get('file_id')
               url = payload.get('url')
               if file_id and url:
-                  result = json.dumps({'file_id': file_id, 'url': url})
+                  result = json.dumps({
+                      'file_id': file_id,
+                      'url': url,
+                      'delivery_folder_id': payload.get('delivery_folder_id', ''),
+                  })
                   break
 
           print(result)
@@ -143,6 +147,7 @@ jobs:
           fi
           FILE_ID=$(python3 -c 'import json,sys; p=json.loads(sys.stdin.read()); print(p.get("file_id",""))' <<< "$RESULT")
           URL=$(python3 -c 'import json,sys; p=json.loads(sys.stdin.read()); print(p.get("url",""))' <<< "$RESULT")
+          DELIVERY_FOLDER_ID=$(python3 -c 'import json,sys; p=json.loads(sys.stdin.read()); print(p.get("delivery_folder_id",""))' <<< "$RESULT")
           if [ -z "$FILE_ID" ] || [ -z "$URL" ]; then
             echo "Invalid merge result payload: missing file_id or url"
             echo "$RESULT"
@@ -151,6 +156,7 @@ jobs:
           echo "result=$RESULT" >> $GITHUB_OUTPUT
           echo "file_id=$FILE_ID" >> $GITHUB_OUTPUT
           echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "delivery_folder_id=$DELIVERY_FOLDER_ID" >> $GITHUB_OUTPUT
 
       - name: Notify backend
         run: |
@@ -158,6 +164,7 @@ jobs:
           JOB_ID="${{ inputs.job_id }}"
           FILE_ID="${{ steps.merge.outputs.file_id }}"
           URL="${{ steps.merge.outputs.url }}"
+          DELIVERY_FOLDER_ID="${{ steps.merge.outputs.delivery_folder_id }}"
           if [ -z "${FILE_ID}" ] || [ -z "${URL}" ]; then
             echo "Missing merge outputs: file_id='${FILE_ID}' url='${URL}'"
             exit 1
@@ -195,6 +202,7 @@ jobs:
             --data-urlencode "file_id=${FILE_ID}" \
             --data-urlencode "url=${URL}" \
             --data-urlencode "clean_chunks=${{ inputs.clean_chunks }}" \
+            --data-urlencode "delivery_folder_id=${DELIVERY_FOLDER_ID}" \
             "${CALLBACK_URL}")
           echo "merge-complete HTTP ${STATUS_CODE}"
           if [ "${STATUS_CODE}" -ge 400 ]; then

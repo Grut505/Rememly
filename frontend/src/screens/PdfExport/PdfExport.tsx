@@ -253,6 +253,21 @@ export function PdfExport() {
     return rows
   }
 
+  // pdf-merge.yml runs `--clean-chunks --delete-chunks-folder` whenever
+  // clean_chunks was on for the job (the default) - once the merge is done
+  // (pdf_url set), the chunks Drive folder chunks_folder_url points to has
+  // actually been deleted, so the "Source pages" link would 404 in Drive.
+  // Hide it in that case rather than link to a folder that's already gone.
+  const chunksFolderGone = (pdf: PdfListItem): boolean => {
+    if (!pdf.options_json) return false
+    try {
+      const options = JSON.parse(pdf.options_json)
+      return !!pdf.pdf_url && options.clean_chunks !== false
+    } catch {
+      return false
+    }
+  }
+
   const getProjectName = (pdf: PdfListItem): string => {
     if (!pdf.options_json) return ''
     try {
@@ -802,7 +817,7 @@ export function PdfExport() {
                           <p className="text-xs text-gray-400 mt-0.5">
                             by {getAuthorLabel(pdf.created_by, pdf.created_by_pseudo)}
                           </p>
-                          {pdf.chunks_folder_url && !!pdf.chunks_count && (
+                          {pdf.chunks_folder_url && !!pdf.chunks_count && !chunksFolderGone(pdf) && (
                             <a
                               href={pdf.chunks_folder_url}
                               target="_blank"

@@ -12,6 +12,7 @@ import { logsApi } from '../../api/logs'
 import { usersApi, DeclaredUser } from '../../api/users'
 import { articlesApi } from '../../api/articles'
 import { useProjectsStore } from '../../state/projectsStore'
+import { isStandalonePWA } from '../../utils/constants'
 import { useImageLoader } from '../../hooks/useImageLoader'
 import { pdfApi } from '../../api/pdf'
 import { DatePicker } from '../../ui/DatePicker'
@@ -73,6 +74,7 @@ interface CoverStylePreset {
 }
 
 export function Settings() {
+  const isStandalone = isStandalonePWA()
   const { showToast, setUnsavedChanges } = useUiStore()
   const backendUrl = import.meta.env.VITE_APPS_SCRIPT_URL || ''
 
@@ -2542,7 +2544,7 @@ export function Settings() {
       </div>
 
       {/* Actions */}
-      <div className="bg-white border-t border-gray-200 p-4 sticky bottom-16">
+      <div className={`bg-white border-t border-gray-200 p-4 sticky ${isStandalone ? 'bottom-20' : 'bottom-16'}`}>
         <div className="max-w-md mx-auto w-full flex justify-center">
           <Button
             onClick={handleSave}

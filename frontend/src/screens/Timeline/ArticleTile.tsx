@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { FamileoPosterModal } from '../../ui/FamileoPosterModal'
 import { articlesService } from '../../services/articles.service'
 import { articlesApi } from '../../api/articles'
+import { useProjectsStore } from '../../state/projectsStore'
 
 interface ArticleTileProps {
   article: Article
@@ -22,6 +23,10 @@ interface ArticleTileProps {
 export function ArticleTile({ article, isDuplicate, onDeleted, onRestored, onPermanentlyDeleted, selectionMode, selected, onSelectionChange }: ArticleTileProps) {
   const navigate = useNavigate()
   const { src: imageSrc, isLoading: imageLoading, error: imageError } = useImageLoader(article.image_url, article.image_file_id)
+  const { projects } = useProjectsStore()
+  const articleProjectNames = (article.project_ids || [])
+    .map((id) => projects.find((p) => p.id === id)?.name)
+    .filter((name): name is string => !!name)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
@@ -245,6 +250,11 @@ export function ArticleTile({ article, isDuplicate, onDeleted, onRestored, onPer
         {article.texte && (
           <div className="text-xs text-gray-700 mt-2 max-h-12 overflow-hidden">
             {article.texte}
+          </div>
+        )}
+        {articleProjectNames.length > 0 && (
+          <div className="text-xs text-primary-600 mt-1 truncate">
+            {articleProjectNames.join(' · ')}
           </div>
         )}
       </div>

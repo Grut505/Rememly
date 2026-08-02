@@ -444,7 +444,7 @@ export function Timeline() {
               className="text-lg font-semibold text-gray-900 truncate bg-transparent border-none focus:outline-none focus:ring-0 -ml-1 pr-1"
               aria-label="Project"
             >
-              <option value="">All projects</option>
+              <option value="">All</option>
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
@@ -480,9 +480,9 @@ export function Timeline() {
                 >
                   <option value="cards">Cards</option>
                   <option value="list">List</option>
-                  <option value="mosaic-2">Mosaic 2 items</option>
-                  <option value="mosaic-3">Mosaic 3 items</option>
-                  <option value="mosaic-4">Mosaic 4 items</option>
+                  <option value="mosaic-2">Mosaic *2</option>
+                  <option value="mosaic-3">Mosaic *3</option>
+                  <option value="mosaic-4">Mosaic *4</option>
                 </select>
               </div>
               <button

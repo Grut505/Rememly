@@ -149,6 +149,7 @@ export const pdfApi = {
       texte?: string
       image_file_id?: string
       image?: { base64: string; mimeType?: string }
+      full_page?: boolean
     }
   }) => apiClient.post<CoverPreviewResponse>('pdf/article-preview', payload),
 

@@ -13,6 +13,7 @@ interface PdfArticlePreviewModalProps {
   articleTexte: string
   photoFile: File | null
   articleImageFileId?: string
+  articleFullPage?: boolean
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -35,6 +36,7 @@ export function PdfArticlePreviewModal({
   articleTexte,
   photoFile,
   articleImageFileId,
+  articleFullPage,
 }: PdfArticlePreviewModalProps) {
   const { showToast } = useUiStore()
   const [startDate, setStartDate] = useState('')
@@ -104,6 +106,7 @@ export function PdfArticlePreviewModal({
           texte: articleTexte,
           image_file_id: imagePayload ? undefined : articleImageFileId,
           image: imagePayload,
+          full_page: articleFullPage,
         },
       })
       setPreviewFileId(response.file_id)

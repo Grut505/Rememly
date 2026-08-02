@@ -106,6 +106,10 @@ export const usePdfGenerationStore = create<PdfGenerationState>((set, get) => ({
         // The server only computes is_blurb when reading a job back (status/list) -
         // there's no round trip needed here since we already know what we submitted.
         is_blurb: Boolean(options.blurb_mode_enabled),
+        // Without this, the project badge (parsed from options_json) only
+        // appeared after the list was refetched from the server - this
+        // optimistic item had no options_json at all until then.
+        options_json: JSON.stringify(options),
       }
 
       if (response.status === 'DONE' && response.pdf_url) {

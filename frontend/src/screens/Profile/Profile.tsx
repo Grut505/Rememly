@@ -6,6 +6,7 @@ import { LoadingScreen, Spinner } from '../../ui/Spinner'
 import { useUiStore } from '../../state/uiStore'
 import { useProfile } from '../../contexts/ProfileContext'
 import { AppHeader } from '../../ui/AppHeader'
+import { isStandalonePWA } from '../../utils/constants'
 
 // Convert Drive URLs to thumbnail format (same as articles)
 function convertDriveUrl(url: string): string {
@@ -35,6 +36,7 @@ function convertDriveUrl(url: string): string {
 }
 
 export function Profile() {
+  const isStandalone = isStandalonePWA()
   const { user, logout } = useAuth()
   const { showToast, setUnsavedChanges } = useUiStore()
   const { profile, isLoading, saveProfile, avatarBlobUrl } = useProfile()
@@ -229,12 +231,12 @@ export function Profile() {
       </div>
 
       {/* Actions */}
-      <div className="bg-white border-t border-gray-200 p-4 sticky bottom-16">
-        <div className="max-w-md mx-auto w-full flex flex-col sm:flex-row sm:justify-center gap-2">
+      <div className={`bg-white border-t border-gray-200 p-4 sticky ${isStandalone ? 'bottom-20' : 'bottom-16'}`}>
+        <div className="max-w-md mx-auto w-full flex gap-2">
           <Button
             onClick={handleSave}
             disabled={isSaving || isLoading || !pseudo.trim() || !isDirty}
-            className="w-full sm:w-auto"
+            className="flex-1"
           >
             {isSaving ? 'Saving...' : 'Save Profile'}
           </Button>
@@ -242,7 +244,7 @@ export function Profile() {
             variant="danger"
             onClick={handleLogout}
             disabled={isSaving}
-            className="w-full sm:w-auto"
+            className="flex-1"
           >
             Logout
           </Button>

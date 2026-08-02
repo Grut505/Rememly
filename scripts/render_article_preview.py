@@ -4,10 +4,11 @@ article editor's Preview PDF button.
 
 This is an HTML-only preview, not an actual PDF: it reuses
 _prepare_article_media()/_render_article_html()/_render_side_by_side_column()/
-build_page_css() from render_pdf_chunks.py to build just the single page
-(interior spread) the target article would land on, with the exact same
-pagination rules (month grouping, 2-per-page pairing, side-by-side portrait
-pairs, recto-alignment blank pages) used to find that page - nothing about
+_render_full_page_article_html()/build_page_groups()/build_page_css() from
+render_pdf_chunks.py to build just the single page (interior spread) the
+target article would land on, with the exact same pagination rules (month
+grouping, 2-per-page pairing, side-by-side portrait pairs, solo full_page
+pages, recto-alignment blank pages) used to find that page - nothing about
 the real export path is touched or duplicated. Skipping the Playwright/
 Chromium PDF-rendering step entirely means no browser install is needed in
 the GitHub Actions runner (see pdf-article-preview.yml), so a preview comes
@@ -34,7 +35,6 @@ would actually produce.
 import argparse
 import base64
 import json
-import math
 import sys
 import urllib.error
 import urllib.parse
@@ -50,8 +50,10 @@ from render_pdf_chunks import (  # noqa: E402
     _compute_divider_blank_pages,
     _prepare_article_media,
     _render_article_html,
+    _render_full_page_article_html,
     _render_side_by_side_column,
     build_page_css,
+    build_page_groups,
     set_article_border_style,
     set_page_dimensions,
 )
@@ -141,7 +143,7 @@ def main():
         by_month[key].append(article)
     months = sorted(by_month.keys())
 
-    page_counts = {key: 1 + math.ceil(len(by_month[key]) / 2) for key in months}
+    page_counts = {key: 1 + len(build_page_groups(by_month[key])) for key in months}
     divider_blank_pages = _compute_divider_blank_pages(months, page_counts)
 
     target_month_key = (target_article.get('date') or '')[:7] or 'unknown'
@@ -155,35 +157,43 @@ def main():
         start_page += page_counts[key]
 
     month_articles = by_month[target_month_key]
-    target_index = next(i for i, a in enumerate(month_articles) if a.get(TARGET_MARKER))
-    pair_start = target_index - (target_index % 2)
+    groups = build_page_groups(month_articles)
+    group_index = next(
+        i for i, group in enumerate(groups) if any(a.get(TARGET_MARKER) for a in group)
+    )
+    group = groups[group_index]
 
-    # Which absolute page the target ended up on - same divider(+1)/pairing
-    # (i // 2 + 1) math as real generation, just for display ("this article
-    # would land on page N") since there's no multi-page PDF to jump around
-    # in anymore.
-    target_page = start_page + 1 + (pair_start // 2) + 1
+    # Which absolute page the target ended up on - same divider(+1) + group
+    # index math as real generation, just for display ("this article would
+    # land on page N") since there's no multi-page PDF to jump around in
+    # anymore.
+    target_page = start_page + 1 + group_index + 1
 
     mirror_odd_pages = bool(options.get('blurb_mirror_odd_pages'))
     mirrored = mirror_odd_pages and target_page % 2 == 1
 
-    media_a = _prepare_article_media(month_articles[pair_start], args.callback_url, args.callback_token)
-    media_b = (
-        _prepare_article_media(month_articles[pair_start + 1], args.callback_url, args.callback_token)
-        if pair_start + 1 < len(month_articles) else None
-    )
-    both_portrait = media_a['is_portrait'] and media_b is not None and media_b['is_portrait']
-
-    if both_portrait:
-        page_html = '\n  <div class="articles-page side-by-side">\n    <div class="side-by-side-row">\n'
-        page_html += _render_side_by_side_column(media_a)
-        page_html += _render_side_by_side_column(media_b)
-        page_html += '\n    </div>\n'
-    else:
+    if len(group) == 1 and group[0].get('full_page'):
+        media = _prepare_article_media(group[0], args.callback_url, args.callback_token)
         page_html = '\n  <div class="articles-page">\n'
-        page_html += _render_article_html(media_a, mirrored=mirrored)
-        if media_b:
-            page_html += _render_article_html(media_b, mirrored=mirrored)
+        page_html += _render_full_page_article_html(media)
+    else:
+        media_a = _prepare_article_media(group[0], args.callback_url, args.callback_token)
+        media_b = (
+            _prepare_article_media(group[1], args.callback_url, args.callback_token)
+            if len(group) > 1 else None
+        )
+        both_portrait = media_a['is_portrait'] and media_b is not None and media_b['is_portrait']
+
+        if both_portrait:
+            page_html = '\n  <div class="articles-page side-by-side">\n    <div class="side-by-side-row">\n'
+            page_html += _render_side_by_side_column(media_a)
+            page_html += _render_side_by_side_column(media_b)
+            page_html += '\n    </div>\n'
+        else:
+            page_html = '\n  <div class="articles-page">\n'
+            page_html += _render_article_html(media_a, mirrored=mirrored)
+            if media_b:
+                page_html += _render_article_html(media_b, mirrored=mirrored)
     page_html += f'\n    <div class="page-number">{target_page}</div>\n  </div>\n'
 
     html = f'''<!doctype html>

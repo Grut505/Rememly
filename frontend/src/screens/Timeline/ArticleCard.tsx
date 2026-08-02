@@ -9,6 +9,7 @@ import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { FamileoPosterModal } from '../../ui/FamileoPosterModal'
 import { articlesService } from '../../services/articles.service'
 import { articlesApi } from '../../api/articles'
+import { useProjectsStore } from '../../state/projectsStore'
 
 // Convert Drive URLs to thumbnail format
 function convertDriveUrl(url: string): string {
@@ -84,6 +85,10 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, onPer
   const navigate = useNavigate()
   const { user } = useAuth()
   const { profile, avatarBlobUrl } = useProfile()
+  const { projects } = useProjectsStore()
+  const articleProjectNames = (article.project_ids || [])
+    .map((id) => projects.find((p) => p.id === id)?.name)
+    .filter((name): name is string => !!name)
   const { src: imageSrc, isLoading: imageLoading, error: imageError } = useImageLoader(article.image_url, article.image_file_id)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -336,6 +341,16 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, onPer
         {article.texte && (
           <div className="p-4 transition-colors">
             <p className="whitespace-pre-wrap text-gray-900">{article.texte}</p>
+          </div>
+        )}
+
+        {articleProjectNames.length > 0 && (
+          <div className={`px-4 flex flex-wrap gap-1.5 ${article.texte ? 'pb-4 -mt-2' : 'py-4'}`}>
+            {articleProjectNames.map((name) => (
+              <span key={name} className="text-xs font-medium text-primary-700 bg-primary-50 px-2 py-0.5 rounded-full">
+                {name}
+              </span>
+            ))}
           </div>
         )}
       </div>

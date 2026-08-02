@@ -76,6 +76,7 @@ export function ArticleEditor() {
     articleStatus: ArticleStatus
     articleAuthor: string
     articleProjectIds: string[]
+    articleFullPage: boolean
   } | null>(null)
 
   const isEditMode = !!id
@@ -155,6 +156,7 @@ export function ArticleEditor() {
           articleStatus: cached.status || 'ACTIVE',
           articleAuthor: cached.auteur || '',
           articleProjectIds: cached.project_ids || [],
+          articleFullPage: cached.full_page || false,
         }
       } else {
         // Not in the store yet (e.g. deep-linked straight into edit mode,
@@ -176,6 +178,7 @@ export function ArticleEditor() {
             articleStatus: article.status || 'ACTIVE',
             articleAuthor: article.auteur || '',
             articleProjectIds: article.project_ids || [],
+            articleFullPage: article.full_page || false,
           }
         }).catch(() => {})
       }
@@ -258,6 +261,7 @@ export function ArticleEditor() {
         articleStatus: 'DRAFT',
         articleAuthor: user?.email || '',
         articleProjectIds: [],
+        articleFullPage: false,
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -301,6 +305,7 @@ export function ArticleEditor() {
           articleStatus: cached.status || 'ACTIVE',
           articleAuthor: cached.auteur || '',
           articleProjectIds: cached.project_ids || [],
+          articleFullPage: cached.full_page || false,
         }
         return
       }
@@ -321,6 +326,7 @@ export function ArticleEditor() {
         articleStatus: article.status || 'ACTIVE',
         articleAuthor: article.auteur || '',
         articleProjectIds: article.project_ids || [],
+        articleFullPage: article.full_page || false,
       }
     } catch (error) {
       showToast('Failed to load article', 'error')
@@ -350,7 +356,7 @@ export function ArticleEditor() {
           photoFile || undefined,
           dateModification,
           assemblyStateData,
-          undefined, // fullPage
+          articleFullPage,
           newStatus,
           undefined, // famileoPostId
           undefined, // famileoMarked
@@ -367,7 +373,7 @@ export function ArticleEditor() {
           dateModification,
           undefined, // famileoPostId
           assemblyStateData,
-          undefined, // fullPage
+          articleFullPage,
           articleStatus,
           articleProjectIds
         )
@@ -400,6 +406,7 @@ export function ArticleEditor() {
       articleStatus !== initial.articleStatus ||
       articleAuthor !== initial.articleAuthor ||
       !sameProjectIds(articleProjectIds, initial.articleProjectIds) ||
+      articleFullPage !== initial.articleFullPage ||
       photoFile !== null
     )
   }
@@ -460,22 +467,22 @@ export function ArticleEditor() {
       <div className="flex-1 flex flex-col max-w-content mx-auto w-full bg-white">
       {/* Sub-header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-center flex-shrink-0 sticky app-safe-top-14 z-20 relative">
+        <button
+          type="button"
+          onClick={() => setShowPdfPreview(true)}
+          className="absolute left-4 top-1/2 -translate-y-1/2 inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors"
+          aria-label="Preview in PDF"
+        >
+          <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+            <path d="M14 3v4a1 1 0 001 1h4"></path>
+            <path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"></path>
+          </svg>
+          PDF
+        </button>
         <h1 className="text-lg font-semibold">
           {isEditMode ? 'Edit Article' : 'New Article'}
         </h1>
         <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowPdfPreview(true)}
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors"
-            aria-label="Preview in PDF"
-          >
-            <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-              <path d="M14 3v4a1 1 0 001 1h4"></path>
-              <path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"></path>
-            </svg>
-            PDF
-          </button>
           <button
             type="button"
             onClick={() => setShowFamileoPoster(true)}
@@ -493,24 +500,27 @@ export function ArticleEditor() {
 
       {/* Content */}
       <div className="flex-1 p-4 space-y-6 pb-28">
-        <DateTimeInput value={dateModification} onChange={setDateModification} />
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Author</label>
-          <select
-            value={articleAuthor}
-            onChange={(e) => setArticleAuthor(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
-          >
-            {articleAuthor && !declaredUsers.some((declaredUser) => declaredUser.email === articleAuthor) && (
-              <option value={articleAuthor}>{articleAuthor}</option>
-            )}
-            {declaredUsers.map((declaredUser) => (
-              <option key={declaredUser.email} value={declaredUser.email}>
-                {declaredUser.pseudo || declaredUser.email}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+          <div className="flex-1 min-w-0">
+            <DateTimeInput value={dateModification} onChange={setDateModification} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Author</label>
+            <select
+              value={articleAuthor}
+              onChange={(e) => setArticleAuthor(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+            >
+              {articleAuthor && !declaredUsers.some((declaredUser) => declaredUser.email === articleAuthor) && (
+                <option value={articleAuthor}>{articleAuthor}</option>
+              )}
+              {declaredUsers.map((declaredUser) => (
+                <option key={declaredUser.email} value={declaredUser.email}>
+                  {declaredUser.pseudo || declaredUser.email}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {projects.length > 0 && (
@@ -547,6 +557,19 @@ export function ArticleEditor() {
             </div>
           </div>
         )}
+
+        <label className="flex items-center justify-between gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <div>
+            <span className="text-sm font-medium text-gray-700">Full page in PDF</span>
+            <p className="text-xs text-gray-500">Gives this article its own PDF page - photo maximized, caption below - instead of sharing a page with another article.</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={articleFullPage}
+            onChange={(e) => setArticleFullPage(e.target.checked)}
+            className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 flex-shrink-0"
+          />
+        </label>
 
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium text-gray-700">Status</div>
@@ -594,7 +617,7 @@ export function ArticleEditor() {
               disabled={isSaving}
               className="flex-1 px-3 py-2 text-sm"
             >
-              Delete Article
+              Delete
             </Button>
           )}
           <Button
@@ -665,6 +688,7 @@ export function ArticleEditor() {
         articleTexte={texte}
         photoFile={photoFile}
         articleImageFileId={articleImageFileId}
+        articleFullPage={articleFullPage}
       />
       </div>
     </div>

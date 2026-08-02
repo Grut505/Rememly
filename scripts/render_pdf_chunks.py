@@ -1029,6 +1029,45 @@ def _prepare_article_media(article: dict, callback_url: str, callback_token: str
     }
 
 
+def build_page_groups(articles: list) -> list:
+    """Splits a month's articles into page groups: a `full_page` article
+    always gets a page to itself (never paired), everything else pairs up
+    two-per-page as before. A full_page article never absorbs its neighbor
+    into its own page, and is never absorbed as someone else's second slot -
+    it always starts (and ends) its own group."""
+    groups = []
+    i = 0
+    n = len(articles)
+    while i < n:
+        if articles[i].get('full_page'):
+            groups.append([articles[i]])
+            i += 1
+        elif i + 1 < n and not articles[i + 1].get('full_page'):
+            groups.append([articles[i], articles[i + 1]])
+            i += 2
+        else:
+            groups.append([articles[i]])
+            i += 1
+    return groups
+
+
+def _render_full_page_article_html(media: dict) -> str:
+    # Always the "landscape" sub-layout (image on top, caption below) even
+    # for a portrait photo - full_page is an explicit "give this one photo
+    # the whole page" choice, and the side-by-side portrait treatment (image
+    # left, caption right) only exists to fit two articles per page.
+    return f'''
+    <div class="article full-page">
+      <div class="article-content landscape full-page">
+        <div class="article-image">{media['image_html']}</div>
+        <div class="article-bottom">
+          <div class="article-date">{media['date_str']}</div>
+          {f'<div class="article-text">{media["text_html"]}</div>' if media['text_html'] else ''}
+        </div>
+      </div>
+    </div>'''
+
+
 def _render_article_html(media: dict, mirrored: bool = False) -> str:
     if media['is_portrait']:
         portrait_class = 'portrait mirrored' if mirrored else 'portrait'
@@ -1043,9 +1082,10 @@ def _render_article_html(media: dict, mirrored: bool = False) -> str:
       </div>
     </div>'''
 
+    no_text_class = '' if media['text_html'] else ' no-text'
     return f'''
     <div class="article">
-      <div class="article-content landscape">
+      <div class="article-content landscape{no_text_class}">
         <div class="article-image">{media['image_html']}</div>
         <div class="article-bottom">
           <div class="article-date">{media['date_str']}</div>
@@ -1060,9 +1100,10 @@ def _render_side_by_side_column(media: dict) -> str:
     # each half-width column - with two portrait photos sharing a page, a
     # side-by-side row-of-articles / stacked-per-column split fits the
     # taller/narrower images far better than the normal full-width stacking.
+    no_text_class = '' if media['text_html'] else ' no-text'
     return f'''
     <div class="article">
-      <div class="article-content landscape">
+      <div class="article-content landscape{no_text_class}">
         <div class="article-image">{media['image_html']}</div>
         <div class="article-bottom">
           <div class="article-date">{media['date_str']}</div>
@@ -1094,27 +1135,32 @@ def generate_month_chunk_html(month_articles: list, month_year_label: str, month
     mirror_odd_pages = bool(options.get('blurb_mirror_odd_pages'))
 
     pages_html = ''
-    for i in range(0, len(month_articles), 2):
+    for group in build_page_groups(month_articles):
         current_page += 1
         mirrored = mirror_odd_pages and current_page % 2 == 1
 
-        media_a = _prepare_article_media(month_articles[i], callback_url, callback_token)
-        media_b = (
-            _prepare_article_media(month_articles[i + 1], callback_url, callback_token)
-            if i + 1 < len(month_articles) else None
-        )
-        both_portrait = media_a['is_portrait'] and media_b is not None and media_b['is_portrait']
-
-        if both_portrait:
-            pages_html += '\n  <div class="articles-page side-by-side">\n    <div class="side-by-side-row">\n'
-            pages_html += _render_side_by_side_column(media_a)
-            pages_html += _render_side_by_side_column(media_b)
-            pages_html += '\n    </div>\n'
-        else:
+        if len(group) == 1 and group[0].get('full_page'):
+            media = _prepare_article_media(group[0], callback_url, callback_token)
             pages_html += '\n  <div class="articles-page">\n'
-            pages_html += _render_article_html(media_a, mirrored=mirrored)
-            if media_b:
-                pages_html += _render_article_html(media_b, mirrored=mirrored)
+            pages_html += _render_full_page_article_html(media)
+        else:
+            media_a = _prepare_article_media(group[0], callback_url, callback_token)
+            media_b = (
+                _prepare_article_media(group[1], callback_url, callback_token)
+                if len(group) > 1 else None
+            )
+            both_portrait = media_a['is_portrait'] and media_b is not None and media_b['is_portrait']
+
+            if both_portrait:
+                pages_html += '\n  <div class="articles-page side-by-side">\n    <div class="side-by-side-row">\n'
+                pages_html += _render_side_by_side_column(media_a)
+                pages_html += _render_side_by_side_column(media_b)
+                pages_html += '\n    </div>\n'
+            else:
+                pages_html += '\n  <div class="articles-page">\n'
+                pages_html += _render_article_html(media_a, mirrored=mirrored)
+                if media_b:
+                    pages_html += _render_article_html(media_b, mirrored=mirrored)
         pages_html += f'\n    <div class="page-number">{current_page}</div>\n  </div>\n'
 
     return f'''<!doctype html>
@@ -1273,6 +1319,11 @@ body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
 .articles-page {{ page-break-before: always; height: {PAGE_CONTENT_HEIGHT_CM}cm; display: flex; flex-direction: column; gap: 0.4cm; }}
 .article {{ flex: 1; border: {ARTICLE_BORDER_WIDTH_PX}px solid {ARTICLE_BORDER_COLOR}; display: flex; flex-direction: column; overflow: hidden; max-height: 13.5cm; }}
 .article:nth-child(2) {{ margin-top: 0.2cm; }}
+/* A full_page article is always alone on its page - no half-page cap on
+   the block itself, nor on the image inside it (the base landscape rule
+   below caps the image at 9.5cm to leave room for a sibling article). */
+.article.full-page {{ max-height: none; }}
+.article-content.landscape.full-page .article-image img {{ max-height: none; }}
 .article-content {{ flex: 1; display: flex; overflow: hidden; }}
 
 /* Two portrait photos sharing a page: side-by-side columns instead of the
@@ -1305,6 +1356,10 @@ body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
    image pushing the caption past the box, clipped by overflow:hidden. */
 .article-content.landscape .article-image {{ width: 100%; display: flex; justify-content: center; flex: 1 1 auto; min-height: 0; }}
 .article-content.landscape .article-image img {{ width: 100%; height: 100%; max-height: 9.5cm; object-fit: contain; object-position: center top; }}
+/* No caption text to make room for - let the photo grow to fill the rest
+   of the article box instead of leaving the 9.5cm cap's dead space below
+   it (the date row is tiny, so this is effectively the whole box). */
+.article-content.landscape.no-text .article-image img {{ max-height: none; }}
 .article-content.landscape .article-bottom {{ display: flex; flex-direction: row; align-items: center; gap: 0.5cm; padding: 0.3cm; flex-shrink: 0; }}
 .article-content.landscape .article-date {{ flex-shrink: 0; }}
 .article-content.landscape .article-text {{ flex: 1; }}
@@ -1576,7 +1631,7 @@ def main():
             by_month[key].append(article)
         months = sorted(by_month.keys())
 
-        page_counts = {key: 1 + math.ceil(len(by_month[key]) / 2) for key in months}
+        page_counts = {key: 1 + len(build_page_groups(by_month[key])) for key in months}
         divider_blank_pages = _compute_divider_blank_pages(months, page_counts)
         extra_recto_blanks = sum(1 for needed in divider_blank_pages.values() if needed)
         total_pages = sum(page_counts.values()) + extra_recto_blanks

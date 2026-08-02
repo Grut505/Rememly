@@ -245,14 +245,14 @@ export const pdfRenderJobHandler: RouteHandler = async (request, context) => {
 
   const articlesQuery = projectId
     ? context.env.DB.prepare(
-        `select id, date, auteur, author_pseudo, texte, image_url, image_file_id
+        `select id, date, auteur, author_pseudo, texte, image_url, image_file_id, full_page
            from articles
           where status = 'ACTIVE' and (deleted_at is null or deleted_at = '') and date >= ?1 and date <= ?2
             and exists (select 1 from json_each(project_ids) where value = ?3)
           order by date asc`
       ).bind(job.date_from, job.date_to, projectId)
     : context.env.DB.prepare(
-        `select id, date, auteur, author_pseudo, texte, image_url, image_file_id
+        `select id, date, auteur, author_pseudo, texte, image_url, image_file_id, full_page
            from articles
           where status = 'ACTIVE' and (deleted_at is null or deleted_at = '') and date >= ?1 and date <= ?2
           order by date asc`
@@ -481,15 +481,18 @@ export const pdfDeleteHandler: RouteHandler = async (request, context) => {
   const job = await getPdfJob(context.env.DB, body.job_id)
   const pdfFileId = job?.pdf_file_id as string | null | undefined
   const chunksFolderId = job?.chunks_folder_id as string | null | undefined
+  const deliveryFolderId = job?.delivery_folder_id as string | null | undefined
 
-  // Deleting the job here only ever removed the D1 row - the merged PDF and
-  // the raw chunks folder stayed on Drive forever. Trash both (best-effort:
+  // Deleting the job here only ever removed the D1 row - the merged PDF, the
+  // raw chunks folder, and (for Blurb jobs) the delivery folder holding the
+  // cover-wrap PDF all stayed on Drive forever. Trash all three (best-effort:
   // a Drive hiccup shouldn't block removing the job from the list).
-  if (pdfFileId || chunksFolderId) {
+  if (pdfFileId || chunksFolderId || deliveryFolderId) {
     const tokenResult = await refreshGdriveToken(context.env)
     if (tokenResult.ok) {
       if (pdfFileId) await driveTrashFolder(tokenResult.token, pdfFileId).catch(() => false)
       if (chunksFolderId) await driveTrashFolder(tokenResult.token, chunksFolderId).catch(() => false)
+      if (deliveryFolderId) await driveTrashFolder(tokenResult.token, deliveryFolderId).catch(() => false)
     } else {
       await logEvent(context.env, 'pdf', 'ERROR', 'Delete: could not refresh Drive token to trash assets', {
         job_id: body.job_id,
@@ -658,6 +661,12 @@ export const pdfMergeCompleteHandler: RouteHandler = async (request, context) =>
   const jobId = params.get('job_id')
   const fileId = params.get('file_id')
   const pdfUrl = params.get('url')
+  // Only set for Blurb jobs (see move_to_pdf_root in merge_pdf_from_drive.py) -
+  // a dedicated folder holding both the content PDF and the cover-wrap PDF,
+  // since neither one alone is "the deliverable". Persisted so pdfDeleteHandler
+  // can trash it too - otherwise the cover-wrap file (whose own Drive id is
+  // never reported anywhere else) is orphaned in Drive forever after delete.
+  const deliveryFolderId = params.get('delivery_folder_id')
   if (!jobId || !fileId || !pdfUrl) {
     return fail('INVALID_PARAMS', 'Missing params', 400)
   }
@@ -669,10 +678,10 @@ export const pdfMergeCompleteHandler: RouteHandler = async (request, context) =>
 
   await context.env.DB.prepare(
     `update jobs_pdf
-        set status = 'DONE', progress = 100, progress_message = 'Merged', pdf_file_id = ?2, pdf_url = ?3, error_message = ''
+        set status = 'DONE', progress = 100, progress_message = 'Merged', pdf_file_id = ?2, pdf_url = ?3, error_message = '', delivery_folder_id = ?4
       where job_id = ?1`
   )
-    .bind(jobId, fileId, pdfUrl)
+    .bind(jobId, fileId, pdfUrl, deliveryFolderId || null)
     .run()
 
   await logEvent(context.env, 'pdf', 'INFO', 'Merge complete', { job_id: jobId, file_id: fileId, url: pdfUrl })
@@ -866,6 +875,7 @@ export const pdfArticlePreviewHandler: RouteHandler = async (request, context) =
       texte?: string
       image_file_id?: string
       image?: { base64: string; mimeType?: string }
+      full_page?: boolean
     }
   }>(request)
 
@@ -901,6 +911,7 @@ export const pdfArticlePreviewHandler: RouteHandler = async (request, context) =
       date: body.article.date,
       texte: body.article.texte || '',
       image_file_id: imageFileId,
+      full_page: !!body.article.full_page,
     },
   })
   const now = new Date().toISOString()
@@ -948,7 +959,7 @@ export const pdfArticlePreviewDataHandler: RouteHandler = async (request, contex
 
   let options: {
     start_date?: string
-    target_article?: { id?: string; date?: string; texte?: string; image_file_id?: string }
+    target_article?: { id?: string; date?: string; texte?: string; image_file_id?: string; full_page?: boolean }
   } = {}
   try {
     options = JSON.parse(row.options_json || '{}')
@@ -968,7 +979,7 @@ export const pdfArticlePreviewDataHandler: RouteHandler = async (request, contex
   // already-saved article being previewed isn't counted twice alongside the
   // (possibly edited) in-progress copy supplied in target_article.
   const articles = await context.env.DB.prepare(
-    `select id, date, auteur, author_pseudo, texte, image_url, image_file_id
+    `select id, date, auteur, author_pseudo, texte, image_url, image_file_id, full_page
        from articles
       where status = 'ACTIVE' and (deleted_at is null or deleted_at = '')
         and date >= ?1 and date <= ?2

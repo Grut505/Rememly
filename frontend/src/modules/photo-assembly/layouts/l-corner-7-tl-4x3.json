@@ -1,0 +1,54 @@
+{
+  "id": "l-corner-7-tl-4x3",
+  "name": "L-Corner 7 (top-left) (4x3)",
+  "aspectRatio": 1.3333,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 50
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 16.66,
+      "height": 50
+    },
+    {
+      "x": 66.66,
+      "y": 0,
+      "width": 16.66,
+      "height": 50
+    },
+    {
+      "x": 83.33,
+      "y": 0,
+      "width": 16.67,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 33.33,
+      "height": 50
+    },
+    {
+      "x": 33.33,
+      "y": 50,
+      "width": 33.33,
+      "height": 50
+    },
+    {
+      "x": 66.66,
+      "y": 50,
+      "width": 33.34,
+      "height": 50
+    }
+  ],
+  "tags": [
+    "hero",
+    "7-photos",
+    "4x3"
+  ]
+}

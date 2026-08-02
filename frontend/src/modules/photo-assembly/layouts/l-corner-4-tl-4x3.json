@@ -1,0 +1,36 @@
+{
+  "id": "l-corner-4-tl-4x3",
+  "name": "L-Corner 4 (top-left) (4x3)",
+  "aspectRatio": 1.3333,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 60,
+      "height": 60
+    },
+    {
+      "x": 60,
+      "y": 0,
+      "width": 40.0,
+      "height": 60
+    },
+    {
+      "x": 0,
+      "y": 60,
+      "width": 50.0,
+      "height": 40
+    },
+    {
+      "x": 50.0,
+      "y": 60,
+      "width": 50.0,
+      "height": 40
+    }
+  ],
+  "tags": [
+    "hero",
+    "4-photos",
+    "4x3"
+  ]
+}

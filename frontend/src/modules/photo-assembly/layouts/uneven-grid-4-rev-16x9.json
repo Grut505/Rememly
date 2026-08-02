@@ -1,0 +1,36 @@
+{
+  "id": "uneven-grid-4-rev-16x9",
+  "name": "Uneven Grid 4 (reversed) (16x9)",
+  "aspectRatio": 1.7778,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 35,
+      "height": 40
+    },
+    {
+      "x": 35,
+      "y": 0,
+      "width": 65,
+      "height": 40
+    },
+    {
+      "x": 0,
+      "y": 40,
+      "width": 35,
+      "height": 60
+    },
+    {
+      "x": 35,
+      "y": 40,
+      "width": 65,
+      "height": 60
+    }
+  ],
+  "tags": [
+    "grid",
+    "4-photos",
+    "16x9"
+  ]
+}

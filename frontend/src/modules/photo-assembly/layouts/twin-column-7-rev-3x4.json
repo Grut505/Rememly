@@ -1,0 +1,54 @@
+{
+  "id": "twin-column-7-rev-3x4",
+  "name": "Twin Column 7 (reversed) (3x4)",
+  "aspectRatio": 0.75,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 55,
+      "height": 33.33
+    },
+    {
+      "x": 0,
+      "y": 33.33,
+      "width": 55,
+      "height": 33.33
+    },
+    {
+      "x": 0,
+      "y": 66.66,
+      "width": 55,
+      "height": 33.34
+    },
+    {
+      "x": 55,
+      "y": 0,
+      "width": 45,
+      "height": 25
+    },
+    {
+      "x": 55,
+      "y": 25,
+      "width": 45,
+      "height": 25
+    },
+    {
+      "x": 55,
+      "y": 50,
+      "width": 45,
+      "height": 25
+    },
+    {
+      "x": 55,
+      "y": 75,
+      "width": 45,
+      "height": 25
+    }
+  ],
+  "tags": [
+    "split",
+    "7-photos",
+    "3x4"
+  ]
+}

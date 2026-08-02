@@ -1,0 +1,48 @@
+{
+  "id": "l-corner-6-tr-1x1",
+  "name": "L-Corner 6 (top-right) (1x1)",
+  "aspectRatio": 1,
+  "zones": [
+    {
+      "x": 45,
+      "y": 0,
+      "width": 55,
+      "height": 55
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "width": 22.5,
+      "height": 55
+    },
+    {
+      "x": 22.5,
+      "y": 0,
+      "width": 22.5,
+      "height": 55
+    },
+    {
+      "x": 0,
+      "y": 55,
+      "width": 33.33,
+      "height": 45
+    },
+    {
+      "x": 33.33,
+      "y": 55,
+      "width": 33.33,
+      "height": 45
+    },
+    {
+      "x": 66.66,
+      "y": 55,
+      "width": 33.34,
+      "height": 45
+    }
+  ],
+  "tags": [
+    "hero",
+    "6-photos",
+    "1x1"
+  ]
+}

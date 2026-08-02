@@ -1,0 +1,42 @@
+{
+  "id": "l-corner-5-bl-4x3",
+  "name": "L-Corner 5 (bottom-left) (4x3)",
+  "aspectRatio": 1.3333,
+  "zones": [
+    {
+      "x": 0,
+      "y": 45,
+      "width": 55,
+      "height": 55
+    },
+    {
+      "x": 55,
+      "y": 45,
+      "width": 22.5,
+      "height": 55
+    },
+    {
+      "x": 77.5,
+      "y": 45,
+      "width": 22.5,
+      "height": 55
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "width": 50.0,
+      "height": 45
+    },
+    {
+      "x": 50.0,
+      "y": 0,
+      "width": 50.0,
+      "height": 45
+    }
+  ],
+  "tags": [
+    "hero",
+    "5-photos",
+    "4x3"
+  ]
+}

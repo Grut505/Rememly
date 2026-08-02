@@ -1,0 +1,48 @@
+{
+  "id": "twin-column-6-9x16",
+  "name": "Twin Column 6 (9x16)",
+  "aspectRatio": 0.5625,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 50,
+      "height": 50
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 50,
+      "height": 25
+    },
+    {
+      "x": 50,
+      "y": 25,
+      "width": 50,
+      "height": 25
+    },
+    {
+      "x": 50,
+      "y": 50,
+      "width": 50,
+      "height": 25
+    },
+    {
+      "x": 50,
+      "y": 75,
+      "width": 50,
+      "height": 25
+    }
+  ],
+  "tags": [
+    "split",
+    "6-photos",
+    "9x16"
+  ]
+}

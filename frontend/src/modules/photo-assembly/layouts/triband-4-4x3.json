@@ -1,0 +1,36 @@
+{
+  "id": "triband-4-4x3",
+  "name": "Triband 4 (4x3)",
+  "aspectRatio": 1.3333,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 50,
+      "height": 50
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 25,
+      "height": 100
+    },
+    {
+      "x": 75,
+      "y": 0,
+      "width": 25,
+      "height": 100
+    }
+  ],
+  "tags": [
+    "split",
+    "4-photos",
+    "4x3"
+  ]
+}

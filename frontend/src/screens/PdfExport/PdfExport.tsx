@@ -419,6 +419,7 @@ export function PdfExport() {
           ...pdf,
           chunks_folder_id: undefined,
           chunks_folder_url: undefined,
+          chunks_count: 0,
           progress_message: 'Chunks cleaned',
         }
       }))
@@ -678,7 +679,7 @@ export function PdfExport() {
                           <p className="text-xs text-gray-400 mt-0.5">
                             by {getAuthorLabel(pdf.created_by, pdf.created_by_pseudo)}
                           </p>
-                          {pdf.chunks_folder_url && (
+                          {pdf.chunks_folder_url && !!pdf.chunks_count && (
                             <a
                               href={pdf.chunks_folder_url}
                               target="_blank"
@@ -686,7 +687,7 @@ export function PdfExport() {
                               className="text-xs text-blue-600 hover:text-blue-700 mt-0.5 inline-flex"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              PDF parts folder
+                              Source pages ({pdf.chunks_count})
                             </a>
                           )}
                         </div>
@@ -783,7 +784,7 @@ export function PdfExport() {
                           <p className="text-xs text-gray-400 mt-0.5">
                             by {getAuthorLabel(pdf.created_by, pdf.created_by_pseudo)}
                           </p>
-                          {pdf.chunks_folder_url && (
+                          {pdf.chunks_folder_url && !!pdf.chunks_count && (
                             <a
                               href={pdf.chunks_folder_url}
                               target="_blank"
@@ -791,7 +792,7 @@ export function PdfExport() {
                               className="text-xs text-blue-600 hover:text-blue-700 mt-0.5 inline-flex"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              PDF parts folder
+                              Source pages ({pdf.chunks_count})
                             </a>
                           )}
                         </div>

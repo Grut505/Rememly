@@ -286,6 +286,7 @@ export function ArticleTile({ article, isDuplicate, onDeleted, onRestored, onPer
         imageUrl={article.image_url}
         imageFileId={article.image_file_id}
         articleId={article.id}
+        fullPage={article.full_page}
       />
     </div>
   )

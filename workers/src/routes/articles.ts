@@ -131,7 +131,7 @@ function buildArticlesQuery(url: URL) {
     conditions.push(`coalesce(famileo_post_id, '') != '' and famileo_post_id in (
       select famileo_post_id
       from articles
-      where coalesce(famileo_post_id, '') != ''
+      where coalesce(famileo_post_id, '') != '' and status != 'DELETED'
       group by famileo_post_id
       having count(*) > 1
     )`)
@@ -150,6 +150,7 @@ function buildArticlesQuery(url: URL) {
                from articles a2
                where a2.famileo_post_id = a.famileo_post_id
                  and a2.id != a.id
+                 and a2.status != 'DELETED'
              ) then 1
              else 0
            end as is_duplicate

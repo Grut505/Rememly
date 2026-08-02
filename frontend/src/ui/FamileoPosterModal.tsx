@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
+import { DatePicker } from './DatePicker'
 import { famileoApi } from '../api/famileo'
 import { articlesService } from '../services/articles.service'
 import { apiClient, ApiError } from '../api/client'
 import { usersApi, DeclaredUser } from '../api/users'
+import { useUiStore } from '../state/uiStore'
+import { useArticlesStore } from '../state/articlesStore'
 
 interface FamileoPosterModalProps {
   isOpen: boolean
@@ -18,6 +21,55 @@ interface FamileoPosterModalProps {
   imageUrl?: string
   imageFileId?: string
   articleId?: string
+  fullPage?: boolean
+}
+
+// Famileo only accepts two postcard aspect ratios (same constants used by
+// the Photo Assembly layout picker's "Famileo" ratio filter) - portrait
+// width:height = 1:1.44, landscape width:height = 1:0.54.
+const FAMILEO_PORTRAIT_RATIO = 1 / 1.44
+const FAMILEO_LANDSCAPE_RATIO = 1 / 0.54
+const FAMILEO_RATIO_TOLERANCE = 0.03
+
+function loadImageDimensions(src: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
+    img.onerror = () => reject(new Error('Failed to read image dimensions.'))
+    img.src = src
+  })
+}
+
+function cropImageToRatio(src: string, targetRatio: number): Promise<{ base64: string; width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const sourceRatio = img.naturalWidth / img.naturalHeight
+      let cropWidth = img.naturalWidth
+      let cropHeight = img.naturalHeight
+      if (sourceRatio > targetRatio) {
+        cropWidth = Math.round(img.naturalHeight * targetRatio)
+      } else {
+        cropHeight = Math.round(img.naturalWidth / targetRatio)
+      }
+      const offsetX = Math.round((img.naturalWidth - cropWidth) / 2)
+      const offsetY = Math.round((img.naturalHeight - cropHeight) / 2)
+
+      const canvas = document.createElement('canvas')
+      canvas.width = cropWidth
+      canvas.height = cropHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('Canvas not supported.'))
+        return
+      }
+      ctx.drawImage(img, offsetX, offsetY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight)
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+      resolve({ base64: dataUrl.split(',')[1] || '', width: cropWidth, height: cropHeight })
+    }
+    img.onerror = () => reject(new Error('Failed to load image for resizing.'))
+    img.src = src
+  })
 }
 
 function extractFileId(url: string): string | null {
@@ -50,8 +102,11 @@ export function FamileoPosterModal({
   familyId,
   imageUrl,
   imageFileId,
-  articleId
+  articleId,
+  fullPage
 }: FamileoPosterModalProps) {
+  const { showToast } = useUiStore()
+  const updateArticleInStore = useArticlesStore((state) => state.updateArticle)
   const [isPosting, setIsPosting] = useState(false)
   const [postError, setPostError] = useState<string | null>(null)
   const [postResult, setPostResult] = useState<string | null>(null)
@@ -59,7 +114,10 @@ export function FamileoPosterModal({
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [previewSrc, setPreviewSrc] = useState<string>('')
   const [imageBase64, setImageBase64] = useState<string>('')
-  const [isFullPage, setIsFullPage] = useState(false)
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null)
+  const [isResizingImage, setIsResizingImage] = useState(false)
+  const [formatWarningDismissed, setFormatWarningDismissed] = useState(false)
+  const [isFullPage, setIsFullPage] = useState(fullPage || false)
   const [progressLabel, setProgressLabel] = useState<string | null>(null)
   const [progressStep, setProgressStep] = useState(0)
   const [progressTotal, setProgressTotal] = useState(0)
@@ -75,6 +133,7 @@ export function FamileoPosterModal({
   const baseText = text || ''
   const baseDate = publishedAt || new Date().toISOString()
   const baseAuthor = authorEmail || ''
+  const defaultFullPage = fullPage || false
   const familiesById = families.reduce<Record<string, string>>((acc, family) => {
     acc[String(family.famileo_id)] = family.name
     return acc
@@ -104,6 +163,29 @@ export function FamileoPosterModal({
       })
   const availableFamilies = families.filter((family) => !selectedFamilyIds.includes(String(family.famileo_id)))
 
+  const imageRatio = imageDimensions ? imageDimensions.width / imageDimensions.height : null
+  const famileoTargetRatio = imageRatio !== null && imageRatio > 1 ? FAMILEO_LANDSCAPE_RATIO : FAMILEO_PORTRAIT_RATIO
+  const isFamileoFormat = imageRatio !== null && (
+    Math.abs(imageRatio - FAMILEO_PORTRAIT_RATIO) < FAMILEO_RATIO_TOLERANCE ||
+    Math.abs(imageRatio - FAMILEO_LANDSCAPE_RATIO) < FAMILEO_RATIO_TOLERANCE
+  )
+  const showFormatWarning = imageRatio !== null && !isFamileoFormat && !formatWarningDismissed
+
+  const handleResizeToFamileoFormat = async () => {
+    if (!previewSrc) return
+    setIsResizingImage(true)
+    try {
+      const cropped = await cropImageToRatio(previewSrc, famileoTargetRatio)
+      setImageBase64(cropped.base64)
+      setPreviewSrc(`data:image/jpeg;base64,${cropped.base64}`)
+      setImageDimensions({ width: cropped.width, height: cropped.height })
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : 'Failed to resize image.')
+    } finally {
+      setIsResizingImage(false)
+    }
+  }
+
   useEffect(() => {
     if (!isOpen) return
     setPostError(null)
@@ -112,6 +194,8 @@ export function FamileoPosterModal({
     setPreviewError(null)
     setPreviewSrc('')
     setImageBase64('')
+    setImageDimensions(null)
+    setFormatWarningDismissed(false)
     setPreviewLoading(false)
     setProgressLabel(null)
     setProgressStep(0)
@@ -122,6 +206,24 @@ export function FamileoPosterModal({
     setFamilyOverrides({})
     setSelectedFamilyNames({})
   }, [isOpen, familyId])
+
+  useEffect(() => {
+    if (!previewSrc) {
+      setImageDimensions(null)
+      return
+    }
+    let cancelled = false
+    loadImageDimensions(previewSrc)
+      .then((dims) => {
+        if (!cancelled) setImageDimensions(dims)
+      })
+      .catch(() => {
+        if (!cancelled) setImageDimensions(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [previewSrc])
 
   useEffect(() => {
     if (!isOpen) return
@@ -136,7 +238,7 @@ export function FamileoPosterModal({
             all: {
               text: baseText,
               date: baseDateLocal,
-              fullPage: false,
+              fullPage: defaultFullPage,
               author: baseAuthor
             }
           }
@@ -241,13 +343,24 @@ export function FamileoPosterModal({
       setProgressTotal(totalSteps)
       setProgressStep(0)
 
+      const failures: { name: string; message: string }[] = []
+      let sessionUnrecoverable = false
+
       for (let i = 0; i < targetFamilies.length; i++) {
         const famileoId = targetFamilies[i]
         const family = families.find((f) => String(f.famileo_id) === String(famileoId))
+        const familyName = family ? family.name : 'Unknown family'
+
+        if (sessionUnrecoverable) {
+          failures.push({ name: familyName, message: 'Famileo session unavailable.' })
+          continue
+        }
+
         const override = selectionMode === 'all' ? familyOverrides.all : familyOverrides[famileoId]
         let finalText = override ? override.text : text || ''
         if (finalText.length > 300) {
-          throw new Error('Text exceeds 300 characters.')
+          failures.push({ name: familyName, message: 'Text exceeds 300 characters.' })
+          continue
         }
         if (!finalText || !finalText.trim()) {
           finalText = '\u200b'
@@ -305,23 +418,40 @@ export function FamileoPosterModal({
             }
           }
           if (articleId) {
-            if (famileoPostId) {
-              console.log('Famileo post created:', famileoPostId)
-            }
-            await articlesService.markFamileoPosted(articleId, famileoPostId)
+            const updated = await articlesService.markFamileoPosted(articleId, famileoPostId)
+            updateArticleInStore(updated)
           }
         }
 
         try {
-          await sendToFamily()
-        } catch (err) {
-          if (!isFamileoSessionError(err) || !(await waitForFamileoSession())) {
-            throw err
+          try {
+            await sendToFamily()
+          } catch (err) {
+            if (!isFamileoSessionError(err)) throw err
+            const recovered = await waitForFamileoSession()
+            if (!recovered) {
+              sessionUnrecoverable = true
+              throw err
+            }
+            await sendToFamily()
           }
-          await sendToFamily()
+        } catch (err) {
+          failures.push({ name: familyName, message: err instanceof Error ? err.message : 'Error while posting to Famileo.' })
         }
       }
-      setPostResult(`Post created for ${targetFamilies.length} ${targetFamilies.length > 1 ? 'families' : 'family'}.`)
+
+      const successCount = targetFamilies.length - failures.length
+      if (failures.length === 0) {
+        const message = `Post created for ${targetFamilies.length} ${targetFamilies.length > 1 ? 'families' : 'family'}.`
+        setPostResult(message)
+        showToast(message, 'success')
+      } else if (successCount > 0) {
+        const message = `Sent to ${successCount}/${targetFamilies.length} families. Failed: ${failures.map((f) => f.name).join(', ')}.`
+        setPostResult(message)
+        showToast(`Sent to ${successCount}/${targetFamilies.length} families (${failures.length} failed).`, 'error')
+      } else {
+        throw new Error(failures[0]?.message || 'Error while posting to Famileo.')
+      }
     } catch (err) {
       setPostError(err instanceof Error ? err.message : 'Error while posting to Famileo.')
     } finally {
@@ -399,6 +529,29 @@ export function FamileoPosterModal({
           </div>
         )}
 
+        {showFormatWarning && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 flex items-start gap-2">
+            <div className="flex-1 text-xs text-amber-800">
+              This image isn't in a Famileo-supported format ({famileoTargetRatio > 1 ? 'landscape' : 'portrait'} 1:{famileoTargetRatio > 1 ? '0.54' : '1.44'}). It may be cropped unexpectedly by Famileo.
+            </div>
+            <button
+              type="button"
+              onClick={handleResizeToFamileoFormat}
+              disabled={isResizingImage}
+              className="text-xs font-medium text-amber-900 underline hover:no-underline disabled:opacity-60 flex-shrink-0"
+            >
+              {isResizingImage ? 'Resizing…' : 'Resize'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormatWarningDismissed(true)}
+              className="text-xs text-amber-700 hover:text-amber-900 flex-shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Families</label>
@@ -422,7 +575,7 @@ export function FamileoPosterModal({
                 }))
                 setFamilyOverrides((prev) => {
                   if (prev[value]) return prev
-                  const seed = prev.all || { text: baseText, date: baseDateLocal, fullPage: false, author: baseAuthor }
+                  const seed = prev.all || { text: baseText, date: baseDateLocal, fullPage: defaultFullPage, author: baseAuthor }
                   return {
                     ...prev,
                     [value]: {
@@ -488,7 +641,7 @@ export function FamileoPosterModal({
             const override = familyOverrides[famileoId] || {
               text: baseText,
               date: baseDateLocal,
-              fullPage: false,
+              fullPage: defaultFullPage,
               author: baseAuthor
             }
             return (
@@ -529,7 +682,7 @@ export function FamileoPosterModal({
                       setFamilyOverrides((prev) => ({
                         ...prev,
                         [famileoId]: {
-                          ...(prev[famileoId] || { text: baseText, date: baseDateLocal, fullPage: false, author: '' }),
+                          ...(prev[famileoId] || { text: baseText, date: baseDateLocal, fullPage: defaultFullPage, author: '' }),
                           author: value
                         }
                       }))
@@ -558,7 +711,7 @@ export function FamileoPosterModal({
                       setFamilyOverrides((prev) => ({
                         ...prev,
                         [famileoId]: {
-                          ...(prev[famileoId] || { text: '', date: baseDateLocal, fullPage: false, author: '' }),
+                          ...(prev[famileoId] || { text: '', date: baseDateLocal, fullPage: defaultFullPage, author: '' }),
                           text: value
                         }
                       }))
@@ -571,21 +724,19 @@ export function FamileoPosterModal({
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Date</label>
-                  <input
-                    type="datetime-local"
+                  <DatePicker
+                    label="Date"
+                    mode="datetime"
                     value={toLocalInputValue(override.date || '')}
-                    onChange={(e) => {
-                      const value = e.target.value
+                    onChange={(value) => {
                       setFamilyOverrides((prev) => ({
                         ...prev,
                         [famileoId]: {
-                          ...(prev[famileoId] || { text: baseText, date: baseDateLocal, fullPage: false, author: '' }),
+                          ...(prev[famileoId] || { text: baseText, date: baseDateLocal, fullPage: defaultFullPage, author: '' }),
                           date: value
                         }
                       }))
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
                   />
                 </div>
                 <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -597,7 +748,7 @@ export function FamileoPosterModal({
                       setFamilyOverrides((prev) => ({
                         ...prev,
                         [famileoId]: {
-                          ...(prev[famileoId] || { text: baseText, date: baseDateLocal, fullPage: false, author: '' }),
+                          ...(prev[famileoId] || { text: baseText, date: baseDateLocal, fullPage: defaultFullPage, author: '' }),
                           fullPage: value
                         }
                       }))

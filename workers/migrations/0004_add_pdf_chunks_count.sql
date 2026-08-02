@@ -1,0 +1,1 @@
+ALTER TABLE jobs_pdf ADD COLUMN chunks_count INTEGER DEFAULT 0;

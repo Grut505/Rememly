@@ -87,6 +87,7 @@ export interface PdfListItem {
   pdf_file_id?: string
   chunks_folder_id?: string
   chunks_folder_url?: string
+  chunks_count?: number
   error_message?: string
   is_blurb?: boolean
   options_json?: string

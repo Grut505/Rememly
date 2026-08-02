@@ -3,8 +3,9 @@ import { Modal } from './Modal'
 
 interface DatePickerProps {
   label?: string
-  value: string // 'YYYY-MM-DD' or ''
+  value: string // 'YYYY-MM-DD' or '', or 'YYYY-MM-DDTHH:mm' when mode='datetime'
   onChange: (value: string) => void
+  mode?: 'date' | 'datetime'
   min?: string
   max?: string
   placeholder?: string
@@ -39,9 +40,20 @@ function formatDisplay(value: string) {
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-export function DatePicker({ label, value, onChange, min, max, placeholder = 'Select date', className = '' }: DatePickerProps) {
+function pad2(n: number) {
+  return String(n).padStart(2, '0')
+}
+
+function splitDateTime(value: string, mode: 'date' | 'datetime') {
+  if (mode !== 'datetime') return { datePart: value, timePart: '' }
+  const [datePart, timePart] = value.split('T')
+  return { datePart: datePart || '', timePart: timePart || '' }
+}
+
+export function DatePicker({ label, value, onChange, mode = 'date', min, max, placeholder = 'Select date', className = '' }: DatePickerProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const parsedValue = parseDateString(value)
+  const { datePart, timePart } = splitDateTime(value, mode)
+  const parsedValue = parseDateString(datePart)
   const today = new Date()
   const [viewYear, setViewYear] = useState(parsedValue?.year ?? today.getFullYear())
   const [viewMonth, setViewMonth] = useState(parsedValue?.month ?? today.getMonth())
@@ -102,8 +114,20 @@ export function DatePicker({ label, value, onChange, min, max, placeholder = 'Se
 
   const handleSelectDay = (day: number) => {
     if (isDisabled(viewYear, viewMonth, day)) return
-    onChange(toDateString(viewYear, viewMonth, day))
-    setIsOpen(false)
+    const newDate = toDateString(viewYear, viewMonth, day)
+    if (mode === 'datetime') {
+      onChange(`${newDate}T${timePart || '00:00'}`)
+    } else {
+      onChange(newDate)
+      setIsOpen(false)
+    }
+  }
+
+  const handleTimeChange = (newTime: string) => {
+    const newDate = parsedValue
+      ? toDateString(parsedValue.year, parsedValue.month, parsedValue.day)
+      : toDateString(today.getFullYear(), today.getMonth(), today.getDate())
+    onChange(`${newDate}T${newTime}`)
   }
 
   return (
@@ -115,7 +139,7 @@ export function DatePicker({ label, value, onChange, min, max, placeholder = 'Se
         className="w-full flex items-center justify-between gap-2 px-4 py-2 border border-gray-300 rounded-lg text-left text-sm touch-manipulation focus:outline-none focus:ring-2 focus:ring-primary-500"
       >
         <span className={value ? 'text-gray-900' : 'text-gray-400'}>
-          {value ? formatDisplay(value) : placeholder}
+          {datePart ? `${formatDisplay(datePart)}${mode === 'datetime' && timePart ? ` · ${timePart}` : ''}` : placeholder}
         </span>
         <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
           <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
@@ -185,29 +209,59 @@ export function DatePicker({ label, value, onChange, min, max, placeholder = 'Se
             })}
           </div>
 
+          {mode === 'datetime' && (
+            <div className="mt-4 pt-3 border-t border-gray-100">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Time</label>
+              <input
+                type="time"
+                value={timePart || '00:00'}
+                onChange={(e) => handleTimeChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white touch-manipulation"
+              />
+            </div>
+          )}
+
           <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
-            <button
-              type="button"
-              onClick={() => {
-                onChange('')
-                setIsOpen(false)
-              }}
-              className="text-sm text-gray-500 hover:text-gray-700 touch-manipulation"
-            >
-              Clear
-            </button>
+            {mode === 'datetime' ? (
+              <div />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange('')
+                  setIsOpen(false)
+                }}
+                className="text-sm text-gray-500 hover:text-gray-700 touch-manipulation"
+              >
+                Clear
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
                 const now = new Date()
                 if (isDisabled(now.getFullYear(), now.getMonth(), now.getDate())) return
-                onChange(toDateString(now.getFullYear(), now.getMonth(), now.getDate()))
-                setIsOpen(false)
+                const dateStr = toDateString(now.getFullYear(), now.getMonth(), now.getDate())
+                if (mode === 'datetime') {
+                  onChange(`${dateStr}T${pad2(now.getHours())}:${pad2(now.getMinutes())}`)
+                } else {
+                  onChange(dateStr)
+                  setIsOpen(false)
+                }
               }}
               className="text-sm text-primary-600 hover:text-primary-700 font-medium touch-manipulation"
             >
               Today
             </button>
+            {mode === 'datetime' && (
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="text-sm font-medium text-gray-700 hover:text-gray-900 touch-manipulation"
+              >
+                Done
+              </button>
+            )}
           </div>
         </div>
       </Modal>

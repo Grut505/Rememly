@@ -369,6 +369,7 @@ export function ArticleRow({ article, isDuplicate, onDeleted, onRestored, onPerm
         imageUrl={article.image_url}
         imageFileId={article.image_file_id}
         articleId={article.id}
+        fullPage={article.full_page}
       />
     </div>
   )

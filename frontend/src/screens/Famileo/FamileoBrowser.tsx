@@ -284,13 +284,16 @@ export function FamileoBrowser() {
         setLoading(false)
         return
       }
-      const message = err instanceof Error ? err.message : 'Failed to fetch posts'
-      if (isSessionError(message) && !autoRefreshing) {
+      // The backend now auto-triggers the refresh workflow itself as soon as
+      // it detects an expired session (see FAMILEO_SESSION in
+      // workers/src/routes/famileo.ts) - no need to call triggerRefresh()
+      // here too, just wait for the session to come back and retry.
+      const isSessionErr = err instanceof ApiError && err.code === 'FAMILEO_SESSION'
+      if (isSessionErr && !autoRefreshing) {
         setAutoRefreshing(true)
         setRefreshing(true)
         setRefreshMessage('Refreshing Famileo session... This may take a few minutes.')
         try {
-          await famileoApi.triggerRefresh()
           const ok = await waitForSessionValid()
           if (ok) {
             const allPosts = await fetchPosts(controller.signal)
@@ -310,7 +313,8 @@ export function FamileoBrowser() {
           setAutoRefreshing(false)
         }
       } else {
-        setError(message)
+        const message = err instanceof Error ? err.message : 'Failed to fetch posts'
+        setError(isSessionErr ? sanitizeSessionError(message) : message)
       }
     } finally {
       setLoading(false)

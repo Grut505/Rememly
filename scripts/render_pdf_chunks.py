@@ -388,7 +388,15 @@ def generate_seasonal_fruits(month_index: int) -> str:
         spacing = (page_width - img_size) / (top_count - 1) if top_count > 1 else (page_width - img_size) / 2
         positions.append({'x': i * spacing if top_count > 1 else spacing, 'y': 0.1, 'size': img_size})
 
-    start_y, end_y = 2.5, page_height - 5
+    # Same top/bottom margin on both vertical edges, sized just to clear the
+    # top/bottom horizontal rows (which sit flush at 0.1cm), so the full
+    # height in between is used evenly - previously the right edge stopped
+    # 5cm short of the bottom while the left edge stopped only 3cm short,
+    # giving the two columns different spacing and an uneven gap next to
+    # the top/bottom rows.
+    vertical_margin = 0.1 + img_size + 0.3
+    start_y, end_y = vertical_margin, page_height - vertical_margin
+
     for i in range(right_count):
         spacing = (end_y - start_y - img_size) / (right_count - 1) if right_count > 1 else 0
         y = start_y + (i * spacing if right_count > 1 else (end_y - start_y - img_size) / 2)
@@ -399,7 +407,6 @@ def generate_seasonal_fruits(month_index: int) -> str:
         spacing = available_width / (bottom_count - 1) if bottom_count > 1 else available_width / 2
         positions.append({'x': i * spacing if bottom_count > 1 else spacing, 'y': page_height - img_size - 0.1, 'size': img_size})
 
-    start_y, end_y = 2.5, page_height - 3
     for i in range(left_count):
         spacing = (end_y - start_y - img_size) / (left_count - 1) if left_count > 1 else 0
         y = start_y + (i * spacing if left_count > 1 else (end_y - start_y - img_size) / 2)
@@ -983,9 +990,11 @@ def generate_month_divider(month_articles: list, month_year_label: str, month_in
     <div class="season-decorations">{fruits_html}</div>
     <div class="month-title-container-centered">
       <h2 class="month-title">{esc(month_year_label)}</h2>
-      <p class="month-subtitle">{article_count} souvenir{plural}</p>
     </div>
     <div class="month-mosaic-centered">{mosaic_html}</div>
+    <div class="month-subtitle-container-centered">
+      <p class="month-subtitle">{article_count} souvenir{plural}</p>
+    </div>
   </div>'''
 
     return f'''
@@ -999,7 +1008,7 @@ def generate_month_divider(month_articles: list, month_year_label: str, month_in
   </div>'''
 
 
-def render_article(article: dict, callback_url: str, callback_token: str, mirrored: bool = False) -> str:
+def _prepare_article_media(article: dict, callback_url: str, callback_token: str) -> dict:
     date_str = format_datetime_fr(article.get('date', ''))
     image_html = ''
     is_portrait = False
@@ -1012,17 +1021,24 @@ def render_article(article: dict, callback_url: str, callback_token: str, mirror
             image_html = f'<img src="data:{mime};base64,{b64}" alt="" />'
             is_portrait = aspect_ratio < 1
 
-    text_html = esc(article.get('texte', ''))
+    return {
+        'date_str': date_str,
+        'image_html': image_html,
+        'is_portrait': is_portrait,
+        'text_html': esc(article.get('texte', '')),
+    }
 
-    if is_portrait:
+
+def _render_article_html(media: dict, mirrored: bool = False) -> str:
+    if media['is_portrait']:
         portrait_class = 'portrait mirrored' if mirrored else 'portrait'
         return f'''
     <div class="article">
       <div class="article-content {portrait_class}">
-        <div class="article-image">{image_html}</div>
+        <div class="article-image">{media['image_html']}</div>
         <div class="article-right">
-          <div class="article-date">{date_str}</div>
-          {f'<div class="article-text">{text_html}</div>' if text_html else ''}
+          <div class="article-date">{media['date_str']}</div>
+          {f'<div class="article-text">{media["text_html"]}</div>' if media['text_html'] else ''}
         </div>
       </div>
     </div>'''
@@ -1030,13 +1046,35 @@ def render_article(article: dict, callback_url: str, callback_token: str, mirror
     return f'''
     <div class="article">
       <div class="article-content landscape">
-        <div class="article-image">{image_html}</div>
+        <div class="article-image">{media['image_html']}</div>
         <div class="article-bottom">
-          <div class="article-date">{date_str}</div>
-          {f'<div class="article-text">{text_html}</div>' if text_html else ''}
+          <div class="article-date">{media['date_str']}</div>
+          {f'<div class="article-text">{media["text_html"]}</div>' if media['text_html'] else ''}
         </div>
       </div>
     </div>'''
+
+
+def _render_side_by_side_column(media: dict) -> str:
+    # Reuses the "landscape" sub-layout (image on top, caption below) for
+    # each half-width column - with two portrait photos sharing a page, a
+    # side-by-side row-of-articles / stacked-per-column split fits the
+    # taller/narrower images far better than the normal full-width stacking.
+    return f'''
+    <div class="article">
+      <div class="article-content landscape">
+        <div class="article-image">{media['image_html']}</div>
+        <div class="article-bottom">
+          <div class="article-date">{media['date_str']}</div>
+          {f'<div class="article-text">{media["text_html"]}</div>' if media['text_html'] else ''}
+        </div>
+      </div>
+    </div>'''
+
+
+def render_article(article: dict, callback_url: str, callback_token: str, mirrored: bool = False) -> str:
+    media = _prepare_article_media(article, callback_url, callback_token)
+    return _render_article_html(media, mirrored=mirrored)
 
 
 def generate_month_chunk_html(month_articles: list, month_year_label: str, month_index: int,
@@ -1059,10 +1097,23 @@ def generate_month_chunk_html(month_articles: list, month_year_label: str, month
     for i in range(0, len(month_articles), 2):
         current_page += 1
         mirrored = mirror_odd_pages and current_page % 2 == 1
-        pages_html += '\n  <div class="articles-page">\n'
-        pages_html += render_article(month_articles[i], callback_url, callback_token, mirrored=mirrored)
-        if i + 1 < len(month_articles):
-            pages_html += render_article(month_articles[i + 1], callback_url, callback_token, mirrored=mirrored)
+
+        media_a = _prepare_article_media(month_articles[i], callback_url, callback_token)
+        media_b = (
+            _prepare_article_media(month_articles[i + 1], callback_url, callback_token)
+            if i + 1 < len(month_articles) else None
+        )
+        both_portrait = media_a['is_portrait'] and media_b is not None and media_b['is_portrait']
+
+        if both_portrait:
+            pages_html += '\n  <div class="articles-page side-by-side">\n'
+            pages_html += _render_side_by_side_column(media_a)
+            pages_html += _render_side_by_side_column(media_b)
+        else:
+            pages_html += '\n  <div class="articles-page">\n'
+            pages_html += _render_article_html(media_a, mirrored=mirrored)
+            if media_b:
+                pages_html += _render_article_html(media_b, mirrored=mirrored)
         pages_html += f'\n    <div class="page-number">{current_page}</div>\n  </div>\n'
 
     return f'''<!doctype html>
@@ -1183,6 +1234,12 @@ def build_page_css() -> str:
     # the mosaic exactly, instead of the title's centering silently eating
     # into space the fruit row already occupies.
     top_fruit_band_bottom_cm = 0.1 + _seasonal_icon_size_cm()
+    # Top edge of the bottom seasonal-fruit row - mirrors
+    # top_fruit_band_bottom_cm so the subtitle band below the mosaic (see
+    # month-subtitle-container-centered) gets the same treatment as the
+    # title band above it: it spans exactly from the mosaic's bottom edge
+    # to where the bottom fruit row starts, then centers its own content.
+    bottom_fruit_band_top_cm = PAGE_CONTENT_HEIGHT_CM - 0.1 - _seasonal_icon_size_cm()
     return _font_face_css() + f"""
 @page {{ size: {page_width_cm}cm {page_height_cm}cm; margin-top: {margin_top_cm}cm; margin-right: {margin_right_cm}cm; margin-bottom: {margin_bottom_cm}cm; margin-left: {margin_left_cm}cm; }}
 * {{ box-sizing: border-box; }}
@@ -1205,6 +1262,21 @@ body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
 .article {{ flex: 1; border: 1px solid #ccc; display: flex; flex-direction: column; overflow: hidden; max-height: 13.5cm; }}
 .article:nth-child(2) {{ margin-top: 0.2cm; }}
 .article-content {{ flex: 1; display: flex; overflow: hidden; }}
+
+/* Two portrait photos sharing a page: side-by-side columns instead of the
+   default full-width vertical stack - each column keeps its own full page
+   height (no 13.5cm cap, which was tuned for the stacked half-height case)
+   and its own caption directly below the image. */
+.articles-page.side-by-side {{ flex-direction: row; }}
+.articles-page.side-by-side .article {{ max-height: none; }}
+.articles-page.side-by-side .article:nth-child(2) {{ margin-top: 0; }}
+/* The base landscape rule flex-grows .article-image to fill the column,
+   which is fine for a width-capped landscape photo but leaves a large dead
+   gap below a width-fit portrait photo (the box still fills the column,
+   the image doesn't) - here the image box sizes to its own content instead
+   so the caption sits right below the photo. */
+.articles-page.side-by-side .article-content.landscape .article-image {{ flex: 0 1 auto; }}
+.articles-page.side-by-side .article-content.landscape .article-image img {{ height: auto; max-height: 22cm; }}
 
 .article-content.landscape {{ flex-direction: column; align-items: stretch; }}
 /* The image is the flexible side (flex plus min-height:0 lets it shrink
@@ -1245,6 +1317,7 @@ body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
 .month-title-container {{ position: absolute; top: 40%; left: 0; right: 0; text-align: center; transform: translateY(-50%); z-index: 5; }}
 .month-title {{ font-size: 42pt; font-weight: bold; color: #333; margin: 0 0 0.5cm 0; text-shadow: 2px 2px 4px rgba(255,255,255,0.8); }}
 .month-subtitle {{ font-size: 16pt; color: #666; margin: 0; }}
+.month-title-container-centered .month-title {{ margin: 0; }}
 
 /* The mosaic square is vertically centered on the page (top: calc(50% -
    6cm), i.e. half its own 12cm height above/below center) so the gap above
@@ -1265,6 +1338,14 @@ body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
 .month-mosaic-centered {{ position: absolute; top: calc(50% - 6cm); left: 50%; transform: translateX(-50%); width: 12cm; height: 12cm; border-radius: 0.15cm; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }}
 .month-mosaic-centered .month-mosaic-cell {{ position: absolute; }}
 .month-mosaic-centered .month-mosaic-cell img {{ width: 100%; height: 100%; object-fit: cover; }}
+
+/* Subtitle band below the mosaic - mirrors the title band above it
+   (month-title-container-centered): spans from the mosaic's bottom edge to
+   where the bottom fruit row starts, then centers its own content, so the
+   subtitle sits centered in that space instead of stacked under the title
+   above the mosaic. */
+.month-divider-centered .month-subtitle-container-centered {{ position: absolute; top: calc(50% + 6cm); left: 0; right: 0; height: calc({bottom_fruit_band_top_cm}cm - 50% - 6cm); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; z-index: 5; }}
+.month-subtitle-container-centered .month-subtitle {{ margin: 0; }}
 """
 
 
@@ -1324,9 +1405,10 @@ def report_status(callback_url: str, token: str, job_id: str, progress: int, mes
     })
 
 
-def report_complete(callback_url: str, token: str, job_id: str, folder_id: str, folder_url: str):
+def report_complete(callback_url: str, token: str, job_id: str, folder_id: str, folder_url: str, chunks_count: int):
     api_call(callback_url, "pdf/render-complete", {
         "token": token, "job_id": job_id, "folder_id": folder_id, "folder_url": folder_url,
+        "chunks_count": str(chunks_count),
     })
 
 
@@ -1400,6 +1482,29 @@ def month_label(key: str) -> str:
         return key
 
 
+def _blank_page_html() -> str:
+    return f'''<!doctype html>
+<html><head><meta charset="utf-8"><style>{build_page_css()}</style></head>
+<body><div class="articles-page"></div></body></html>'''
+
+
+def _compute_divider_blank_pages(months: list, page_counts: dict) -> dict:
+    """For each month (in order), decide whether a blank page must be
+    inserted right before its month-divider so the divider always lands on
+    a right-hand (odd, recto) page - same recto/verso convention already
+    used by blurb_mirror_odd_pages (odd = recto, outer edge on the right)."""
+    needs_blank_before = {}
+    cumulative = 0
+    for key in months:
+        divider_page = cumulative + 1
+        blank_needed = divider_page % 2 == 0
+        needs_blank_before[key] = blank_needed
+        if blank_needed:
+            cumulative += 1
+        cumulative += page_counts[key]
+    return needs_blank_before
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -1443,7 +1548,9 @@ def main():
         months = sorted(by_month.keys())
 
         page_counts = {key: 1 + math.ceil(len(by_month[key]) / 2) for key in months}
-        total_pages = sum(page_counts.values())
+        divider_blank_pages = _compute_divider_blank_pages(months, page_counts)
+        extra_recto_blanks = sum(1 for needed in divider_blank_pages.values() if needed)
+        total_pages = sum(page_counts.values()) + extra_recto_blanks
 
         # RPI Print requires an even interior page count. Rather than reject
         # the export, pad with one blank trailing page - the family shouldn't
@@ -1471,11 +1578,21 @@ def main():
         total_chunks = (
             (0 if blurb_mode else 1)
             + len(months)
+            + extra_recto_blanks
             + (1 if needs_blank_padding else 0)
             + (1 if blurb_mode and blurb_page_count_ok else 0)
         )
         report_status(args.callback_url, args.callback_token, args.job_id, 8,
                       f"Rendering {total_chunks} chunk(s) for {len(articles)} article(s)")
+
+        uploaded_count = 0
+        # Chunk filenames are numbered for merge ordering (see
+        # merge_pdf_from_drive.py's sort_key, which sorts on this integer) -
+        # 0 is reserved for the cover, so every other upload (month chunks
+        # and the recto-alignment/Blurb padding blanks) draws from this one
+        # running counter instead of a per-month index, since blank pages
+        # can now be inserted between months.
+        chunk_seq = 1
 
         with sync_playwright() as p:
             browser = p.chromium.launch()
@@ -1485,11 +1602,21 @@ def main():
                                                  options, config, args.callback_url, args.callback_token)
                 cover_pdf = render_html_to_pdf(browser, cover_html)
                 upload_pdf(service, folder_id, "chunk_000_cover.pdf", cover_pdf)
+                uploaded_count += 1
                 report_status(args.callback_url, args.callback_token, args.job_id,
                               10, f"Rendered cover (1/{total_chunks})")
 
             start_page = 0
             for idx, key in enumerate(months, start=1):
+                if divider_blank_pages.get(key):
+                    blank_pdf = render_html_to_pdf(browser, _blank_page_html())
+                    upload_pdf(service, folder_id, f"chunk_{chunk_seq:03d}_recto-blank.pdf", blank_pdf)
+                    chunk_seq += 1
+                    uploaded_count += 1
+                    start_page += 1
+                    report_status(args.callback_url, args.callback_token, args.job_id,
+                                  10, f"Rendered blank page (aligning {month_label(key)} to a right-hand page)")
+
                 month_index = int(key.split('-')[1]) - 1
                 chunk_html = generate_month_chunk_html(
                     by_month[key], month_label(key), month_index,
@@ -1498,17 +1625,18 @@ def main():
                 start_page += page_counts[key]
 
                 chunk_pdf = render_html_to_pdf(browser, chunk_html)
-                upload_pdf(service, folder_id, f"chunk_{idx:03d}_{key}.pdf", chunk_pdf)
+                upload_pdf(service, folder_id, f"chunk_{chunk_seq:03d}_{key}.pdf", chunk_pdf)
+                chunk_seq += 1
+                uploaded_count += 1
                 progress = 10 + int(65 * idx / max(len(months), 1))
                 report_status(args.callback_url, args.callback_token, args.job_id,
-                              progress, f"Rendered {month_label(key)} ({idx + 1}/{total_chunks})")
+                              progress, f"Rendered {month_label(key)} ({uploaded_count}/{total_chunks})")
 
             if needs_blank_padding:
-                blank_html = f'''<!doctype html>
-<html><head><meta charset="utf-8"><style>{build_page_css()}</style></head>
-<body><div class="articles-page"></div></body></html>'''
-                blank_pdf = render_html_to_pdf(browser, blank_html)
-                upload_pdf(service, folder_id, f"chunk_{len(months) + 1:03d}_blank.pdf", blank_pdf)
+                blank_pdf = render_html_to_pdf(browser, _blank_page_html())
+                upload_pdf(service, folder_id, f"chunk_{chunk_seq:03d}_blank.pdf", blank_pdf)
+                chunk_seq += 1
+                uploaded_count += 1
                 report_status(args.callback_url, args.callback_token, args.job_id,
                               78, "Rendered blank padding page (even page count for Blurb)")
 
@@ -1522,6 +1650,7 @@ def main():
                     )
                     cover_wrap_pdf = render_html_to_pdf(browser, cover_wrap_html)
                     upload_pdf(service, folder_id, "cover_wrap.pdf", cover_wrap_pdf)
+                    uploaded_count += 1
                     report_status(args.callback_url, args.callback_token, args.job_id,
                                   85, f"Rendered Blurb cover-wrap (spine {blurb_spine_width_in:.3f}in)")
                 else:
@@ -1533,8 +1662,8 @@ def main():
 
             browser.close()
 
-        report_complete(args.callback_url, args.callback_token, args.job_id, folder_id, folder_url)
-        print(json.dumps({"chunks_folder_id": folder_id, "chunks_folder_url": folder_url}))
+        report_complete(args.callback_url, args.callback_token, args.job_id, folder_id, folder_url, uploaded_count)
+        print(json.dumps({"chunks_folder_id": folder_id, "chunks_folder_url": folder_url, "chunks_count": uploaded_count}))
     except SystemExit as exc:
         report_failed(args.callback_url, args.callback_token, args.job_id, str(exc))
         raise

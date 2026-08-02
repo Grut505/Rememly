@@ -59,6 +59,7 @@ export function ArticleEditor() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [assemblyStateData, setAssemblyStateData] = useState<object | undefined>(undefined)
   const [autoDateFromPhoto, setAutoDateFromPhoto] = useState(true)
+  const [articleFullPage, setArticleFullPage] = useState(false)
 
   const initialSnapshotRef = useRef<{
     texte: string
@@ -134,6 +135,7 @@ export function ArticleEditor() {
       if (cached) {
         setArticleImageUrl(cached.image_url || '')
         setArticleImageFileId(cached.image_file_id || '')
+        setArticleFullPage(cached.full_page || false)
         initialSnapshotRef.current = {
           texte: cached.texte || '',
           dateModification: cached.date,
@@ -210,6 +212,7 @@ export function ArticleEditor() {
         setArticleImageUrl(cached.image_url || '')
         setArticleImageFileId(cached.image_file_id || '')
         setArticleStatus(cached.status || 'ACTIVE')
+        setArticleFullPage(cached.full_page || false)
         initialSnapshotRef.current = {
           texte: cached.texte || '',
           dateModification: cached.date,
@@ -225,6 +228,7 @@ export function ArticleEditor() {
       setArticleImageUrl(article.image_url || '')
       setArticleImageFileId(article.image_file_id || '')
       setArticleStatus(article.status || 'ACTIVE')
+      setArticleFullPage(article.full_page || false)
       initialSnapshotRef.current = {
         texte: article.texte,
         dateModification: article.date,
@@ -487,6 +491,7 @@ export function ArticleEditor() {
         imageUrl={articleImageUrl}
         imageFileId={articleImageFileId}
         articleId={id}
+        fullPage={articleFullPage}
       />
       </div>
     </div>

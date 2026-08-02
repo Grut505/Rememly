@@ -23,6 +23,8 @@ interface FamileoPostsApiResponse {
   unreadPost?: number
 }
 
+class FamileoSessionError extends Error {}
+
 async function getConfigValue(env: Env, key: string): Promise<string | null> {
   const row = await env.DB.prepare('select value from config where key = ?1 limit 1')
     .bind(key)
@@ -54,7 +56,7 @@ async function famileoFetchPosts(
   const familyId = opts.familyId || (await getConfigValue(env, 'famileo_family_id')) || '321238'
   const session = await getFamileoSession(env, opts.famileoEmail)
   if (!session) {
-    throw new Error('Famileo session not configured. Waiting for GitHub Actions to refresh cookies.')
+    throw new FamileoSessionError('Famileo session not configured. Waiting for GitHub Actions to refresh cookies.')
   }
 
   let url = `https://www.famileo.com/api/families/${familyId}/posts?limit=${opts.limit}`
@@ -71,14 +73,15 @@ async function famileoFetchPosts(
     },
   })
 
-  if (response.status === 401 || response.status === 403) {
-    throw new Error('Session expired. Please trigger a Famileo refresh.')
+  const text = await response.text()
+  if (response.status === 401 || response.status === 403 || looksLikeSessionExpired(response.status, text)) {
+    throw new FamileoSessionError('Session expired. Please trigger a Famileo refresh.')
   }
   if (response.status !== 200) {
     throw new Error(`Failed to fetch posts: HTTP ${response.status}`)
   }
 
-  return response.json()
+  return JSON.parse(text)
 }
 
 async function buildFamileoAuthorMap(env: Env) {
@@ -109,18 +112,68 @@ export const famileoStatusHandler: RouteHandler = async (request, context) => {
     return auth.response
   }
 
+  const url = new URL(request.url)
+  const shouldValidate = url.searchParams.get('validate') === 'true'
+  const familyIdParam = url.searchParams.get('family_id')
+
   const session = await context.env.DB.prepare(
-    'select famileo_email, updated_at from famileo_sessions order by updated_at desc limit 1'
-  ).first<{ famileo_email: string | null; updated_at: string | null }>()
+    'select famileo_email, phpsessid, rememberme, updated_at from famileo_sessions order by updated_at desc limit 1'
+  ).first<{ famileo_email: string | null; phpsessid: string; rememberme: string; updated_at: string | null }>()
 
   const configured = !!session
-  return ok({
-    configured,
-    valid: configured,
-    message: getSessionMessage(configured),
-    famileo_email: session?.famileo_email || '',
-    updated_at: session?.updated_at || null,
-  })
+  if (!configured) {
+    return ok({
+      configured: false,
+      valid: false,
+      message: getSessionMessage(false),
+      famileo_email: '',
+      updated_at: null,
+    })
+  }
+
+  if (!shouldValidate) {
+    return ok({
+      configured: true,
+      valid: true,
+      message: getSessionMessage(true),
+      famileo_email: session.famileo_email || '',
+      updated_at: session.updated_at || null,
+    })
+  }
+
+  // A DB row can exist while its cookies are stale (refresh mid-flight, or
+  // the session simply expired) - callers polling with validate=true are
+  // waiting to know the cookies actually work again, which only a real
+  // request against Famileo can confirm.
+  try {
+    const familyId = familyIdParam || (await getConfigValue(context.env, 'famileo_family_id')) || '321238'
+    const response = await fetch(`https://www.famileo.com/api/families/${familyId}/posts?limit=1`, {
+      method: 'GET',
+      headers: {
+        Cookie: formatFamileoCookies(session),
+        Accept: 'application/json',
+        Referer: 'https://www.famileo.com/',
+      },
+    })
+    const text = await response.text()
+    const valid = response.status >= 200 && response.status < 300 && !looksLikeSessionExpired(response.status, text)
+
+    return ok({
+      configured: true,
+      valid,
+      message: valid ? getSessionMessage(true) : 'Session expired. Waiting for Famileo refresh to complete...',
+      famileo_email: session.famileo_email || '',
+      updated_at: session.updated_at || null,
+    })
+  } catch {
+    return ok({
+      configured: true,
+      valid: false,
+      message: 'Unable to validate the Famileo session right now.',
+      famileo_email: session.famileo_email || '',
+      updated_at: session.updated_at || null,
+    })
+  }
 }
 
 type TriggerRefreshResult =
@@ -306,6 +359,11 @@ export const famileoPostsHandler: RouteHandler = async (request, context) => {
       counts,
     })
   } catch (error) {
+    if (error instanceof FamileoSessionError) {
+      await triggerFamileoRefresh(context.env, auth.user.email).catch(() => null)
+      await logEvent(context.env, 'famileo', 'ERROR', 'Fetch posts failed: session expired', { user: auth.user.email })
+      return fail('FAMILEO_SESSION', 'Session Famileo expirée. Rafraîchissement déclenché.', 502)
+    }
     const message = error instanceof Error ? error.message : 'Unknown Famileo error'
     return fail('FAMILEO_ERROR', message, 502)
   }

@@ -315,6 +315,7 @@ export const pdfRenderCompleteHandler: RouteHandler = async (request, context) =
   const jobId = params.get('job_id')
   const folderId = params.get('folder_id')
   const folderUrl = params.get('folder_url')
+  const chunksCount = Number(params.get('chunks_count') || '0') || 0
   if (!jobId || !folderId) {
     return fail('INVALID_PARAMS', 'Missing params', 400)
   }
@@ -323,9 +324,9 @@ export const pdfRenderCompleteHandler: RouteHandler = async (request, context) =
   if (!job) return fail('NOT_FOUND', 'Job not found', 404)
 
   await context.env.DB.prepare(
-    `update jobs_pdf set chunks_folder_id = ?2, chunks_folder_url = ?3 where job_id = ?1`
+    `update jobs_pdf set chunks_folder_id = ?2, chunks_folder_url = ?3, chunks_count = ?4 where job_id = ?1`
   )
-    .bind(jobId, folderId, folderUrl || '')
+    .bind(jobId, folderId, chunksCount > 0 ? folderUrl || '' : '', chunksCount)
     .run()
 
   let options: Record<string, unknown> = {}
@@ -460,6 +461,26 @@ export const pdfDeleteHandler: RouteHandler = async (request, context) => {
 
   const body = await readJson<{ job_id?: string }>(request)
   if (!body.job_id) return fail('MISSING_JOB_ID', 'Job ID is required', 400)
+
+  const job = await getPdfJob(context.env.DB, body.job_id)
+  const pdfFileId = job?.pdf_file_id as string | null | undefined
+  const chunksFolderId = job?.chunks_folder_id as string | null | undefined
+
+  // Deleting the job here only ever removed the D1 row - the merged PDF and
+  // the raw chunks folder stayed on Drive forever. Trash both (best-effort:
+  // a Drive hiccup shouldn't block removing the job from the list).
+  if (pdfFileId || chunksFolderId) {
+    const tokenResult = await refreshGdriveToken(context.env)
+    if (tokenResult.ok) {
+      if (pdfFileId) await driveTrashFolder(tokenResult.token, pdfFileId).catch(() => false)
+      if (chunksFolderId) await driveTrashFolder(tokenResult.token, chunksFolderId).catch(() => false)
+    } else {
+      await logEvent(context.env, 'pdf', 'ERROR', 'Delete: could not refresh Drive token to trash assets', {
+        job_id: body.job_id,
+        code: tokenResult.code,
+      })
+    }
+  }
 
   await context.env.DB.prepare('delete from jobs_pdf where job_id = ?1').bind(body.job_id).run()
   return ok({ deleted: true })
@@ -755,7 +776,7 @@ export const pdfMergeCleanupJobHandler: RouteHandler = async (request, context) 
   await driveTrashFolder(tokenResult.token, folderId)
 
   await context.env.DB.prepare(
-    `update jobs_pdf set chunks_folder_id = '', chunks_folder_url = '', progress_message = 'Chunks cleaned' where job_id = ?1`
+    `update jobs_pdf set chunks_folder_id = '', chunks_folder_url = '', chunks_count = 0, progress_message = 'Chunks cleaned' where job_id = ?1`
   )
     .bind(body.job_id)
     .run()

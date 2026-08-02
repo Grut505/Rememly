@@ -38,14 +38,25 @@ export const DEFAULT_LAYOUT: LayoutTemplate = normalize(defaultLayoutData as Par
 // being inlined into whichever chunk imports this module.
 const lazyModules = import.meta.glob('./layouts/*.json') as Record<string, () => Promise<{ default: Partial<LayoutTemplate> }>>
 
+export const TOTAL_LAYOUT_COUNT = Object.keys(lazyModules).length
+
 let cachedLayouts: LayoutTemplate[] | null = null
 let inFlight: Promise<LayoutTemplate[]> | null = null
 
-export async function loadAllLayouts(): Promise<LayoutTemplate[]> {
+export async function loadAllLayouts(onProgress?: (loaded: number, total: number) => void): Promise<LayoutTemplate[]> {
   if (cachedLayouts) return cachedLayouts
   if (inFlight) return inFlight
 
-  inFlight = Promise.all(Object.values(lazyModules).map((load) => load()))
+  const entries = Object.values(lazyModules)
+  let loaded = 0
+  inFlight = Promise.all(
+    entries.map((load) =>
+      load().finally(() => {
+        loaded += 1
+        onProgress?.(loaded, entries.length)
+      })
+    )
+  )
     .then((modules) => {
       const layouts = modules
         .map((mod) => normalize(mod.default || {}))

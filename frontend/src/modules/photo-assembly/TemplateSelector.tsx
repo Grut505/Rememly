@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LayoutTemplate, loadAllLayouts } from './layoutRegistry'
+import { LayoutTemplate, loadAllLayouts, TOTAL_LAYOUT_COUNT } from './layoutRegistry'
 
 interface TemplateSelectorProps {
   selectedTemplateId: string
@@ -11,6 +11,7 @@ export function TemplateSelector({
   onSelect,
 }: TemplateSelectorProps) {
   const [layouts, setLayouts] = useState<LayoutTemplate[] | null>(null)
+  const [loadProgress, setLoadProgress] = useState({ loaded: 0, total: TOTAL_LAYOUT_COUNT })
   const [activeCount, setActiveCount] = useState<number | 'all'>('all')
   const [activeRatio, setActiveRatio] = useState<string | 'all'>('all')
   const [activeOrientation, setActiveOrientation] = useState<'landscape' | 'portrait' | 'square' | 'all'>('all')
@@ -18,7 +19,9 @@ export function TemplateSelector({
 
   useEffect(() => {
     let cancelled = false
-    loadAllLayouts().then((loaded) => {
+    loadAllLayouts((loaded, total) => {
+      if (!cancelled) setLoadProgress({ loaded, total })
+    }).then((loaded) => {
       if (!cancelled) setLayouts(loaded)
     })
     return () => {
@@ -214,8 +217,14 @@ export function TemplateSelector({
       )}
 
       {layouts === null && (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-          Loading layouts...
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-sm text-gray-500">
+          <div>Loading layouts... {loadProgress.loaded} / {loadProgress.total}</div>
+          <div className="w-40 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary-600 transition-all"
+              style={{ width: `${loadProgress.total ? (loadProgress.loaded / loadProgress.total) * 100 : 0}%` }}
+            />
+          </div>
         </div>
       )}
 

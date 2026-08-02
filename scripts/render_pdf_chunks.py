@@ -1106,9 +1106,10 @@ def generate_month_chunk_html(month_articles: list, month_year_label: str, month
         both_portrait = media_a['is_portrait'] and media_b is not None and media_b['is_portrait']
 
         if both_portrait:
-            pages_html += '\n  <div class="articles-page side-by-side">\n'
+            pages_html += '\n  <div class="articles-page side-by-side">\n    <div class="side-by-side-row">\n'
             pages_html += _render_side_by_side_column(media_a)
             pages_html += _render_side_by_side_column(media_b)
+            pages_html += '\n    </div>\n'
         else:
             pages_html += '\n  <div class="articles-page">\n'
             pages_html += _render_article_html(media_a, mirrored=mirrored)
@@ -1210,6 +1211,11 @@ BLURB_MODE_ACTIVE = False
 # more mosaic/photo content extending into it.
 PAGE_BLEED_CM = 0.0
 
+# Article photo frame border - configurable via Settings (pdf_article_border_width_px /
+# pdf_article_border_color), applied to every interior page's .article box.
+ARTICLE_BORDER_WIDTH_PX = 1
+ARTICLE_BORDER_COLOR = '#cccccc'
+
 
 def set_page_dimensions(content_width_cm: float, content_height_cm: float, bleed_cm: float = 0.0,
                         blurb_mode: bool = False) -> None:
@@ -1218,6 +1224,12 @@ def set_page_dimensions(content_width_cm: float, content_height_cm: float, bleed
     PAGE_CONTENT_HEIGHT_CM = content_height_cm
     PAGE_BLEED_CM = bleed_cm
     BLURB_MODE_ACTIVE = blurb_mode
+
+
+def set_article_border_style(width_px: float, color: str) -> None:
+    global ARTICLE_BORDER_WIDTH_PX, ARTICLE_BORDER_COLOR
+    ARTICLE_BORDER_WIDTH_PX = width_px
+    ARTICLE_BORDER_COLOR = color
 
 
 def build_page_css() -> str:
@@ -1259,24 +1271,31 @@ body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; }}
 .mosaic-cell img {{ width: 100%; height: 100%; object-fit: cover; }}
 
 .articles-page {{ page-break-before: always; height: {PAGE_CONTENT_HEIGHT_CM}cm; display: flex; flex-direction: column; gap: 0.4cm; }}
-.article {{ flex: 1; border: 1px solid #ccc; display: flex; flex-direction: column; overflow: hidden; max-height: 13.5cm; }}
+.article {{ flex: 1; border: {ARTICLE_BORDER_WIDTH_PX}px solid {ARTICLE_BORDER_COLOR}; display: flex; flex-direction: column; overflow: hidden; max-height: 13.5cm; }}
 .article:nth-child(2) {{ margin-top: 0.2cm; }}
 .article-content {{ flex: 1; display: flex; overflow: hidden; }}
 
 /* Two portrait photos sharing a page: side-by-side columns instead of the
-   default full-width vertical stack - each column keeps its own full page
-   height (no 13.5cm cap, which was tuned for the stacked half-height case)
-   and its own caption directly below the image. */
-.articles-page.side-by-side {{ flex-direction: row; }}
-.articles-page.side-by-side .article {{ max-height: none; }}
-.articles-page.side-by-side .article:nth-child(2) {{ margin-top: 0; }}
+   default full-width vertical stack. The row lives in its own wrapper
+   (.side-by-side-row) rather than making .articles-page itself row-direction,
+   because .page-number is also a direct child of .articles-page - a
+   row-direction .articles-page would squeeze the page number into a third
+   column instead of leaving it centered at the bottom like every other
+   page mode. The wrapper is flex:1 so it automatically yields whatever
+   height .page-number needs, keeping the bottom aligned with other modes. */
+.side-by-side-row {{ flex: 1; min-height: 0; display: flex; flex-direction: row; gap: 0.4cm; }}
+.side-by-side-row .article {{ max-height: none; margin-top: 0; }}
 /* The base landscape rule flex-grows .article-image to fill the column,
    which is fine for a width-capped landscape photo but leaves a large dead
    gap below a width-fit portrait photo (the box still fills the column,
-   the image doesn't) - here the image box sizes to its own content instead
-   so the caption sits right below the photo. */
-.articles-page.side-by-side .article-content.landscape .article-image {{ flex: 0 1 auto; }}
-.articles-page.side-by-side .article-content.landscape .article-image img {{ height: auto; max-height: 22cm; }}
+   the image doesn't) - here the image box sizes to its own content instead. */
+.side-by-side-row .article-content.landscape .article-image {{ flex: 0 1 auto; }}
+.side-by-side-row .article-content.landscape .article-image img {{ height: auto; max-height: 22cm; }}
+/* The caption then takes all the leftover column height (instead of
+   flex-shrink:0 sitting right under the photo) and centers its own content
+   within it, so the caption sits centered between the photo's bottom edge
+   and the frame border rather than stuck immediately below the photo. */
+.side-by-side-row .article-content.landscape .article-bottom {{ flex: 1; }}
 
 .article-content.landscape {{ flex-direction: column; align-items: stretch; }}
 /* The image is the flexible side (flex plus min-height:0 lets it shrink
@@ -1521,6 +1540,16 @@ def main():
 
     job, articles, config = fetch_job(args.callback_url, args.callback_token, args.job_id)
     options = json.loads(job.get('options_json') or '{}')
+
+    try:
+        border_width_px = float(config.get('pdf_article_border_width_px') or 1)
+    except (TypeError, ValueError):
+        border_width_px = 1
+    border_width_px = clamp(border_width_px, 0, 20)
+    border_color = config.get('pdf_article_border_color') or '#cccccc'
+    if not re.match(r'^#[0-9a-fA-F]{3,8}$', border_color):
+        border_color = '#cccccc'
+    set_article_border_style(border_width_px, border_color)
 
     blurb_mode = bool(options.get('blurb_mode_enabled'))
     blurb_format = options.get('blurb_format') or 'magazine_premium'

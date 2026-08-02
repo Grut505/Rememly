@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Article } from '../../api/types'
 import { formatDateTimeFull } from '../../utils/date'
@@ -34,9 +34,19 @@ export function ArticleTile({ article, isDuplicate, onDeleted, onRestored, onPer
   const isDraft = article.status === 'DRAFT'
   const displayName = article.author_pseudo || 'Unknown'
 
+  const lastTapRef = useRef(0)
+
   const handleTileClick = () => {
     if (selectionMode) {
       onSelectionChange?.(article.id, !selected)
+      return
+    }
+    const now = Date.now()
+    if (now - lastTapRef.current < 350) {
+      lastTapRef.current = 0
+      navigate(`/editor/${article.id}`)
+    } else {
+      lastTapRef.current = now
     }
   }
 

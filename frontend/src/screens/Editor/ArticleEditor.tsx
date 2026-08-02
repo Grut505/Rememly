@@ -16,8 +16,10 @@ import { DateTimeInput } from './DateTimeInput'
 import { ArticleStatus } from '../../api/types'
 import { useImageLoader } from '../../hooks/useImageLoader'
 import { FamileoPosterModal } from '../../ui/FamileoPosterModal'
+import { PdfArticlePreviewModal } from '../../ui/PdfArticlePreviewModal'
 import { formatDateTimeFull } from '../../utils/date'
 import { configApi } from '../../api/config'
+import { usersApi, DeclaredUser } from '../../api/users'
 
 interface FamileoImportData {
   text: string
@@ -55,17 +57,21 @@ export function ArticleEditor() {
   const [isSaving, setIsSaving] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showFamileoPoster, setShowFamileoPoster] = useState(false)
+  const [showPdfPreview, setShowPdfPreview] = useState(false)
   const [articleStatus, setArticleStatus] = useState<ArticleStatus>('DRAFT')
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [assemblyStateData, setAssemblyStateData] = useState<object | undefined>(undefined)
   const [autoDateFromPhoto, setAutoDateFromPhoto] = useState(true)
   const [articleFullPage, setArticleFullPage] = useState(false)
+  const [articleAuthor, setArticleAuthor] = useState('')
+  const [declaredUsers, setDeclaredUsers] = useState<DeclaredUser[]>([])
 
   const initialSnapshotRef = useRef<{
     texte: string
     dateModification: string
     photoFile: File | null
     articleStatus: ArticleStatus
+    articleAuthor: string
   } | null>(null)
 
   const isEditMode = !!id
@@ -136,12 +142,34 @@ export function ArticleEditor() {
         setArticleImageUrl(cached.image_url || '')
         setArticleImageFileId(cached.image_file_id || '')
         setArticleFullPage(cached.full_page || false)
+        setArticleAuthor(cached.auteur || '')
         initialSnapshotRef.current = {
           texte: cached.texte || '',
           dateModification: cached.date,
           photoFile: null,
           articleStatus: cached.status || 'ACTIVE',
+          articleAuthor: cached.auteur || '',
         }
+      } else {
+        // Not in the store yet (e.g. deep-linked straight into edit mode,
+        // so Timeline never populated it) - without this fallback,
+        // articleAuthor/articleImageUrl/the snapshot were silently left at
+        // their blank defaults, which made the save right after Assembly
+        // attribute the article to whoever is logged in instead of its
+        // real author.
+        articlesApi.get(id).then((article) => {
+          setArticleImageUrl(article.image_url || '')
+          setArticleImageFileId(article.image_file_id || '')
+          setArticleFullPage(article.full_page || false)
+          setArticleAuthor(article.auteur || '')
+          initialSnapshotRef.current = {
+            texte: article.texte || '',
+            dateModification: article.date,
+            photoFile: null,
+            articleStatus: article.status || 'ACTIVE',
+            articleAuthor: article.auteur || '',
+          }
+        }).catch(() => {})
       }
     }
 
@@ -164,6 +192,24 @@ export function ArticleEditor() {
   }, [])
 
   useEffect(() => {
+    usersApi.list()
+      .then((response) => {
+        const activeUsers = (response.users || []).filter((u) => String(u.status || '').toUpperCase() === 'ACTIVE')
+        setDeclaredUsers(activeUsers)
+      })
+      .catch(() => setDeclaredUsers([]))
+  }, [])
+
+  // New articles default to whoever is creating them - existing articles
+  // get their real author from loadArticle/the Assembly-restore effect
+  // instead, so this only ever applies before either of those can run.
+  useEffect(() => {
+    if (!isEditMode && user?.email) {
+      setArticleAuthor(user.email)
+    }
+  }, [isEditMode, user])
+
+  useEffect(() => {
     const fromAssembly = (location.state as AssemblyReturnData | null)?.fromAssembly
     // Coming back from Assembly is handled entirely by the effect above
     // (which restores the real texte/date/status/snapshot) - loadArticle
@@ -179,6 +225,7 @@ export function ArticleEditor() {
         dateModification,
         photoFile: null,
         articleStatus: 'DRAFT',
+        articleAuthor: user?.email || '',
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -213,11 +260,13 @@ export function ArticleEditor() {
         setArticleImageFileId(cached.image_file_id || '')
         setArticleStatus(cached.status || 'ACTIVE')
         setArticleFullPage(cached.full_page || false)
+        setArticleAuthor(cached.auteur || '')
         initialSnapshotRef.current = {
           texte: cached.texte || '',
           dateModification: cached.date,
           photoFile: null,
           articleStatus: cached.status || 'ACTIVE',
+          articleAuthor: cached.auteur || '',
         }
         return
       }
@@ -229,11 +278,13 @@ export function ArticleEditor() {
       setArticleImageFileId(article.image_file_id || '')
       setArticleStatus(article.status || 'ACTIVE')
       setArticleFullPage(article.full_page || false)
+      setArticleAuthor(article.auteur || '')
       initialSnapshotRef.current = {
         texte: article.texte,
         dateModification: article.date,
         photoFile: null,
         articleStatus: article.status || 'ACTIVE',
+        articleAuthor: article.auteur || '',
       }
     } catch (error) {
       showToast('Failed to load article', 'error')
@@ -264,13 +315,16 @@ export function ArticleEditor() {
           dateModification,
           assemblyStateData,
           undefined, // fullPage
-          newStatus
+          newStatus,
+          undefined, // famileoPostId
+          undefined, // famileoMarked
+          articleAuthor || user.email
         )
         updateArticleInStore(updated)
         showToast(isDeleted ? 'Article restored' : 'Article updated', 'success')
       } else if (photoFile) {
         await articlesService.createArticle(
-          user.email,
+          articleAuthor || user.email,
           texte,
           photoFile,
           dateModification,
@@ -303,6 +357,7 @@ export function ArticleEditor() {
       texte !== initial.texte ||
       dateModification !== initial.dateModification ||
       articleStatus !== initial.articleStatus ||
+      articleAuthor !== initial.articleAuthor ||
       photoFile !== null
     )
   }
@@ -366,23 +421,55 @@ export function ArticleEditor() {
         <h1 className="text-lg font-semibold">
           {isEditMode ? 'Edit Article' : 'New Article'}
         </h1>
-        <button
-          type="button"
-          onClick={() => setShowFamileoPoster(true)}
-          className="absolute right-4 top-1/2 -translate-y-1/2 inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
-          aria-label="Poster vers Famileo"
-        >
-          <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-            <path d="M22 2L11 13"></path>
-            <path d="M22 2l-7 20-4-9-9-4 20-7z"></path>
-          </svg>
-          Famileo
-        </button>
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowPdfPreview(true)}
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors"
+            aria-label="Preview in PDF"
+          >
+            <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+              <path d="M14 3v4a1 1 0 001 1h4"></path>
+              <path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"></path>
+            </svg>
+            PDF
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowFamileoPoster(true)}
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
+            aria-label="Poster vers Famileo"
+          >
+            <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+              <path d="M22 2L11 13"></path>
+              <path d="M22 2l-7 20-4-9-9-4 20-7z"></path>
+            </svg>
+            Famileo
+          </button>
+        </div>
       </header>
 
       {/* Content */}
       <div className="flex-1 p-4 space-y-6 pb-28">
         <DateTimeInput value={dateModification} onChange={setDateModification} />
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Author</label>
+          <select
+            value={articleAuthor}
+            onChange={(e) => setArticleAuthor(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+          >
+            {articleAuthor && !declaredUsers.some((declaredUser) => declaredUser.email === articleAuthor) && (
+              <option value={articleAuthor}>{articleAuthor}</option>
+            )}
+            {declaredUsers.map((declaredUser) => (
+              <option key={declaredUser.email} value={declaredUser.email}>
+                {declaredUser.pseudo || declaredUser.email}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium text-gray-700">Status</div>
@@ -482,8 +569,8 @@ export function ArticleEditor() {
       <FamileoPosterModal
         isOpen={showFamileoPoster}
         onClose={() => setShowFamileoPoster(false)}
-        authorLabel={user?.email || 'Unknown'}
-        authorEmail={user?.email || ''}
+        authorLabel={declaredUsers.find((declaredUser) => declaredUser.email === articleAuthor)?.pseudo || articleAuthor || user?.email || 'Unknown'}
+        authorEmail={articleAuthor || user?.email || ''}
         dateLabel={formatDateTimeFull(dateModification)}
         excerpt={texte}
         text={texte}
@@ -492,6 +579,15 @@ export function ArticleEditor() {
         imageFileId={articleImageFileId}
         articleId={id}
         fullPage={articleFullPage}
+      />
+      <PdfArticlePreviewModal
+        isOpen={showPdfPreview}
+        onClose={() => setShowPdfPreview(false)}
+        articleId={id}
+        articleDate={dateModification}
+        articleTexte={texte}
+        photoFile={photoFile}
+        articleImageFileId={articleImageFileId}
       />
       </div>
     </div>

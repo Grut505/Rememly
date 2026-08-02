@@ -29,6 +29,8 @@ import {
 } from './routes/famileo'
 import { imageFetchHandler, preparationOnlyHandler } from './routes/preparation'
 import {
+  pdfArticlePreviewDataHandler,
+  pdfArticlePreviewHandler,
   pdfCoverPreviewContentHandler,
   pdfCoverPreviewDeleteHandler,
   pdfCoverPreviewHandler,
@@ -154,6 +156,8 @@ register('GET', '/pdf/preview-job', pdfPreviewJobHandler)
 register('POST', '/pdf/preview-complete', pdfPreviewCompleteHandler)
 register('GET', '/pdf/preview-failed', pdfPreviewFailedHandler)
 register('POST', '/pdf/preview-failed', pdfPreviewFailedHandler)
+register('POST', '/pdf/article-preview', pdfArticlePreviewHandler)
+register('GET', '/pdf/article-preview-data', pdfArticlePreviewDataHandler)
 register('GET', '/logs/pdf/range', logsRangeHandler)
 register('POST', '/logs/pdf/range', logsRangeHandler)
 register('POST', '/logs/pdf/clear', logsClearHandler)

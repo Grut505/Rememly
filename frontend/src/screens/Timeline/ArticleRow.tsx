@@ -46,6 +46,7 @@ export function ArticleRow({ article, isDuplicate, onDeleted, onRestored, onPerm
   // alone for the page's native scroll instead of being hijacked.
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null)
   const justSwipedRef = useRef(false)
+  const lastTapRef = useRef(0)
 
   const handleSwipePointerDown = (e: React.PointerEvent) => {
     if (selectionMode) return
@@ -100,6 +101,14 @@ export function ArticleRow({ article, isDuplicate, onDeleted, onRestored, onPerm
     }
     if (selectionMode) {
       onSelectionChange?.(article.id, !selected)
+      return
+    }
+    const now = Date.now()
+    if (now - lastTapRef.current < 350) {
+      lastTapRef.current = 0
+      navigate(`/editor/${article.id}`)
+    } else {
+      lastTapRef.current = now
     }
   }
 

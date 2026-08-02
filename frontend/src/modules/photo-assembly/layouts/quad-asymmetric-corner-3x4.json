@@ -1,0 +1,36 @@
+{
+  "id": "quad-asymmetric-corner-3x4",
+  "name": "Asymmetric Corner Quad (3x4)",
+  "aspectRatio": 0.75,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 65,
+      "height": 65
+    },
+    {
+      "x": 65,
+      "y": 0,
+      "width": 35,
+      "height": 65
+    },
+    {
+      "x": 0,
+      "y": 65,
+      "width": 65,
+      "height": 35
+    },
+    {
+      "x": 65,
+      "y": 65,
+      "width": 35,
+      "height": 35
+    }
+  ],
+  "tags": [
+    "grid",
+    "4-photos",
+    "3x4"
+  ]
+}

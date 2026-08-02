@@ -2,13 +2,14 @@ import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 're
 import { LayoutTemplate } from './layoutRegistry'
 import { StateManager } from './StateManager'
 import { CONSTANTS } from '../../utils/constants'
-import { getAllEffectiveRects, getResizeHandles, resizeEdge, Rect, ResizeEdge } from './zoneGeometry'
+import { getAllEffectiveRects, getResizeHandles, resizeEdge, resizeBlockEdge, Rect, ResizeEdge, ResizeMode } from './zoneGeometry'
 
 interface AssemblyCanvasProps {
   template: LayoutTemplate
   stateManager: StateManager
   selectedZoneIndex: number | null
   onZoneSelect: (zoneIndex: number) => void
+  onZoneDoubleClick?: (zoneIndex: number) => void
   onStateChange: () => void
   stateVersion: number
   separatorWidth: number
@@ -30,6 +31,7 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
   stateManager,
   selectedZoneIndex,
   onZoneSelect,
+  onZoneDoubleClick,
   onStateChange,
   stateVersion,
   separatorWidth,
@@ -67,6 +69,7 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
   })
   const resizeRef = useRef<{
     edge: ResizeEdge
+    mode: ResizeMode
     zoneIndex: number
     startPoint: { x: number; y: number }
     startRects: Rect[]
@@ -317,21 +320,26 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
       ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
     }
 
-    // Resize handles - small draggable squares at the midpoint of each edge
-    // of the selected zone that's shared with a neighbor. Skipped in swap
-    // mode (long-press) so the two gestures never fight over the same drag.
+    // Resize handles - two per shared edge of the selected zone: a 'line'
+    // handle right on the border (drags every zone sharing that line, like
+    // before) and a smaller 'block' handle inset into the zone (resizes
+    // only this zone, which can open a gap/overlap - see resizeBlockEdge).
+    // Skipped in swap mode (long-press) so the two gestures never fight
+    // over the same drag.
     if (selectedZoneIndex !== null && !swap.isSwapMode) {
-      const handles = getResizeHandles(effectiveRects, selectedZoneIndex)
-      const handleSize = 18 * editScale
+      const handles = getResizeHandles(effectiveRects, selectedZoneIndex, template.zones)
+      const lineHandleSize = 18 * editScale
+      const blockHandleSize = 12 * editScale
       handles.forEach((handle) => {
         const hx = (handle.x / 100) * width
         const hy = (handle.y / 100) * height
+        const isLine = handle.mode === 'line'
         ctx.save()
-        ctx.fillStyle = '#2563eb'
+        ctx.fillStyle = isLine ? '#2563eb' : '#f97316'
         ctx.strokeStyle = '#ffffff'
         ctx.lineWidth = 2 * editScale
         ctx.beginPath()
-        ctx.arc(hx, hy, handleSize / 2, 0, Math.PI * 2)
+        ctx.arc(hx, hy, (isLine ? lineHandleSize : blockHandleSize) / 2, 0, Math.PI * 2)
         ctx.fill()
         ctx.stroke()
         ctx.restore()
@@ -386,13 +394,25 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
     const width = canvas.width
     const height = canvas.height
     const editScale = getEditScale()
-    const radius = (18 * editScale) / 2 + 10 * editScale // generous touch target beyond the drawn dot
-    const handles = getResizeHandles(rects, selectedZoneIndex)
-    return handles.find((handle) => {
+    const handles = getResizeHandles(rects, selectedZoneIndex, template.zones)
+    // Line and block handles for the same edge sit close together - pick
+    // whichever is actually closest to the touch point (within its own
+    // touch radius) instead of the first one that merely overlaps, so a tap
+    // nearer the inset 'block' dot doesn't get swallowed by the 'line' one.
+    let closest: (typeof handles)[number] | null = null
+    let closestDist = Infinity
+    for (const handle of handles) {
       const hx = (handle.x / 100) * width
       const hy = (handle.y / 100) * height
-      return Math.hypot(point.x - hx, point.y - hy) <= radius
-    }) || null
+      const dotSize = handle.mode === 'line' ? 18 * editScale : 12 * editScale
+      const radius = dotSize / 2 + 10 * editScale // generous touch target beyond the drawn dot
+      const dist = Math.hypot(point.x - hx, point.y - hy)
+      if (dist <= radius && dist < closestDist) {
+        closestDist = dist
+        closest = handle
+      }
+    }
+    return closest
   }
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -404,6 +424,7 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
     if (handle && selectedZoneIndex !== null) {
       resizeRef.current = {
         edge: handle.edge,
+        mode: handle.mode,
         zoneIndex: selectedZoneIndex,
         startPoint: point,
         startRects: rects,
@@ -492,7 +513,9 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
       const isVertical = resize.edge === 'left' || resize.edge === 'right'
       const deltaPx = isVertical ? point.x - resize.startPoint.x : point.y - resize.startPoint.y
       const deltaPct = (deltaPx / (isVertical ? canvas.width : canvas.height)) * 100
-      const nextRects = resizeEdge(resize.startRects, resize.zoneIndex, resize.edge, deltaPct)
+      const nextRects = resize.mode === 'block'
+        ? resizeBlockEdge(resize.startRects, resize.zoneIndex, resize.edge, deltaPct)
+        : resizeEdge(resize.startRects, resize.zoneIndex, resize.edge, deltaPct)
       nextRects.forEach((rect, i) => {
         const original = resize.startRects[i]
         if (rect.x !== original.x || rect.y !== original.y || rect.width !== original.width || rect.height !== original.height) {
@@ -624,6 +647,7 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
           onZoneSelect(candidate.zoneIndex)
         } else {
           lastClickRef.current = { time: 0, zone: null }
+          onZoneDoubleClick?.(candidate.zoneIndex)
         }
       }
       activeZoneRef.current = null

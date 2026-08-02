@@ -1,0 +1,36 @@
+{
+  "id": "quad-asymmetric-corner-16x9",
+  "name": "Asymmetric Corner Quad (16x9)",
+  "aspectRatio": 1.7778,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 65,
+      "height": 65
+    },
+    {
+      "x": 65,
+      "y": 0,
+      "width": 35,
+      "height": 65
+    },
+    {
+      "x": 0,
+      "y": 65,
+      "width": 65,
+      "height": 35
+    },
+    {
+      "x": 65,
+      "y": 65,
+      "width": 35,
+      "height": 35
+    }
+  ],
+  "tags": [
+    "grid",
+    "4-photos",
+    "16x9"
+  ]
+}

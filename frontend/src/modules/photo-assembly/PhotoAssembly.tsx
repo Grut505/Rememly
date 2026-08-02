@@ -50,6 +50,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   const [webcamError, setWebcamError] = useState<string>('')
   const [lastPhotoDate, setLastPhotoDate] = useState<Date | null>(null)
   const [fineAdjustZoneIndex, setFineAdjustZoneIndex] = useState<number | null>(null)
+  const [selectedZoneFormat, setSelectedZoneFormat] = useState<string>('')
 
   const trackPhotoDate = (file: File) => {
     getPhotoDate(file).then((date) => setLastPhotoDate(date))
@@ -364,6 +365,30 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
     return dims
   }
 
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
+
+  useEffect(() => {
+    if (selectedZoneIndex === null) {
+      setSelectedZoneFormat('')
+      return
+    }
+    const photo = stateManager.getPhotoForZone(selectedZoneIndex)
+    if (!photo) {
+      setSelectedZoneFormat('')
+      return
+    }
+    let cancelled = false
+    getPhotoDimensions(photo).then(({ width, height }) => {
+      if (cancelled || !width || !height) return
+      const divisor = gcd(width, height)
+      setSelectedZoneFormat(`${width} × ${height} px · ${width / divisor}:${height / divisor}`)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedZoneIndex, stateVersion])
+
   const handleFitZone = async (zoneIndex: number) => {
     const photo = stateManager.getPhotoForZone(zoneIndex)
     if (!photo) {
@@ -616,6 +641,10 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
             stateManager={stateManager}
             selectedZoneIndex={selectedZoneIndex}
             onZoneSelect={handleZoneClick}
+            onZoneDoubleClick={(zoneIndex) => {
+              setSelectedZoneIndex(zoneIndex)
+              handleAddPhotoRequest(zoneIndex)
+            }}
             onStateChange={() => setStateVersion((v) => v + 1)}
             stateVersion={stateVersion}
             separatorWidth={separatorWidth}
@@ -639,6 +668,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
         <ZoneController
           zoneIndex={selectedZoneIndex}
           stateManager={stateManager}
+          photoFormatLabel={selectedZoneFormat}
           onUpdate={handleZoneUpdate}
           onClose={() => setSelectedZoneIndex(null)}
           onAddPhoto={(zoneIndex) => {

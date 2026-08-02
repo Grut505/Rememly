@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Article } from '../../api/types'
 import { formatDateTimeFull } from '../../utils/date'
 import { useNavigate } from 'react-router-dom'
@@ -101,9 +101,19 @@ export function ArticleCard({ article, isDuplicate, onDeleted, onRestored, onPer
     navigate(`/editor/${article.id}`)
   }
 
+  const lastTapRef = useRef(0)
+
   const handleCardClick = () => {
     if (selectionMode) {
       onSelectionChange?.(article.id, !selected)
+      return
+    }
+    const now = Date.now()
+    if (now - lastTapRef.current < 350) {
+      lastTapRef.current = 0
+      navigate(`/editor/${article.id}`)
+    } else {
+      lastTapRef.current = now
     }
   }
 

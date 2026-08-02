@@ -89,7 +89,7 @@ export function Slider({ value, onChange, min, max, step = 1, label, formatValue
           type="button"
           {...decrementHandlers}
           disabled={value <= min}
-          className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+          className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation app-no-callout"
           aria-label="Decrease"
         >
           −
@@ -107,7 +107,7 @@ export function Slider({ value, onChange, min, max, step = 1, label, formatValue
           type="button"
           {...incrementHandlers}
           disabled={value >= max}
-          className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+          className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation app-no-callout"
           aria-label="Increase"
         >
           +

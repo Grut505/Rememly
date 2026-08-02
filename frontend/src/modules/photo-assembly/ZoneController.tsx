@@ -5,6 +5,7 @@ import { Slider } from '../../ui/Slider'
 interface ZoneControllerProps {
   zoneIndex: number
   stateManager: StateManager
+  photoFormatLabel?: string
   onUpdate: () => void
   onClose: () => void
   onAddPhoto: (zoneIndex: number) => void
@@ -19,6 +20,7 @@ interface ZoneControllerProps {
 export function ZoneController({
   zoneIndex,
   stateManager,
+  photoFormatLabel,
   onUpdate,
   onClose,
   onAddPhoto,
@@ -71,6 +73,9 @@ export function ZoneController({
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 shadow-lg z-20 app-safe-x app-safe-bottom">
       <div className="max-w-mobile mx-auto">
+        {hasPhoto && photoFormatLabel && (
+          <div className="text-xs text-gray-500 px-1 pb-1.5">{photoFormatLabel}</div>
+        )}
         <div className="flex items-center flex-wrap gap-2">
           <button
             onClick={() => onAddPhoto(zoneIndex)}

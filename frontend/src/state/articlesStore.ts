@@ -26,6 +26,26 @@ const defaultFilters: ArticleFilters = {
   sourceFilter: 'all',
 }
 
+const FILTERS_STORAGE_KEY = 'rememly_article_filters'
+
+function loadPersistedFilters(): ArticleFilters {
+  try {
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY)
+    if (!raw) return defaultFilters
+    return { ...defaultFilters, ...JSON.parse(raw) }
+  } catch {
+    return defaultFilters
+  }
+}
+
+function persistFilters(filters: ArticleFilters) {
+  try {
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters))
+  } catch {
+    // localStorage unavailable (private browsing, quota) - filters just won't survive a reload
+  }
+}
+
 interface ArticlesState {
   articles: Article[]
   isLoading: boolean
@@ -49,7 +69,7 @@ export const useArticlesStore = create<ArticlesState>((set) => ({
   error: null,
   cursor: null,
   hasMore: true,
-  filters: defaultFilters,
+  filters: loadPersistedFilters(),
 
   setArticles: (articles, cursor = null) => {
     // Remove duplicates based on id
@@ -90,9 +110,13 @@ export const useArticlesStore = create<ArticlesState>((set) => ({
 
   setError: (error) => set({ error }),
 
-  setFilters: (filters) => set({ filters }),
+  setFilters: (filters) => {
+    persistFilters(filters)
+    set({ filters })
+  },
 
-  reset: () =>
+  reset: () => {
+    persistFilters(defaultFilters)
     set({
       articles: [],
       isLoading: false,
@@ -100,5 +124,6 @@ export const useArticlesStore = create<ArticlesState>((set) => ({
       cursor: null,
       hasMore: true,
       filters: defaultFilters,
-    }),
+    })
+  },
 }))

@@ -38,10 +38,12 @@ class ArticlesService {
     fullPage?: boolean,
     status?: 'ACTIVE' | 'DRAFT' | 'DELETED',
     famileoPostId?: string,
-    famileoMarked?: boolean
+    famileoMarked?: boolean,
+    auteur?: string
   ): Promise<Article> {
     const payload: UpdateArticlePayload = {
       id,
+      auteur,
       texte,
       date: dateModification,
       assembly_state: assemblyState,

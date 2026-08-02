@@ -106,6 +106,7 @@ export interface CoverPreviewResponse {
 export interface CoverPreviewContentResponse {
   mime_type: string
   base64: string
+  meta?: { target_page?: number }
 }
 
 export interface PreviewStatusResponse {
@@ -136,6 +137,26 @@ export const pdfApi = {
     apiClient.post<CoverPreviewContentResponse>('pdf/cover-preview-content', { file_id: fileId }),
 
   deleteCoverPreview: (fileId: string) =>
+    apiClient.post<{ deleted: boolean }>('pdf/cover-preview-delete', { file_id: fileId }),
+
+  previewArticle: (payload: {
+    start_date: string
+    article: {
+      id?: string
+      date: string
+      texte?: string
+      image_file_id?: string
+      image?: { base64: string; mimeType?: string }
+    }
+  }) => apiClient.post<CoverPreviewResponse>('pdf/article-preview', payload),
+
+  // The article-preview render script reuses pdf/preview-complete (the same
+  // generic pdf_previews row a cover preview uses), so its content/delete
+  // are the same cover-preview endpoints too - no separate ones needed.
+  previewArticleContent: (fileId: string) =>
+    apiClient.post<CoverPreviewContentResponse>('pdf/cover-preview-content', { file_id: fileId }),
+
+  deleteArticlePreview: (fileId: string) =>
     apiClient.post<{ deleted: boolean }>('pdf/cover-preview-delete', { file_id: fileId }),
 
   // Fire and forget - triggers the actual PDF generation

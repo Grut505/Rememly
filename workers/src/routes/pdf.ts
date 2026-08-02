@@ -838,6 +838,140 @@ export const pdfCoverPreviewHandler: RouteHandler = async (request, context) => 
   return ok({ file_id: previewId, url: '' })
 }
 
+export const pdfArticlePreviewHandler: RouteHandler = async (request, context) => {
+  const auth = await requireAuth(request, context.env)
+  if (!auth.ok) return auth.response
+
+  const body = await readJson<{
+    start_date?: string
+    article?: {
+      id?: string
+      date?: string
+      texte?: string
+      image_file_id?: string
+      image?: { base64: string; mimeType?: string }
+    }
+  }>(request)
+
+  if (!body.start_date || !body.article?.date) {
+    return fail('INVALID_PARAMS', 'start_date and article.date are required', 400)
+  }
+
+  const previewId = crypto.randomUUID()
+
+  // The article being previewed may be brand new or a still-unsaved Draft
+  // (which real generation would never include) - rather than requiring it
+  // to already exist as an ACTIVE row, the editor sends its current
+  // in-progress content/photo directly. A changed-but-unsaved photo gets
+  // uploaded here under a preview-scoped key (cleaned up alongside the
+  // rendered PDF by pdfCoverPreviewDeleteHandler, reused as-is for article
+  // previews too); an unchanged photo just reuses its existing file id.
+  let imageFileId = body.article.image_file_id || ''
+  if (body.article.image?.base64) {
+    const key = `previews/${previewId}/photo.jpg`
+    await context.env.FILES.put(key, base64ToUint8ArrayPdf(body.article.image.base64), {
+      httpMetadata: { contentType: body.article.image.mimeType || 'image/jpeg' },
+    })
+    imageFileId = key
+  }
+
+  // Reuses the generic pdf_previews table/pipeline (status/content/delete
+  // handlers below are all preview-type-agnostic) - options_json just
+  // carries what render_article_preview.py needs instead of cover styling.
+  const optionsJson = JSON.stringify({
+    start_date: body.start_date,
+    target_article: {
+      id: body.article.id || '',
+      date: body.article.date,
+      texte: body.article.texte || '',
+      image_file_id: imageFileId,
+    },
+  })
+  const now = new Date().toISOString()
+
+  await context.env.DB.prepare(
+    `insert into pdf_previews (id, status, options_json, created_by, created_at, updated_at)
+     values (?1, 'PENDING', ?2, ?3, ?4, ?4)`
+  )
+    .bind(previewId, optionsJson, auth.user.email, now)
+    .run()
+
+  const dispatchResult = await dispatchGithubWorkflow(context.env, 'pdf-article-preview.yml', { preview_id: previewId })
+  if (!dispatchResult.ok) {
+    await context.env.DB.prepare(
+      `update pdf_previews set status = 'ERROR', error_message = ?2, updated_at = ?3 where id = ?1`
+    )
+      .bind(previewId, dispatchResult.message, new Date().toISOString())
+      .run()
+    return fail(dispatchResult.code, dispatchResult.message, 502, dispatchResult.detail)
+  }
+
+  await context.env.DB.prepare(
+    `update pdf_previews set status = 'RUNNING', updated_at = ?2 where id = ?1`
+  )
+    .bind(previewId, new Date().toISOString())
+    .run()
+
+  return ok({ file_id: previewId })
+}
+
+export const pdfArticlePreviewDataHandler: RouteHandler = async (request, context) => {
+  const params = new URL(request.url).searchParams
+  const token = params.get('token')
+  if (!context.env.PDF_MERGE_TOKEN || token !== context.env.PDF_MERGE_TOKEN) {
+    return fail('FORBIDDEN', 'Invalid token', 403)
+  }
+
+  const previewId = params.get('preview_id')
+  if (!previewId) return fail('INVALID_PARAMS', 'preview_id is required', 400)
+
+  const row = await context.env.DB.prepare('select options_json from pdf_previews where id = ?1 limit 1')
+    .bind(previewId)
+    .first<{ options_json: string }>()
+  if (!row) return fail('NOT_FOUND', 'Preview not found', 404)
+
+  let options: {
+    start_date?: string
+    target_article?: { id?: string; date?: string; texte?: string; image_file_id?: string }
+  } = {}
+  try {
+    options = JSON.parse(row.options_json || '{}')
+  } catch {
+    options = {}
+  }
+  const targetArticle = options.target_article
+  if (!options.start_date || !targetArticle?.date) {
+    return fail('INVALID_PARAMS', 'Preview is missing start_date/target_article', 400)
+  }
+
+  // Same "what would actually be in the generated PDF" query real
+  // generation uses (see pdfRenderJobHandler) - active, non-deleted, and
+  // bounded by the configured preview start date through the target
+  // article's own date, so its true page/pairing position can be computed
+  // exactly like the real export would. Excludes the target's own id so an
+  // already-saved article being previewed isn't counted twice alongside the
+  // (possibly edited) in-progress copy supplied in target_article.
+  const articles = await context.env.DB.prepare(
+    `select id, date, auteur, author_pseudo, texte, image_url, image_file_id
+       from articles
+      where status = 'ACTIVE' and (deleted_at is null or deleted_at = '')
+        and date >= ?1 and date <= ?2
+        and id != ?3
+      order by date asc`
+  )
+    .bind(options.start_date, targetArticle.date, targetArticle.id || '__none__')
+    .all<Record<string, unknown>>()
+
+  const configRows = await context.env.DB.prepare('select key, value from config').all<{ key: string; value: string | null }>()
+  const config = Object.fromEntries((configRows.results || []).map((r) => [r.key, r.value]))
+
+  return ok({
+    target_article: targetArticle,
+    articles: articles.results || [],
+    config,
+  })
+}
+
 export const pdfPreviewStatusHandler: RouteHandler = async (request, context) => {
   const auth = await requireAuth(request, context.env)
   if (!auth.ok) return auth.response
@@ -864,10 +998,10 @@ export const pdfCoverPreviewContentHandler: RouteHandler = async (request, conte
   if (!body.file_id) return fail('INVALID_PARAMS', 'file_id is required', 400)
 
   const row = await context.env.DB.prepare(
-    'select id, status, r2_key from pdf_previews where id = ?1 limit 1'
+    'select id, status, r2_key, result_meta from pdf_previews where id = ?1 limit 1'
   )
     .bind(body.file_id)
-    .first<{ id: string; status: string; r2_key: string | null }>()
+    .first<{ id: string; status: string; r2_key: string | null; result_meta: string | null }>()
 
   if (!row) return fail('NOT_FOUND', 'Preview not found', 404)
   if (row.status !== 'DONE' || !row.r2_key) {
@@ -877,8 +1011,18 @@ export const pdfCoverPreviewContentHandler: RouteHandler = async (request, conte
   const object = await context.env.FILES.get(row.r2_key)
   if (!object) return fail('NOT_FOUND', 'Preview file not found', 404)
 
+  let meta: Record<string, unknown> | undefined
+  if (row.result_meta) {
+    try {
+      meta = JSON.parse(row.result_meta)
+    } catch {
+      meta = undefined
+    }
+  }
+
   const buffer = await object.arrayBuffer()
-  return ok({ mime_type: 'application/pdf', base64: arrayBufferToBase64Pdf(buffer) })
+  const mimeType = object.httpMetadata?.contentType || 'application/pdf'
+  return ok({ mime_type: mimeType, base64: arrayBufferToBase64Pdf(buffer), meta })
 }
 
 export const pdfCoverPreviewDeleteHandler: RouteHandler = async (request, context) => {
@@ -895,6 +1039,10 @@ export const pdfCoverPreviewDeleteHandler: RouteHandler = async (request, contex
   if (row?.r2_key) {
     await context.env.FILES.delete(row.r2_key)
   }
+  // Best-effort: article previews may also have uploaded a source photo
+  // under this deterministic key (see pdfArticlePreviewHandler) - deleting
+  // a key that was never created is a harmless no-op.
+  await context.env.FILES.delete(`previews/${body.file_id}/photo.jpg`).catch(() => null)
   await context.env.DB.prepare('delete from pdf_previews where id = ?1').bind(body.file_id).run()
 
   return ok({ deleted: true })
@@ -935,20 +1083,27 @@ export const pdfPreviewCompleteHandler: RouteHandler = async (request, context) 
     return fail('FORBIDDEN', 'Invalid token', 403)
   }
 
-  const body = await readJson<{ preview_id?: string; base64?: string }>(request)
+  const body = await readJson<{ preview_id?: string; base64?: string; mime_type?: string; meta?: Record<string, unknown> }>(request)
   if (!body.preview_id || !body.base64) {
     return fail('INVALID_PARAMS', 'preview_id and base64 are required', 400)
   }
 
-  const r2Key = `previews/${body.preview_id}.pdf`
+  // Article previews report text/html (a single rendered page, no PDF/Chromium
+  // step involved - see render_article_preview.py); cover previews omit
+  // mime_type and keep defaulting to a real PDF.
+  const mimeType = body.mime_type || 'application/pdf'
+  const r2Key = `previews/${body.preview_id}.bin`
   await context.env.FILES.put(r2Key, base64ToUint8ArrayPdf(body.base64), {
-    httpMetadata: { contentType: 'application/pdf' },
+    httpMetadata: { contentType: mimeType },
   })
 
+  // meta is optional and only used by article previews so far (carries
+  // target_page, letting the frontend jump straight to the article's real
+  // page) - a cover preview simply omits it.
   await context.env.DB.prepare(
-    `update pdf_previews set status = 'DONE', r2_key = ?2, updated_at = ?3 where id = ?1`
+    `update pdf_previews set status = 'DONE', r2_key = ?2, result_meta = ?3, updated_at = ?4 where id = ?1`
   )
-    .bind(body.preview_id, r2Key, new Date().toISOString())
+    .bind(body.preview_id, r2Key, body.meta ? JSON.stringify(body.meta) : null, new Date().toISOString())
     .run()
 
   return ok({ ok: true })

@@ -1,0 +1,36 @@
+{
+  "id": "hero-top-quad-split-4x3",
+  "name": "Hero Top + Split 2/1 (4x3)",
+  "aspectRatio": 1.3333,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 50,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 75,
+      "width": 50,
+      "height": 25
+    },
+    {
+      "x": 50,
+      "y": 50,
+      "width": 50,
+      "height": 50
+    }
+  ],
+  "tags": [
+    "hero",
+    "4-photos",
+    "4x3"
+  ]
+}

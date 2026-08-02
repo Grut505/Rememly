@@ -344,6 +344,14 @@ export const articleUpdateHandler: RouteHandler = async (request, context) => {
     imageFileId = uploaded.key
   }
 
+  const now = new Date().toISOString()
+  const nextStatus = String(body.status ?? existing.status ?? 'ACTIVE')
+  // Restoring (or any update that isn't a delete) must clear deleted_at -
+  // otherwise a restored article stays invisible to anything that filters
+  // on deleted_at directly instead of status (see the PDF generation
+  // date-range query), even though it shows as ACTIVE everywhere else.
+  const deletedAt = nextStatus === 'DELETED' ? (existing.deleted_at || now) : null
+
   await context.env.DB.prepare(
     `update articles
         set date = ?2,
@@ -357,7 +365,8 @@ export const articleUpdateHandler: RouteHandler = async (request, context) => {
             status = ?10,
             famileo_post_id = ?11,
             famileo_fingerprint = ?12,
-            updated_at = ?13
+            updated_at = ?13,
+            deleted_at = ?14
       where id = ?1`
   )
     .bind(
@@ -370,10 +379,11 @@ export const articleUpdateHandler: RouteHandler = async (request, context) => {
       imageFileId,
       body.assembly_state !== undefined ? JSON.stringify(body.assembly_state || '') : String(existing.assembly_state_json ?? ''),
       body.full_page !== undefined ? (body.full_page ? 1 : 0) : Number(existing.full_page || 0),
-      String(body.status ?? existing.status ?? 'ACTIVE'),
+      nextStatus,
       famileoPostId,
       famileoFingerprint,
-      new Date().toISOString()
+      now,
+      deletedAt
     )
     .run()
 

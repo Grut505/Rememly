@@ -18,6 +18,7 @@ export interface CreateArticlePayload {
 
 export interface UpdateArticlePayload {
   id: string
+  auteur?: string
   texte?: string
   image?: {
     fileName: string

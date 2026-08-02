@@ -188,15 +188,19 @@ export function Timeline() {
   }
 
   const handleArticleDeleted = (id: string) => {
-    // If showing only active articles, remove from the list
-    if (filters.statusFilter === 'active' || filters.statusFilter === 'draft' || !filters.statusFilter) {
-      useArticlesStore.getState().deleteArticle(id)
-    } else {
-      // Otherwise (all or deleted), update the article status locally
+    // 'deleted' is the only filter whose server query actually includes
+    // DELETED status (see parseStatusFilter) - 'all' maps to ACTIVE+DRAFT
+    // only, not DELETED, so a just-deleted article needs to disappear from
+    // the list under every filter except 'deleted' itself, not just
+    // active/draft (previously 'all' fell through to updating it in place,
+    // leaving it lingering in the list it should no longer match).
+    if (filters.statusFilter === 'deleted') {
       const article = articles.find(a => a.id === id)
       if (article) {
         useArticlesStore.getState().updateArticle({ ...article, status: 'DELETED' })
       }
+    } else {
+      useArticlesStore.getState().deleteArticle(id)
     }
   }
 

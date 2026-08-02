@@ -13,6 +13,7 @@ import { usersApi, DeclaredUser } from '../../api/users'
 import { articlesApi } from '../../api/articles'
 import { useImageLoader } from '../../hooks/useImageLoader'
 import { pdfApi } from '../../api/pdf'
+import { DatePicker } from '../../ui/DatePicker'
 import {
   BlurbFormat, BlurbCoverType, BlurbPaperType,
   BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, BLURB_PAPER_LABELS, PAGE_COUNT_MIN, PAGE_COUNT_MAX, PAGE_COUNT_STEP,
@@ -76,6 +77,12 @@ export function Settings() {
 
   const [autoDateFromPhoto, setAutoDateFromPhoto] = useState(true)
   const [initialAutoDateFromPhoto, setInitialAutoDateFromPhoto] = useState(true)
+  const [articleBorderWidth, setArticleBorderWidth] = useState(1)
+  const [initialArticleBorderWidth, setInitialArticleBorderWidth] = useState(1)
+  const [articleBorderColor, setArticleBorderColor] = useState('#cccccc')
+  const [initialArticleBorderColor, setInitialArticleBorderColor] = useState('#cccccc')
+  const [pdfPreviewStartDate, setPdfPreviewStartDate] = useState('')
+  const [initialPdfPreviewStartDate, setInitialPdfPreviewStartDate] = useState('')
   const [blurbModeEnabled, setBlurbModeEnabled] = useState(false)
   const [initialBlurbModeEnabled, setInitialBlurbModeEnabled] = useState(false)
   const [blurbMeasurementUnits, setBlurbMeasurementUnits] = useState<'inches' | 'centimeters'>('inches')
@@ -209,6 +216,9 @@ export function Settings() {
   const [usersLoading, setUsersLoading] = useState(false)
   const [users, setUsers] = useState<DeclaredUser[]>([])
   const isDirty = autoDateFromPhoto !== initialAutoDateFromPhoto
+    || articleBorderWidth !== initialArticleBorderWidth
+    || articleBorderColor !== initialArticleBorderColor
+    || pdfPreviewStartDate !== initialPdfPreviewStartDate
     || blurbModeEnabled !== initialBlurbModeEnabled
     || blurbMeasurementUnits !== initialBlurbMeasurementUnits
     || blurbBackCoverMosaicMaxPhotos !== initialBlurbBackCoverMosaicMaxPhotos
@@ -275,6 +285,8 @@ export function Settings() {
     loadConfig()
     loadAutoDateSetting()
     loadBlurbSettings()
+    loadArticleBorderSettings()
+    loadPdfPreviewStartDate()
     loadCoverStylePresets()
     loadLogsRange()
     loadFamileoLogsRange()
@@ -291,6 +303,35 @@ export function Settings() {
       setInitialAutoDateFromPhoto(value)
     } catch {
       // keep default (enabled)
+    }
+  }
+
+  const loadArticleBorderSettings = async () => {
+    try {
+      const [widthResult, colorResult] = await Promise.all([
+        configApi.get('pdf_article_border_width_px'),
+        configApi.get('pdf_article_border_color'),
+      ])
+      const width = widthResult.value ? Number(widthResult.value) : NaN
+      const widthValue = Number.isFinite(width) && width >= 0 ? width : 1
+      const colorValue = colorResult.value || '#cccccc'
+      setArticleBorderWidth(widthValue)
+      setInitialArticleBorderWidth(widthValue)
+      setArticleBorderColor(colorValue)
+      setInitialArticleBorderColor(colorValue)
+    } catch {
+      // keep defaults
+    }
+  }
+
+  const loadPdfPreviewStartDate = async () => {
+    try {
+      const result = await configApi.get('pdf_preview_start_date')
+      const value = result.value || ''
+      setPdfPreviewStartDate(value)
+      setInitialPdfPreviewStartDate(value)
+    } catch {
+      // keep default (empty)
     }
   }
 
@@ -688,6 +729,9 @@ export function Settings() {
       const nextSubtitle = coverSubtitle.trim()
       await Promise.all([
         configApi.set('auto_date_from_photo', String(autoDateFromPhoto)),
+        configApi.set('pdf_article_border_width_px', String(articleBorderWidth)),
+        configApi.set('pdf_article_border_color', articleBorderColor),
+        configApi.set('pdf_preview_start_date', pdfPreviewStartDate),
         configApi.set('blurb_mode_enabled', String(blurbModeEnabled)),
         configApi.set('blurb_measurement_units', blurbMeasurementUnits),
         configApi.set('blurb_back_cover_mosaic_max_photos', String(blurbBackCoverMosaicMaxPhotos)),
@@ -733,6 +777,9 @@ export function Settings() {
         configApi.set('pdf_cover_family_outline_color', familyOutlineColor),
       ])
       setInitialAutoDateFromPhoto(autoDateFromPhoto)
+      setInitialArticleBorderWidth(articleBorderWidth)
+      setInitialArticleBorderColor(articleBorderColor)
+      setInitialPdfPreviewStartDate(pdfPreviewStartDate)
       setInitialBlurbModeEnabled(blurbModeEnabled)
       setInitialBlurbMeasurementUnits(blurbMeasurementUnits)
       setInitialBlurbBackCoverMosaicMaxPhotos(blurbBackCoverMosaicMaxPhotos)
@@ -1900,6 +1947,46 @@ export function Settings() {
                   </div>
                 )}
               </div>
+            </CollapsibleSection>
+
+            {/* Article photo frame border (interior pages, all PDF modes) */}
+            <CollapsibleSection title="Article photo border">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Width (px)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={20}
+                    step={1}
+                    value={articleBorderWidth}
+                    onChange={(e) => setArticleBorderWidth(Math.max(0, Number(e.target.value) || 0))}
+                    className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-700 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Color</label>
+                  <input
+                    type="color"
+                    value={articleBorderColor}
+                    onChange={(e) => setArticleBorderColor(e.target.value)}
+                    className="w-full h-9 rounded border border-gray-300"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">Border drawn around each photo frame on generated PDF interior pages.</p>
+            </CollapsibleSection>
+
+            {/* Article editor's "Preview PDF" reference start date */}
+            <CollapsibleSection title="Article PDF preview">
+              <DatePicker
+                label="Start date"
+                value={pdfPreviewStartDate}
+                onChange={setPdfPreviewStartDate}
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Reference date the article editor's "Preview PDF" simulates generating from, to compute which page and position an article would actually land on. Overridable per-preview.
+              </p>
             </CollapsibleSection>
 
             {/* Blurb print-ready mode */}

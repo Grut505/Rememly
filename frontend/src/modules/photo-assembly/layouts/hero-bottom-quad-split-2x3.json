@@ -1,0 +1,36 @@
+{
+  "id": "hero-bottom-quad-split-2x3",
+  "name": "Hero Bottom + Split 2/1 (2x3)",
+  "aspectRatio": 0.6667,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 25,
+      "width": 50,
+      "height": 25
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 50,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 100,
+      "height": 50
+    }
+  ],
+  "tags": [
+    "hero",
+    "4-photos",
+    "2x3"
+  ]
+}

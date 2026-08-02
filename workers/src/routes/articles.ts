@@ -22,6 +22,17 @@ interface ArticleBody {
   full_page?: boolean
   status?: string
   famileo_post_id?: string
+  project_ids?: string[]
+}
+
+function parseProjectIds(value: unknown): string[] {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(String(value))
+    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : []
+  } catch {
+    return []
+  }
 }
 
 function base64ToUint8Array(base64: string): Uint8Array {
@@ -82,6 +93,7 @@ function buildArticlesQuery(url: URL) {
   const from = url.searchParams.get('from')
   const to = url.searchParams.get('to')
   const author = url.searchParams.get('author')
+  const project = url.searchParams.get('project')
   const limit = Math.min(Number(url.searchParams.get('limit') || '40') || 40, 200)
   const cursor = Number(url.searchParams.get('cursor') || '0') || 0
   const statusFilter = parseStatusFilter(url.searchParams.get('status_filter'))
@@ -119,6 +131,11 @@ function buildArticlesQuery(url: URL) {
     bindings.push(normalizeEmail(author))
   }
 
+  if (project) {
+    conditions.push('exists (select 1 from json_each(a.project_ids) where value = ?)')
+    bindings.push(project)
+  }
+
   if (sourceFilter === 'famileo') {
     conditions.push("coalesce(famileo_post_id, '') != ''")
   }
@@ -141,7 +158,7 @@ function buildArticlesQuery(url: URL) {
   const sql = `
     select a.id, a.date, a.auteur, a.texte, a.image_url, a.image_file_id,
            a.assembly_state_json as assembly_state, a.full_page, a.status,
-           a.famileo_post_id, a.famileo_fingerprint,
+           a.famileo_post_id, a.famileo_fingerprint, a.project_ids,
            coalesce(u.pseudo, substr(a.auteur, 1, instr(a.auteur, '@') - 1), 'Unknown') as author_pseudo,
            case
              when a.famileo_post_id is null or a.famileo_post_id = '' then 0
@@ -188,6 +205,7 @@ export const listArticlesHandler: RouteHandler = async (request, context) => {
     famileo_post_id: row.famileo_post_id ? Number(row.famileo_post_id) : '',
     full_page: !!row.full_page,
     is_duplicate: !!row.is_duplicate,
+    project_ids: parseProjectIds(row.project_ids),
   }))
 
   return ok({
@@ -244,7 +262,7 @@ export const articleGetHandler: RouteHandler = async (request, context) => {
   const row = await context.env.DB.prepare(
     `select a.id, a.date, a.auteur, a.texte, a.image_url, a.image_file_id,
             a.assembly_state_json as assembly_state, a.full_page, a.status,
-            a.famileo_post_id, a.famileo_fingerprint,
+            a.famileo_post_id, a.famileo_fingerprint, a.project_ids,
             coalesce(u.pseudo, substr(a.auteur, 1, instr(a.auteur, '@') - 1), 'Unknown') as author_pseudo
        from articles a
        left join users u on lower(u.email) = lower(a.auteur)
@@ -258,7 +276,7 @@ export const articleGetHandler: RouteHandler = async (request, context) => {
     return fail('NOT_FOUND', 'Article not found', 404)
   }
 
-  return ok(row)
+  return ok({ ...row, project_ids: parseProjectIds(row.project_ids) })
 }
 
 export const articleCreateHandler: RouteHandler = async (request, context) => {
@@ -288,8 +306,8 @@ export const articleCreateHandler: RouteHandler = async (request, context) => {
     `insert into articles (
        id, date, auteur, author_pseudo, texte, image_url, image_file_id,
        assembly_state_json, full_page, status, famileo_post_id, famileo_fingerprint,
-       created_at, updated_at
-     ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)`
+       project_ids, created_at, updated_at
+     ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14)`
   )
     .bind(
       id,
@@ -304,12 +322,13 @@ export const articleCreateHandler: RouteHandler = async (request, context) => {
       body.status || 'ACTIVE',
       body.famileo_post_id || '',
       famileoFingerprint,
+      JSON.stringify(body.project_ids || []),
       now
     )
     .run()
 
   const row = await context.env.DB.prepare('select * from articles where id = ?1 limit 1').bind(id).first<Record<string, unknown>>()
-  return ok(row)
+  return ok({ ...row, project_ids: parseProjectIds(row?.project_ids) })
 }
 
 export const articleUpdateHandler: RouteHandler = async (request, context) => {
@@ -365,8 +384,9 @@ export const articleUpdateHandler: RouteHandler = async (request, context) => {
             status = ?10,
             famileo_post_id = ?11,
             famileo_fingerprint = ?12,
-            updated_at = ?13,
-            deleted_at = ?14
+            project_ids = ?13,
+            updated_at = ?14,
+            deleted_at = ?15
       where id = ?1`
   )
     .bind(
@@ -382,13 +402,14 @@ export const articleUpdateHandler: RouteHandler = async (request, context) => {
       nextStatus,
       famileoPostId,
       famileoFingerprint,
+      body.project_ids !== undefined ? JSON.stringify(body.project_ids) : String(existing.project_ids ?? '[]'),
       now,
       deletedAt
     )
     .run()
 
   const saved = await context.env.DB.prepare('select * from articles where id = ?1 limit 1').bind(body.id).first<Record<string, unknown>>()
-  return ok(saved)
+  return ok({ ...saved, project_ids: parseProjectIds(saved?.project_ids) })
 }
 
 export const articleDeleteHandler: RouteHandler = async (request, context) => {

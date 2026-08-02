@@ -235,14 +235,30 @@ export const pdfRenderJobHandler: RouteHandler = async (request, context) => {
   const job = await getPdfJob(context.env.DB, jobId)
   if (!job) return fail('NOT_FOUND', 'Job not found', 404)
 
-  const articles = await context.env.DB.prepare(
-    `select id, date, auteur, author_pseudo, texte, image_url, image_file_id
-       from articles
-      where status = 'ACTIVE' and (deleted_at is null or deleted_at = '') and date >= ?1 and date <= ?2
-      order by date asc`
-  )
-    .bind(job.date_from, job.date_to)
-    .all<Record<string, unknown>>()
+  let jobOptions: Record<string, unknown> = {}
+  try {
+    jobOptions = JSON.parse((job.options_json as string) || '{}')
+  } catch {
+    jobOptions = {}
+  }
+  const projectId = typeof jobOptions.project_id === 'string' ? jobOptions.project_id : ''
+
+  const articlesQuery = projectId
+    ? context.env.DB.prepare(
+        `select id, date, auteur, author_pseudo, texte, image_url, image_file_id
+           from articles
+          where status = 'ACTIVE' and (deleted_at is null or deleted_at = '') and date >= ?1 and date <= ?2
+            and exists (select 1 from json_each(project_ids) where value = ?3)
+          order by date asc`
+      ).bind(job.date_from, job.date_to, projectId)
+    : context.env.DB.prepare(
+        `select id, date, auteur, author_pseudo, texte, image_url, image_file_id
+           from articles
+          where status = 'ACTIVE' and (deleted_at is null or deleted_at = '') and date >= ?1 and date <= ?2
+          order by date asc`
+      ).bind(job.date_from, job.date_to)
+
+  const articles = await articlesQuery.all<Record<string, unknown>>()
 
   const configRows = await context.env.DB.prepare('select key, value from config').all<{ key: string; value: string | null }>()
   const config = Object.fromEntries((configRows.results || []).map((row) => [row.key, row.value]))

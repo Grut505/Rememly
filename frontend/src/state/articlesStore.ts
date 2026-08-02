@@ -8,6 +8,7 @@ export interface ArticleFilters {
   from?: string
   to?: string
   author?: string
+  projectId?: string
   search?: string
   duplicatesOnly?: boolean
   statusFilter?: StatusFilter
@@ -20,6 +21,7 @@ const defaultFilters: ArticleFilters = {
   from: '',
   to: '',
   author: '',
+  projectId: '',  // Empty = all projects
   search: '',
   duplicatesOnly: false,
   statusFilter: 'all',

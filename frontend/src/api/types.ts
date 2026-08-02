@@ -13,6 +13,7 @@ export interface Article {
   status?: ArticleStatus
   famileo_post_id?: string
   is_duplicate?: boolean
+  project_ids?: string[]
 }
 
 export interface AssemblyState {

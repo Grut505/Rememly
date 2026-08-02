@@ -234,6 +234,7 @@ export function PdfExport() {
       if (value === undefined || value === null || value === '') return
       rows.push([label, String(value)])
     }
+    push('Project', options.project_name)
     push('Cover style', options.cover_style)
     push('Family name', options.family_name)
     push('Cover title', options.cover_title)
@@ -250,6 +251,16 @@ export function PdfExport() {
       push('Spine font size', options.blurb_spine_font_size_cm !== undefined ? `${options.blurb_spine_font_size_cm}cm` : undefined)
     }
     return rows
+  }
+
+  const getProjectName = (pdf: PdfListItem): string => {
+    if (!pdf.options_json) return ''
+    try {
+      const options = JSON.parse(pdf.options_json)
+      return typeof options.project_name === 'string' ? options.project_name : ''
+    } catch {
+      return ''
+    }
   }
 
   const isMergeInProgress = (pdf: PdfListItem) => {
@@ -714,11 +725,18 @@ export function PdfExport() {
                           )}
                         </button>
                       </div>
-                      {pdf.is_blurb && (
-                        <div className="flex justify-end mt-2">
-                          <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
-                            Blurb
-                          </span>
+                      {(pdf.is_blurb || getProjectName(pdf)) && (
+                        <div className="flex justify-end gap-1 mt-2">
+                          {pdf.is_blurb && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
+                              Blurb
+                            </span>
+                          )}
+                          {getProjectName(pdf) && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+                              {getProjectName(pdf)}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -907,6 +925,11 @@ export function PdfExport() {
                           {pdf.is_blurb && (
                             <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
                               Blurb
+                            </span>
+                          )}
+                          {getProjectName(pdf) && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+                              {getProjectName(pdf)}
                             </span>
                           )}
                         </div>

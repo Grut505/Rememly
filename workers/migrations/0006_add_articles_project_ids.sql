@@ -1,0 +1,1 @@
+ALTER TABLE articles ADD COLUMN project_ids TEXT NOT NULL DEFAULT '[]';

@@ -6,6 +6,7 @@ import { Switch } from '../../ui/Switch'
 import { MONTHS_EN, isStandalonePWA } from '../../utils/constants'
 import { getCurrentYear } from '../../utils/date'
 import { articlesApi } from '../../api/articles'
+import { useProjectsStore } from '../../state/projectsStore'
 
 const DEFAULT_FILTERS: FilterValues = {
   year: '',
@@ -13,6 +14,7 @@ const DEFAULT_FILTERS: FilterValues = {
   dateFrom: '',
   dateTo: '',
   author: '',
+  projectId: '',
   search: '',
   duplicatesOnly: false,
   statusFilter: 'all',
@@ -35,6 +37,7 @@ export interface FilterValues {
   dateFrom: string
   dateTo: string
   author: string
+  projectId: string
   search: string
   duplicatesOnly: boolean
   statusFilter: StatusFilter
@@ -43,11 +46,13 @@ export interface FilterValues {
 
 export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelProps) {
   const isStandalone = isStandalonePWA()
+  const { projects, load: loadProjects } = useProjectsStore()
   const [year, setYear] = useState(initialFilters?.year ?? DEFAULT_FILTERS.year)
   const [month, setMonth] = useState(initialFilters?.month ?? DEFAULT_FILTERS.month)
   const [dateFrom, setDateFrom] = useState(initialFilters?.dateFrom ?? DEFAULT_FILTERS.dateFrom)
   const [dateTo, setDateTo] = useState(initialFilters?.dateTo ?? DEFAULT_FILTERS.dateTo)
   const [author, setAuthor] = useState(initialFilters?.author ?? DEFAULT_FILTERS.author)
+  const [projectId, setProjectId] = useState(initialFilters?.projectId ?? DEFAULT_FILTERS.projectId)
   const [search, setSearch] = useState(initialFilters?.search ?? DEFAULT_FILTERS.search)
   const [duplicatesOnly, setDuplicatesOnly] = useState(initialFilters?.duplicatesOnly ?? DEFAULT_FILTERS.duplicatesOnly)
   // "Deleted" is an override, not a fourth option alongside All/Active/Draft:
@@ -62,12 +67,18 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
   const [loadingAuthors, setLoadingAuthors] = useState(false)
 
   useEffect(() => {
+    loadProjects()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
     if (initialFilters) {
       setYear(initialFilters.year ?? DEFAULT_FILTERS.year)
       setMonth(initialFilters.month ?? DEFAULT_FILTERS.month)
       setDateFrom(initialFilters.dateFrom ?? DEFAULT_FILTERS.dateFrom)
       setDateTo(initialFilters.dateTo ?? DEFAULT_FILTERS.dateTo)
       setAuthor(initialFilters.author ?? DEFAULT_FILTERS.author)
+      setProjectId(initialFilters.projectId ?? DEFAULT_FILTERS.projectId)
       setSearch(initialFilters.search ?? DEFAULT_FILTERS.search)
       setDuplicatesOnly(initialFilters.duplicatesOnly ?? DEFAULT_FILTERS.duplicatesOnly)
       const nextStatus = initialFilters.statusFilter ?? DEFAULT_FILTERS.statusFilter
@@ -106,7 +117,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
   }, [statusFilter, sourceFilter])
 
   const handleApply = () => {
-    onApply({ year, month, dateFrom, dateTo, author, search, duplicatesOnly, statusFilter, sourceFilter })
+    onApply({ year, month, dateFrom, dateTo, author, projectId, search, duplicatesOnly, statusFilter, sourceFilter })
     onClose()
   }
 
@@ -116,6 +127,7 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
     setDateFrom(DEFAULT_FILTERS.dateFrom)
     setDateTo(DEFAULT_FILTERS.dateTo)
     setAuthor(DEFAULT_FILTERS.author)
+    setProjectId(DEFAULT_FILTERS.projectId)
     setSearch(DEFAULT_FILTERS.search)
     setDuplicatesOnly(DEFAULT_FILTERS.duplicatesOnly)
     setBaseStatus(DEFAULT_FILTERS.statusFilter as BaseStatus)
@@ -249,6 +261,25 @@ export function FiltersPanel({ initialFilters, onApply, onClose }: FiltersPanelP
                 ))}
               </>
             )}
+          </select>
+        </div>
+
+        {/* Project */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Project
+          </label>
+          <select
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All projects</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
           </select>
         </div>
 

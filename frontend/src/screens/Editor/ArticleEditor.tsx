@@ -20,6 +20,7 @@ import { PdfArticlePreviewModal } from '../../ui/PdfArticlePreviewModal'
 import { formatDateTimeFull } from '../../utils/date'
 import { configApi } from '../../api/config'
 import { usersApi, DeclaredUser } from '../../api/users'
+import { useProjectsStore } from '../../state/projectsStore'
 
 interface FamileoImportData {
   text: string
@@ -65,6 +66,8 @@ export function ArticleEditor() {
   const [articleFullPage, setArticleFullPage] = useState(false)
   const [articleAuthor, setArticleAuthor] = useState('')
   const [declaredUsers, setDeclaredUsers] = useState<DeclaredUser[]>([])
+  const [articleProjectIds, setArticleProjectIds] = useState<string[]>([])
+  const { projects, load: loadProjects } = useProjectsStore()
 
   const initialSnapshotRef = useRef<{
     texte: string
@@ -72,6 +75,7 @@ export function ArticleEditor() {
     photoFile: File | null
     articleStatus: ArticleStatus
     articleAuthor: string
+    articleProjectIds: string[]
   } | null>(null)
 
   const isEditMode = !!id
@@ -143,12 +147,14 @@ export function ArticleEditor() {
         setArticleImageFileId(cached.image_file_id || '')
         setArticleFullPage(cached.full_page || false)
         setArticleAuthor(cached.auteur || '')
+        setArticleProjectIds(cached.project_ids || [])
         initialSnapshotRef.current = {
           texte: cached.texte || '',
           dateModification: cached.date,
           photoFile: null,
           articleStatus: cached.status || 'ACTIVE',
           articleAuthor: cached.auteur || '',
+          articleProjectIds: cached.project_ids || [],
         }
       } else {
         // Not in the store yet (e.g. deep-linked straight into edit mode,
@@ -162,12 +168,14 @@ export function ArticleEditor() {
           setArticleImageFileId(article.image_file_id || '')
           setArticleFullPage(article.full_page || false)
           setArticleAuthor(article.auteur || '')
+          setArticleProjectIds(article.project_ids || [])
           initialSnapshotRef.current = {
             texte: article.texte || '',
             dateModification: article.date,
             photoFile: null,
             articleStatus: article.status || 'ACTIVE',
             articleAuthor: article.auteur || '',
+            articleProjectIds: article.project_ids || [],
           }
         }).catch(() => {})
       }
@@ -200,6 +208,11 @@ export function ArticleEditor() {
       .catch(() => setDeclaredUsers([]))
   }, [])
 
+  useEffect(() => {
+    loadProjects()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // New articles default to whoever is creating them - existing articles
   // get their real author from loadArticle/the Assembly-restore effect
   // instead, so this only ever applies before either of those can run.
@@ -208,6 +221,24 @@ export function ArticleEditor() {
       setArticleAuthor(user.email)
     }
   }, [isEditMode, user])
+
+  // New articles default to the project marked as default in Settings -
+  // projects load asynchronously, so this can't just be part of the
+  // synchronous initial snapshot below like articleAuthor is. Updates the
+  // snapshot's baseline alongside the live state so this default doesn't
+  // itself show up as an unsaved change once it lands.
+  useEffect(() => {
+    if (!isEditMode && projects.length > 0 && articleProjectIds.length === 0) {
+      const defaultProject = projects.find((p) => p.isDefault)
+      if (defaultProject) {
+        setArticleProjectIds([defaultProject.id])
+        if (initialSnapshotRef.current) {
+          initialSnapshotRef.current = { ...initialSnapshotRef.current, articleProjectIds: [defaultProject.id] }
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, projects])
 
   useEffect(() => {
     const fromAssembly = (location.state as AssemblyReturnData | null)?.fromAssembly
@@ -226,6 +257,7 @@ export function ArticleEditor() {
         photoFile: null,
         articleStatus: 'DRAFT',
         articleAuthor: user?.email || '',
+        articleProjectIds: [],
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -261,12 +293,14 @@ export function ArticleEditor() {
         setArticleStatus(cached.status || 'ACTIVE')
         setArticleFullPage(cached.full_page || false)
         setArticleAuthor(cached.auteur || '')
+        setArticleProjectIds(cached.project_ids || [])
         initialSnapshotRef.current = {
           texte: cached.texte || '',
           dateModification: cached.date,
           photoFile: null,
           articleStatus: cached.status || 'ACTIVE',
           articleAuthor: cached.auteur || '',
+          articleProjectIds: cached.project_ids || [],
         }
         return
       }
@@ -279,12 +313,14 @@ export function ArticleEditor() {
       setArticleStatus(article.status || 'ACTIVE')
       setArticleFullPage(article.full_page || false)
       setArticleAuthor(article.auteur || '')
+      setArticleProjectIds(article.project_ids || [])
       initialSnapshotRef.current = {
         texte: article.texte,
         dateModification: article.date,
         photoFile: null,
         articleStatus: article.status || 'ACTIVE',
         articleAuthor: article.auteur || '',
+        articleProjectIds: article.project_ids || [],
       }
     } catch (error) {
       showToast('Failed to load article', 'error')
@@ -318,7 +354,8 @@ export function ArticleEditor() {
           newStatus,
           undefined, // famileoPostId
           undefined, // famileoMarked
-          articleAuthor || user.email
+          articleAuthor || user.email,
+          articleProjectIds
         )
         updateArticleInStore(updated)
         showToast(isDeleted ? 'Article restored' : 'Article updated', 'success')
@@ -331,7 +368,8 @@ export function ArticleEditor() {
           undefined, // famileoPostId
           assemblyStateData,
           undefined, // fullPage
-          articleStatus
+          articleStatus,
+          articleProjectIds
         )
         showToast('Article created', 'success')
       }
@@ -350,6 +388,9 @@ export function ArticleEditor() {
     }
   }
 
+  const sameProjectIds = (a: string[], b: string[]) =>
+    a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i])
+
   const hasUnsavedChanges = () => {
     const initial = initialSnapshotRef.current
     if (!initial) return false
@@ -358,6 +399,7 @@ export function ArticleEditor() {
       dateModification !== initial.dateModification ||
       articleStatus !== initial.articleStatus ||
       articleAuthor !== initial.articleAuthor ||
+      !sameProjectIds(articleProjectIds, initial.articleProjectIds) ||
       photoFile !== null
     )
   }
@@ -470,6 +512,41 @@ export function ArticleEditor() {
             ))}
           </select>
         </div>
+
+        {projects.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Projects</label>
+            <div className="flex flex-wrap gap-2">
+              {projects.map((project) => {
+                const checked = articleProjectIds.includes(project.id)
+                return (
+                  <label
+                    key={project.id}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm cursor-pointer transition-colors ${
+                      checked
+                        ? 'bg-primary-50 border-primary-300 text-primary-700'
+                        : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        setArticleProjectIds(
+                          e.target.checked
+                            ? [...articleProjectIds, project.id]
+                            : articleProjectIds.filter((id) => id !== project.id)
+                        )
+                      }}
+                      className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    {project.name}
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium text-gray-700">Status</div>

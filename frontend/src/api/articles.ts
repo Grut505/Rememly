@@ -14,6 +14,7 @@ export interface CreateArticlePayload {
   assembly_state?: object | null
   full_page?: boolean
   status?: 'ACTIVE' | 'DRAFT' | 'DELETED'
+  project_ids?: string[]
 }
 
 export interface UpdateArticlePayload {
@@ -31,6 +32,7 @@ export interface UpdateArticlePayload {
   status?: 'ACTIVE' | 'DRAFT' | 'DELETED'
   famileo_post_id?: string
   famileo_marked?: boolean
+  project_ids?: string[]
 }
 
 export interface ListArticlesFilters {
@@ -39,6 +41,7 @@ export interface ListArticlesFilters {
   from?: string
   to?: string
   author?: string
+  project?: string
   duplicates_only?: string
   limit?: string
   cursor?: string

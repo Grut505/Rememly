@@ -21,6 +21,7 @@ import { FiltersPanel, FilterValues } from '../Filters/FiltersPanel'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { Switch } from '../../ui/Switch'
 import { articlesService } from '../../services/articles.service'
+import { useProjectsStore } from '../../state/projectsStore'
 
 export function Timeline() {
   const navigate = useNavigate()
@@ -52,6 +53,12 @@ export function Timeline() {
     setError,
     setFilters,
   } = useArticlesStore()
+  const { projects, load: loadProjects } = useProjectsStore()
+
+  useEffect(() => {
+    loadProjects()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const observerRef = useRef<IntersectionObserver>()
   const loadingRef = useRef(false)
@@ -85,6 +92,7 @@ export function Timeline() {
         from: filters.from,
         to: filters.to,
         author: filters.author,
+        project: filters.projectId || undefined,
         duplicates_only: filters.duplicatesOnly ? 'true' : undefined,
         limit: String(CONSTANTS.ARTICLES_PER_PAGE),
         status_filter: filters.statusFilter || 'all',
@@ -127,6 +135,7 @@ export function Timeline() {
         from: filters.from,
         to: filters.to,
         author: filters.author,
+        project: filters.projectId || undefined,
         cursor: currentCursor,
         duplicates_only: filters.duplicatesOnly ? 'true' : undefined,
         limit: String(CONSTANTS.ARTICLES_PER_PAGE),
@@ -143,7 +152,7 @@ export function Timeline() {
       loadingRef.current = false
       setIsLoadingMore(false)
     }
-  }, [filters.year, filters.month, filters.from, filters.to, filters.statusFilter, filters.sourceFilter, addArticles, setError])
+  }, [filters.year, filters.month, filters.from, filters.to, filters.projectId, filters.statusFilter, filters.sourceFilter, addArticles, setError])
 
   const sentinelRef = useCallback(
     (node: HTMLDivElement) => {
@@ -175,6 +184,7 @@ export function Timeline() {
         from: filterValues.dateFrom,
         to: filterValues.dateTo,
         author: filterValues.author,
+        projectId: filterValues.projectId,
         search: filterValues.search,
         duplicatesOnly: filterValues.duplicatesOnly,
         statusFilter: filterValues.statusFilter,
@@ -372,6 +382,7 @@ export function Timeline() {
     filters.from ||
     filters.to ||
     filters.author ||
+    filters.projectId ||
     filters.search ||
     filters.duplicatesOnly ||
     (filters.statusFilter && filters.statusFilter !== 'all') ||
@@ -384,6 +395,7 @@ export function Timeline() {
     dateFrom: filters.from || '',
     dateTo: filters.to || '',
     author: filters.author || '',
+    projectId: filters.projectId || '',
     search: filters.search || '',
     duplicatesOnly: filters.duplicatesOnly || false,
     statusFilter: filters.statusFilter || 'all',
@@ -399,6 +411,7 @@ export function Timeline() {
     filters.from,
     filters.to,
     filters.author,
+    filters.projectId,
     filters.search,
     filters.duplicatesOnly,
     filters.statusFilter,
@@ -417,12 +430,28 @@ export function Timeline() {
     >
       <AppHeader />
 
-      {/* Year Header with Filter - Fixed */}
+      {/* Project Header with Filter - Fixed */}
       <div className="bg-white border-b border-gray-300 px-4 py-3 flex items-center justify-between fixed app-safe-top-14 left-0 right-0 z-[25] max-w-content mx-auto">
         <div className="min-w-0 flex items-center gap-2">
-          <h2 className="text-lg font-semibold text-gray-900 truncate">
-            {selectionMode ? `${selectedIds.size} selected` : (filters.year || 'All years')}
-          </h2>
+          {selectionMode ? (
+            <h2 className="text-lg font-semibold text-gray-900 truncate">
+              {selectedIds.size} selected
+            </h2>
+          ) : (
+            <select
+              value={filters.projectId || ''}
+              onChange={(e) => setFilters({ ...filters, projectId: e.target.value })}
+              className="text-lg font-semibold text-gray-900 truncate bg-transparent border-none focus:outline-none focus:ring-0 -ml-1 pr-1"
+              aria-label="Project"
+            >
+              <option value="">All projects</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          )}
           {!selectionMode && (
             <span className="text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-full px-2 py-0.5">
               {totalCountLabel}

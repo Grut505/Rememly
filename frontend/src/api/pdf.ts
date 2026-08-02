@@ -56,6 +56,8 @@ export interface PdfOptions {
   blurb_spine_font_family?: string
   blurb_spine_font_size_cm?: number
   blurb_preview_page_count?: number
+  project_id?: string
+  project_name?: string
 }
 
 export interface CreatePdfPayload {

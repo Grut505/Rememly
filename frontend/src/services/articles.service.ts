@@ -11,7 +11,8 @@ class ArticlesService {
     famileoPostId?: string,
     assemblyState?: object,
     fullPage?: boolean,
-    status?: 'ACTIVE' | 'DRAFT' | 'DELETED'
+    status?: 'ACTIVE' | 'DRAFT' | 'DELETED',
+    projectIds?: string[]
   ): Promise<Article> {
     const imageData = await imageService.processImage(imageFile)
 
@@ -24,6 +25,7 @@ class ArticlesService {
       assembly_state: assemblyState || null,
       full_page: fullPage || false,
       status,
+      project_ids: projectIds,
     }
 
     return articlesApi.create(payload)
@@ -39,7 +41,8 @@ class ArticlesService {
     status?: 'ACTIVE' | 'DRAFT' | 'DELETED',
     famileoPostId?: string,
     famileoMarked?: boolean,
-    auteur?: string
+    auteur?: string,
+    projectIds?: string[]
   ): Promise<Article> {
     const payload: UpdateArticlePayload = {
       id,
@@ -51,6 +54,7 @@ class ArticlesService {
       status,
       famileo_post_id: famileoPostId,
       famileo_marked: famileoMarked,
+      project_ids: projectIds,
     }
 
     if (imageFile) {

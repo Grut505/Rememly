@@ -11,6 +11,7 @@ import { configApi } from '../../api/config'
 import { logsApi } from '../../api/logs'
 import { usersApi, DeclaredUser } from '../../api/users'
 import { articlesApi } from '../../api/articles'
+import { useProjectsStore } from '../../state/projectsStore'
 import { useImageLoader } from '../../hooks/useImageLoader'
 import { pdfApi } from '../../api/pdf'
 import { DatePicker } from '../../ui/DatePicker'
@@ -215,6 +216,9 @@ export function Settings() {
   } | null>(null)
   const [usersLoading, setUsersLoading] = useState(false)
   const [users, setUsers] = useState<DeclaredUser[]>([])
+  const { projects, load: loadProjectsStore, save: saveProjects } = useProjectsStore()
+  const [newProjectName, setNewProjectName] = useState('')
+  const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null)
   const isDirty = autoDateFromPhoto !== initialAutoDateFromPhoto
     || articleBorderWidth !== initialArticleBorderWidth
     || articleBorderColor !== initialArticleBorderColor
@@ -288,6 +292,7 @@ export function Settings() {
     loadArticleBorderSettings()
     loadPdfPreviewStartDate()
     loadCoverStylePresets()
+    loadProjectsStore()
     loadLogsRange()
     loadFamileoLogsRange()
     loadUsers()
@@ -502,6 +507,38 @@ export function Settings() {
     await persistCoverStylePresets(coverStylePresets.filter((p) => p.id !== deletePresetId))
     if (selectedPresetId === deletePresetId) setSelectedPresetId('')
     setDeletePresetId(null)
+  }
+
+  const handleAddProject = async () => {
+    const name = newProjectName.trim()
+    if (!name) return
+    const project = { id: crypto.randomUUID(), name, isDefault: projects.length === 0 }
+    await saveProjects([...projects, project])
+    setNewProjectName('')
+    showToast('Project added', 'success')
+  }
+
+  const handleRenameProject = async (id: string) => {
+    const project = projects.find((p) => p.id === id)
+    if (!project) return
+    const nextName = window.prompt('Rename this project', project.name)?.trim()
+    if (!nextName || nextName === project.name) return
+    await saveProjects(projects.map((p) => (p.id === id ? { ...p, name: nextName } : p)))
+  }
+
+  const handleSetDefaultProject = async (id: string) => {
+    await saveProjects(projects.map((p) => ({ ...p, isDefault: p.id === id })))
+  }
+
+  const handleDeleteProject = async () => {
+    if (!deleteProjectId) return
+    const wasDefault = projects.find((p) => p.id === deleteProjectId)?.isDefault
+    const remaining = projects.filter((p) => p.id !== deleteProjectId)
+    const next = wasDefault && remaining.length > 0
+      ? remaining.map((p, i) => (i === 0 ? { ...p, isDefault: true } : p))
+      : remaining
+    await saveProjects(next)
+    setDeleteProjectId(null)
   }
 
   const loadConfig = async () => {
@@ -1241,6 +1278,67 @@ export function Settings() {
                   <p className="text-xs text-gray-500">When creating a new article, use the selected photo's date instead of today's date</p>
                 </div>
               </label>
+            </CollapsibleSection>
+
+            {/* Projects */}
+            <CollapsibleSection title="Projects">
+              <div className="space-y-3">
+                <p className="text-xs text-gray-500">
+                  Group articles into named projects (e.g. "Famileo") - filter the timeline by project and generate a PDF for just one.
+                </p>
+                <div className="space-y-2">
+                  {projects.map((project) => (
+                    <div key={project.id} className="flex items-center gap-2 p-2 border border-gray-200 rounded-lg">
+                      <div className="flex-1 min-w-0 text-sm font-medium text-gray-800 truncate">
+                        {project.name}
+                      </div>
+                      {project.isDefault ? (
+                        <span className="text-xs font-medium text-primary-700 bg-primary-50 px-2 py-0.5 rounded whitespace-nowrap">
+                          Default
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleSetDefaultProject(project.id)}
+                          className="text-xs text-gray-500 hover:text-gray-700 whitespace-nowrap"
+                        >
+                          Set default
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleRenameProject(project.id)}
+                        className="text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Rename
+                      </button>
+                      <button
+                        onClick={() => setDeleteProjectId(project.id)}
+                        className="text-xs text-red-600 hover:text-red-700"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                  {projects.length === 0 && (
+                    <p className="text-xs text-gray-400">No projects yet.</p>
+                  )}
+                </div>
+                <div className="flex gap-2 pt-2 border-t border-gray-200">
+                  <input
+                    type="text"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    placeholder="New project name..."
+                    className="flex-1 px-2 py-1.5 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                  <button
+                    onClick={handleAddProject}
+                    disabled={!newProjectName.trim()}
+                    className="px-3 py-1.5 rounded-md bg-primary-600 text-white text-xs font-medium hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
             </CollapsibleSection>
 
             {/* Family Name */}
@@ -2508,6 +2606,17 @@ export function Settings() {
         variant="danger"
         onConfirm={handleDeleteCoverStylePreset}
         onCancel={() => setDeletePresetId(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={deleteProjectId !== null}
+        title="Delete this project?"
+        message="Articles already tagged with this project keep their tag, but it disappears from the project list and filters."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleDeleteProject}
+        onCancel={() => setDeleteProjectId(null)}
       />
 
     </div>

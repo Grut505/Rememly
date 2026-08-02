@@ -10,6 +10,7 @@ import { usePdfGenerationStore } from '../../stores/pdfGenerationStore'
 import type { PdfListItem } from '../../api/pdf'
 import { pdfApi } from '../../api/pdf'
 import { configApi } from '../../api/config'
+import { useProjectsStore } from '../../state/projectsStore'
 import {
   BlurbFormat, BlurbCoverType, BlurbPaperType,
   BLURB_FORMAT_LABELS, BLURB_PAPER_TYPES, BLURB_PAPER_LABELS, COVER_FONT_OPTIONS,
@@ -77,6 +78,13 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const currentYear = new Date().getFullYear()
   const [startDate, setStartDate] = useState(`${currentYear}-01-01`)
   const [endDate, setEndDate] = useState(`${currentYear}-12-31`)
+  const { projects, load: loadProjects } = useProjectsStore()
+  const [projectId, setProjectId] = useState('')
+
+  useEffect(() => {
+    loadProjects()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Preview data
   const [loading, setLoading] = useState(false)
@@ -221,6 +229,7 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
         const response = await articlesApi.list({
           from: startDate,
           to: endDate,
+          project: projectId || undefined,
           limit: '100',
           cursor: cursor || undefined,
           status_filter: 'all',
@@ -303,6 +312,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
   const handleGenerate = async () => {
     setShowSpineWarning(false)
 
+    const selectedProject = projects.find((p) => p.id === projectId)
+
     const commonOptions = {
       mosaic_layout: mosaicLayout,
       show_seasonal_fruits: showSeasonalFruits,
@@ -310,6 +321,8 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
       cover_style: coverStyle,
       auto_merge: autoMerge,
       clean_chunks: autoMerge ? cleanChunksAfterMerge : undefined,
+      project_id: selectedProject?.id,
+      project_name: selectedProject?.name,
     }
 
     const jobs: (PdfListItem | null)[] = []
@@ -435,6 +448,23 @@ export function PdfGenerateModal({ isOpen, onClose, onComplete }: PdfGenerateMod
                 }}
                 min={startDate || undefined}
               />
+              {projects.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                  <select
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All projects</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 

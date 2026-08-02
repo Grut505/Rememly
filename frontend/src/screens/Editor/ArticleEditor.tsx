@@ -82,6 +82,9 @@ export function ArticleEditor() {
   const isEditMode = !!id
   const isDeleted = articleStatus === 'DELETED'
   const isDraft = articleStatus === 'DRAFT'
+  const hasPhoto = !!previewUrl
+  const hasText = texte.trim().length > 0
+  const hasContent = hasPhoto || hasText
   const { src: loadedImageSrc } = useImageLoader(articleImageUrl, articleImageFileId)
 
   // Check for Famileo import data
@@ -337,8 +340,8 @@ export function ArticleEditor() {
   }
 
   const handleSave = async () => {
-    if (!photoFile && !isEditMode) {
-      showToast('Please select a photo', 'error')
+    if (!hasContent) {
+      showToast('Please add a photo or some text', 'error')
       return
     }
 
@@ -365,11 +368,11 @@ export function ArticleEditor() {
         )
         updateArticleInStore(updated)
         showToast(isDeleted ? 'Article restored' : 'Article updated', 'success')
-      } else if (photoFile) {
+      } else {
         await articlesService.createArticle(
           articleAuthor || user.email,
           texte,
-          photoFile,
+          photoFile || undefined,
           dateModification,
           undefined, // famileoPostId
           assemblyStateData,
@@ -467,18 +470,20 @@ export function ArticleEditor() {
       <div className="flex-1 flex flex-col max-w-content mx-auto w-full bg-white">
       {/* Sub-header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-center flex-shrink-0 sticky app-safe-top-14 z-20 relative">
-        <button
-          type="button"
-          onClick={() => setShowPdfPreview(true)}
-          className="absolute left-4 top-1/2 -translate-y-1/2 inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors"
-          aria-label="Preview in PDF"
-        >
-          <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-            <path d="M14 3v4a1 1 0 001 1h4"></path>
-            <path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"></path>
-          </svg>
-          PDF
-        </button>
+        {hasContent && (
+          <button
+            type="button"
+            onClick={() => setShowPdfPreview(true)}
+            className="absolute left-4 top-1/2 -translate-y-1/2 inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors"
+            aria-label="Preview in PDF"
+          >
+            <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+              <path d="M14 3v4a1 1 0 001 1h4"></path>
+              <path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"></path>
+            </svg>
+            PDF
+          </button>
+        )}
         <h1 className="text-lg font-semibold">
           {isEditMode ? 'Edit Article' : 'New Article'}
         </h1>
@@ -619,7 +624,7 @@ export function ArticleEditor() {
           )}
           <Button
             onClick={handleSave}
-            disabled={isSaving || (!photoFile && !isEditMode)}
+            disabled={isSaving || !hasContent}
             className="flex-1 px-3 py-2 text-sm"
           >
             {isSaving

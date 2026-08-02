@@ -4,7 +4,7 @@ import { Article, ListArticlesResponse } from './types'
 export interface CreateArticlePayload {
   auteur: string
   texte: string
-  image: {
+  image?: {
     fileName: string
     mimeType: string
     base64: string

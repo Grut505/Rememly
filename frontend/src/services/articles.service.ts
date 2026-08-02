@@ -6,7 +6,7 @@ class ArticlesService {
   async createArticle(
     auteur: string,
     texte: string,
-    imageFile: File,
+    imageFile: File | undefined,
     dateModification?: string,
     famileoPostId?: string,
     assemblyState?: object,
@@ -14,7 +14,7 @@ class ArticlesService {
     status?: 'ACTIVE' | 'DRAFT' | 'DELETED',
     projectIds?: string[]
   ): Promise<Article> {
-    const imageData = await imageService.processImage(imageFile)
+    const imageData = imageFile ? await imageService.processImage(imageFile) : undefined
 
     const payload: CreateArticlePayload = {
       auteur,

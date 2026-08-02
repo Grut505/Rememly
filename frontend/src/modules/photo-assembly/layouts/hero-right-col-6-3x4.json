@@ -1,0 +1,48 @@
+{
+  "id": "hero-right-col-6-3x4",
+  "name": "Hero Right Column 6 (3x4)",
+  "aspectRatio": 0.75,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 55,
+      "height": 20.0
+    },
+    {
+      "x": 0,
+      "y": 20.0,
+      "width": 55,
+      "height": 20.0
+    },
+    {
+      "x": 0,
+      "y": 40.0,
+      "width": 55,
+      "height": 20.0
+    },
+    {
+      "x": 0,
+      "y": 60.0,
+      "width": 55,
+      "height": 20.0
+    },
+    {
+      "x": 0,
+      "y": 80.0,
+      "width": 55,
+      "height": 20.0
+    },
+    {
+      "x": 55,
+      "y": 0,
+      "width": 45,
+      "height": 100
+    }
+  ],
+  "tags": [
+    "hero",
+    "6-photos",
+    "3x4"
+  ]
+}

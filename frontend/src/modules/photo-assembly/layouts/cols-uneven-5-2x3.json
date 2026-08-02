@@ -1,0 +1,42 @@
+{
+  "id": "cols-uneven-5-2x3",
+  "name": "Columns Uneven 5 (2x3)",
+  "aspectRatio": 0.6667,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 30,
+      "height": 100
+    },
+    {
+      "x": 30,
+      "y": 0,
+      "width": 20,
+      "height": 100
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 20,
+      "height": 100
+    },
+    {
+      "x": 70,
+      "y": 0,
+      "width": 15,
+      "height": 100
+    },
+    {
+      "x": 85,
+      "y": 0,
+      "width": 15,
+      "height": 100
+    }
+  ],
+  "tags": [
+    "columns",
+    "5-photos",
+    "2x3"
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "id": "split-2-4-cols-4x3",
+  "name": "Split 2+4 Columns (4x3)",
+  "aspectRatio": 1.3333,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 45,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 45,
+      "height": 50
+    },
+    {
+      "x": 45,
+      "y": 0,
+      "width": 55,
+      "height": 25
+    },
+    {
+      "x": 45,
+      "y": 25,
+      "width": 55,
+      "height": 25
+    },
+    {
+      "x": 45,
+      "y": 50,
+      "width": 55,
+      "height": 25
+    },
+    {
+      "x": 45,
+      "y": 75,
+      "width": 55,
+      "height": 25
+    }
+  ],
+  "tags": [
+    "split",
+    "6-photos",
+    "4x3"
+  ]
+}

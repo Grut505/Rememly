@@ -1,0 +1,42 @@
+{
+  "id": "hero-right-col-5-1x1",
+  "name": "Hero Right Column 5 (1x1)",
+  "aspectRatio": 1,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 25.0
+    },
+    {
+      "x": 0,
+      "y": 25.0,
+      "width": 50,
+      "height": 25.0
+    },
+    {
+      "x": 0,
+      "y": 50.0,
+      "width": 50,
+      "height": 25.0
+    },
+    {
+      "x": 0,
+      "y": 75.0,
+      "width": 50,
+      "height": 25.0
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 50,
+      "height": 100
+    }
+  ],
+  "tags": [
+    "hero",
+    "5-photos",
+    "1x1"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "id": "rows-uneven-4-9x16",
+  "name": "Rows Uneven 4 (9x16)",
+  "aspectRatio": 0.5625,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 40
+    },
+    {
+      "x": 0,
+      "y": 40,
+      "width": 100,
+      "height": 20
+    },
+    {
+      "x": 0,
+      "y": 60,
+      "width": 100,
+      "height": 20
+    },
+    {
+      "x": 0,
+      "y": 80,
+      "width": 100,
+      "height": 20
+    }
+  ],
+  "tags": [
+    "rows",
+    "4-photos",
+    "9x16"
+  ]
+}

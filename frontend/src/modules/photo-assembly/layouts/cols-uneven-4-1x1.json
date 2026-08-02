@@ -1,0 +1,36 @@
+{
+  "id": "cols-uneven-4-1x1",
+  "name": "Columns Uneven 4 (1x1)",
+  "aspectRatio": 1,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 40,
+      "height": 100
+    },
+    {
+      "x": 40,
+      "y": 0,
+      "width": 20,
+      "height": 100
+    },
+    {
+      "x": 60,
+      "y": 0,
+      "width": 20,
+      "height": 100
+    },
+    {
+      "x": 80,
+      "y": 0,
+      "width": 20,
+      "height": 100
+    }
+  ],
+  "tags": [
+    "columns",
+    "4-photos",
+    "1x1"
+  ]
+}

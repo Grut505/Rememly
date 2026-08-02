@@ -1,0 +1,36 @@
+{
+  "id": "split-1-3-cols-9x16",
+  "name": "Split 1+3 Columns (9x16)",
+  "aspectRatio": 0.5625,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 45,
+      "height": 100
+    },
+    {
+      "x": 45,
+      "y": 0,
+      "width": 55,
+      "height": 33.33
+    },
+    {
+      "x": 45,
+      "y": 33.33,
+      "width": 55,
+      "height": 33.33
+    },
+    {
+      "x": 45,
+      "y": 66.66,
+      "width": 55,
+      "height": 33.34
+    }
+  ],
+  "tags": [
+    "split",
+    "4-photos",
+    "9x16"
+  ]
+}

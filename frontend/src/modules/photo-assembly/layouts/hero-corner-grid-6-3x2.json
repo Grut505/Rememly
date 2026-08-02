@@ -1,0 +1,48 @@
+{
+  "id": "hero-corner-grid-6-3x2",
+  "name": "Hero Corner Grid 6 (3x2)",
+  "aspectRatio": 1.5,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 60,
+      "height": 60
+    },
+    {
+      "x": 60,
+      "y": 0,
+      "width": 40,
+      "height": 30
+    },
+    {
+      "x": 60,
+      "y": 30,
+      "width": 40,
+      "height": 30
+    },
+    {
+      "x": 0,
+      "y": 60,
+      "width": 33.33,
+      "height": 40
+    },
+    {
+      "x": 33.33,
+      "y": 60,
+      "width": 33.33,
+      "height": 40
+    },
+    {
+      "x": 66.66,
+      "y": 60,
+      "width": 33.34,
+      "height": 40
+    }
+  ],
+  "tags": [
+    "hero",
+    "6-photos",
+    "3x2"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "id": "corner-hero-4-bl-1x1",
+  "name": "Corner Hero 4 (bottom-left) (1x1)",
+  "aspectRatio": 1,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 65,
+      "height": 35
+    },
+    {
+      "x": 65,
+      "y": 0,
+      "width": 35,
+      "height": 35
+    },
+    {
+      "x": 0,
+      "y": 35,
+      "width": 65,
+      "height": 65
+    },
+    {
+      "x": 65,
+      "y": 35,
+      "width": 35,
+      "height": 65
+    }
+  ],
+  "tags": [
+    "hero",
+    "4-photos",
+    "1x1"
+  ]
+}

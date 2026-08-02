@@ -1,0 +1,48 @@
+{
+  "id": "split-4-2-cols-1x1.44",
+  "name": "Split 4+2 Columns (1x1.44)",
+  "aspectRatio": 0.694444,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 55,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 25,
+      "width": 55,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 55,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 75,
+      "width": 55,
+      "height": 25
+    },
+    {
+      "x": 55,
+      "y": 0,
+      "width": 45,
+      "height": 50
+    },
+    {
+      "x": 55,
+      "y": 50,
+      "width": 45,
+      "height": 50
+    }
+  ],
+  "tags": [
+    "split",
+    "6-photos",
+    "1x1.44"
+  ]
+}

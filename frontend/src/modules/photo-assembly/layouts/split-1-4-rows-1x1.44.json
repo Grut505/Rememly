@@ -1,0 +1,42 @@
+{
+  "id": "split-1-4-rows-1x1.44",
+  "name": "Split 1+4 Rows (top wide) (1x1.44)",
+  "aspectRatio": 0.694444,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 40
+    },
+    {
+      "x": 0,
+      "y": 40,
+      "width": 25,
+      "height": 60
+    },
+    {
+      "x": 25,
+      "y": 40,
+      "width": 25,
+      "height": 60
+    },
+    {
+      "x": 50,
+      "y": 40,
+      "width": 25,
+      "height": 60
+    },
+    {
+      "x": 75,
+      "y": 40,
+      "width": 25,
+      "height": 60
+    }
+  ],
+  "tags": [
+    "split",
+    "5-photos",
+    "1x1.44"
+  ]
+}

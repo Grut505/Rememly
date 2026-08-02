@@ -1,0 +1,42 @@
+{
+  "id": "quad-plus-hero-5-1x1.44",
+  "name": "Quad Plus Hero 5 (1x1.44)",
+  "aspectRatio": 0.694444,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 50
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 50,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 50,
+      "height": 50
+    },
+    {
+      "x": 50,
+      "y": 50,
+      "width": 50,
+      "height": 25
+    },
+    {
+      "x": 50,
+      "y": 75,
+      "width": 50,
+      "height": 25
+    }
+  ],
+  "tags": [
+    "mosaic",
+    "5-photos",
+    "1x1.44"
+  ]
+}

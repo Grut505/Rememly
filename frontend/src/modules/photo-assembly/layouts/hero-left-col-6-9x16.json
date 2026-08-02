@@ -1,0 +1,48 @@
+{
+  "id": "hero-left-col-6-9x16",
+  "name": "Hero Left Column 6 (9x16)",
+  "aspectRatio": 0.5625,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 45,
+      "height": 100
+    },
+    {
+      "x": 45,
+      "y": 0,
+      "width": 55,
+      "height": 20.0
+    },
+    {
+      "x": 45,
+      "y": 20.0,
+      "width": 55,
+      "height": 20.0
+    },
+    {
+      "x": 45,
+      "y": 40.0,
+      "width": 55,
+      "height": 20.0
+    },
+    {
+      "x": 45,
+      "y": 60.0,
+      "width": 55,
+      "height": 20.0
+    },
+    {
+      "x": 45,
+      "y": 80.0,
+      "width": 55,
+      "height": 20.0
+    }
+  ],
+  "tags": [
+    "hero",
+    "6-photos",
+    "9x16"
+  ]
+}

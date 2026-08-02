@@ -1,0 +1,54 @@
+{
+  "id": "hero-right-col-7-9x16",
+  "name": "Hero Right Column 7 (9x16)",
+  "aspectRatio": 0.5625,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 60,
+      "height": 16.67
+    },
+    {
+      "x": 0,
+      "y": 16.67,
+      "width": 60,
+      "height": 16.67
+    },
+    {
+      "x": 0,
+      "y": 33.34,
+      "width": 60,
+      "height": 16.67
+    },
+    {
+      "x": 0,
+      "y": 50.01,
+      "width": 60,
+      "height": 16.67
+    },
+    {
+      "x": 0,
+      "y": 66.68,
+      "width": 60,
+      "height": 16.67
+    },
+    {
+      "x": 0,
+      "y": 83.35,
+      "width": 60,
+      "height": 16.65
+    },
+    {
+      "x": 60,
+      "y": 0,
+      "width": 40,
+      "height": 100
+    }
+  ],
+  "tags": [
+    "hero",
+    "7-photos",
+    "9x16"
+  ]
+}

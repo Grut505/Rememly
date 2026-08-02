@@ -1,0 +1,42 @@
+{
+  "id": "hero-left-col-5-4x5",
+  "name": "Hero Left Column 5 (4x5)",
+  "aspectRatio": 0.8,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 50,
+      "height": 100
+    },
+    {
+      "x": 50,
+      "y": 0,
+      "width": 50,
+      "height": 25.0
+    },
+    {
+      "x": 50,
+      "y": 25.0,
+      "width": 50,
+      "height": 25.0
+    },
+    {
+      "x": 50,
+      "y": 50.0,
+      "width": 50,
+      "height": 25.0
+    },
+    {
+      "x": 50,
+      "y": 75.0,
+      "width": 50,
+      "height": 25.0
+    }
+  ],
+  "tags": [
+    "hero",
+    "5-photos",
+    "4x5"
+  ]
+}

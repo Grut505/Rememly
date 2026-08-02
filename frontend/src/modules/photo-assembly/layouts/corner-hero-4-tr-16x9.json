@@ -1,0 +1,36 @@
+{
+  "id": "corner-hero-4-tr-16x9",
+  "name": "Corner Hero 4 (top-right) (16x9)",
+  "aspectRatio": 1.7778,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 35,
+      "height": 65
+    },
+    {
+      "x": 35,
+      "y": 0,
+      "width": 65,
+      "height": 65
+    },
+    {
+      "x": 0,
+      "y": 65,
+      "width": 35,
+      "height": 35
+    },
+    {
+      "x": 35,
+      "y": 65,
+      "width": 65,
+      "height": 35
+    }
+  ],
+  "tags": [
+    "hero",
+    "4-photos",
+    "16x9"
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "id": "split-3-3-rows-4x5",
+  "name": "Split 3+3 Rows (4x5)",
+  "aspectRatio": 0.8,
+  "zones": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 33.33,
+      "height": 50
+    },
+    {
+      "x": 33.33,
+      "y": 0,
+      "width": 33.33,
+      "height": 50
+    },
+    {
+      "x": 66.66,
+      "y": 0,
+      "width": 33.34,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 33.33,
+      "height": 50
+    },
+    {
+      "x": 33.33,
+      "y": 50,
+      "width": 33.33,
+      "height": 50
+    },
+    {
+      "x": 66.66,
+      "y": 50,
+      "width": 33.34,
+      "height": 50
+    }
+  ],
+  "tags": [
+    "split",
+    "6-photos",
+    "4x5"
+  ]
+}

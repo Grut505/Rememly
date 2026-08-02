@@ -558,19 +558,6 @@ export function ArticleEditor() {
           </div>
         )}
 
-        <label className="flex items-center justify-between gap-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-          <div>
-            <span className="text-sm font-medium text-gray-700">Full page in PDF</span>
-            <p className="text-xs text-gray-500">Gives this article its own PDF page - photo maximized, caption below - instead of sharing a page with another article.</p>
-          </div>
-          <input
-            type="checkbox"
-            checked={articleFullPage}
-            onChange={(e) => setArticleFullPage(e.target.checked)}
-            className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 flex-shrink-0"
-          />
-        </label>
-
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium text-gray-700">Status</div>
           <div className="flex rounded-lg border border-gray-300 overflow-hidden">
@@ -603,6 +590,16 @@ export function ArticleEditor() {
           currentImage={previewUrl}
           onPhotoAssembly={() => navigate('/photo-assembly', { state: { editMode: isEditMode, articleId: id, texte, dateModification, articleStatus } })}
         />
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={articleFullPage}
+            onChange={(e) => setArticleFullPage(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span className="text-sm text-gray-700">Full page in PDF</span>
+        </label>
 
         <TextInput value={texte} onChange={setTexte} />
       </div>

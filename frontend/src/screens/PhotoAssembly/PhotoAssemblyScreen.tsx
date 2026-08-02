@@ -2,26 +2,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { PhotoAssembly } from '../../modules/photo-assembly/PhotoAssembly'
 import { AppHeader } from '../../ui/AppHeader'
-import { useAuth } from '../../auth/AuthContext'
-import { articlesService } from '../../services/articles.service'
-import { useArticlesStore } from '../../state/articlesStore'
-import { useUiStore } from '../../state/uiStore'
-import { configApi } from '../../api/config'
 
 export function PhotoAssemblyScreen() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user } = useAuth()
-  const { updateArticle: updateArticleInStore } = useArticlesStore()
-  const { showToast } = useUiStore()
   const [isValidating, setIsValidating] = useState(false)
-  const [autoDateFromPhoto, setAutoDateFromPhoto] = useState(true)
-
-  useEffect(() => {
-    configApi.get('auto_date_from_photo')
-      .then((result) => setAutoDateFromPhoto(result.value !== 'false'))
-      .catch(() => setAutoDateFromPhoto(true))
-  }, [])
 
   // Get mode and article ID from navigation state
   const editMode = location.state?.editMode || false
@@ -30,55 +15,25 @@ export function PhotoAssemblyScreen() {
   const dateModification = location.state?.dateModification || new Date().toISOString()
   const articleStatus = location.state?.articleStatus
 
-  const handleComplete = async (imageBase64: string, assemblyState: object, lastPhotoDate?: string) => {
-    if (!user) return
-
-    const effectiveDate = autoDateFromPhoto && lastPhotoDate ? lastPhotoDate : dateModification
-
-    try {
-      // Convert base64 to File for upload
-      const dataUrl = `data:image/jpeg;base64,${imageBase64}`
-      const response = await fetch(dataUrl)
-      const blob = await response.blob()
-      const file = new File([blob], 'assembled.jpg', { type: 'image/jpeg' })
-
-      if (editMode && articleId) {
-        // Update existing article
-        const updated = await articlesService.updateArticle(
-          articleId,
-          texte,
-          file,
-          dateModification,
-          assemblyState,
-          undefined, // fullPage
-          articleStatus
-        )
-        updateArticleInStore(updated)
-        showToast('Article updated', 'success')
-      } else {
-        // Create new article
-        await articlesService.createArticle(
-          user.email,
-          texte,
-          file,
-          effectiveDate,
-          undefined, // famileoPostId
-          assemblyState,
-          undefined, // fullPage
-          articleStatus
-        )
-        showToast('Article created', 'success')
-      }
-
-      navigate('/')
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : 'Failed to save article',
-        'error'
-      )
-    } finally {
-      setIsValidating(false)
-    }
+  // Assembly no longer saves the article itself - it hands the assembled
+  // photo back to the editor (like a normal photo pick) so the user can
+  // still review/adjust text, date and status before saving themselves,
+  // instead of Confirm silently publishing and jumping to the Timeline.
+  // Whether to actually apply lastPhotoDate is decided once, by the editor's
+  // own assembly-restore effect (same autoDateFromPhoto setting either way).
+  const handleComplete = (imageBase64: string, assemblyState: object, lastPhotoDate?: string) => {
+    navigate(editMode && articleId ? `/editor/${articleId}` : '/editor', {
+      state: {
+        fromAssembly: true,
+        assembledPhotoBase64: imageBase64,
+        assemblyState,
+        lastPhotoDate,
+        texte,
+        dateModification,
+        articleStatus,
+      },
+      replace: true,
+    })
   }
 
   const handleCancel = () => {
@@ -136,7 +91,7 @@ export function PhotoAssemblyScreen() {
               <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
                 <div className="flex items-center gap-3 text-sm text-gray-700 bg-white px-4 py-3 rounded-xl shadow">
                   <div className="w-5 h-5 border-2 border-green-200 border-t-green-600 rounded-full animate-spin"></div>
-                  Creating article...
+                  Preparing photo...
                 </div>
               </div>
             )}

@@ -26,6 +26,10 @@ export interface ZoneState {
   x: number
   y: number
   rotation?: number
+  // Overrides the template's zone position/size for this instance only (all
+  // in %, same convention as LayoutZone) - set once the user drags an edge
+  // handle to resize a block. Undefined means "use the template's zone as-is".
+  rect?: { x: number; y: number; width: number; height: number }
 }
 
 export interface PdfJob {

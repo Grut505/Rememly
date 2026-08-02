@@ -59,13 +59,25 @@ export class StateManager {
     }
   }
 
+  updateZoneRect(zoneIndex: number, rect: { x: number; y: number; width: number; height: number } | undefined): void {
+    if (zoneIndex >= 0 && zoneIndex < this.state.zoneStates.length) {
+      this.state.zoneStates[zoneIndex].rect = rect
+    }
+  }
+
+  // Swaps the PHOTO placement (photoIndex/zoom/x/y/rotation) between two
+  // zones, but not each zone's own `rect` - that's the block's shape at that
+  // position, which stays put regardless of which photo ends up in it.
   swapZoneStates(a: number, b: number): void {
     if (a === b) return
     if (a < 0 || b < 0) return
     if (a >= this.state.zoneStates.length || b >= this.state.zoneStates.length) return
-    const temp = this.state.zoneStates[a]
-    this.state.zoneStates[a] = this.state.zoneStates[b]
-    this.state.zoneStates[b] = temp
+    const zoneA = this.state.zoneStates[a]
+    const zoneB = this.state.zoneStates[b]
+    const { rect: rectA, ...placementA } = zoneA
+    const { rect: rectB, ...placementB } = zoneB
+    this.state.zoneStates[a] = { ...placementB, rect: rectA }
+    this.state.zoneStates[b] = { ...placementA, rect: rectB }
   }
 
   removePhotoFromZone(zoneIndex: number): void {

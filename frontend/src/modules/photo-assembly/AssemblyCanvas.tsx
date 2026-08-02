@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 're
 import { LayoutTemplate } from './layoutRegistry'
 import { StateManager } from './StateManager'
 import { CONSTANTS } from '../../utils/constants'
+import { getAllEffectiveRects, getResizeHandles, resizeEdge, Rect, ResizeEdge } from './zoneGeometry'
 
 interface AssemblyCanvasProps {
   template: LayoutTemplate
@@ -11,6 +12,7 @@ interface AssemblyCanvasProps {
   onStateChange: () => void
   stateVersion: number
   separatorWidth: number
+  showOuterBorder?: boolean
   minZoom?: number
   maxZoom?: number
   maxHeightClassName?: string
@@ -31,6 +33,7 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
   onStateChange,
   stateVersion,
   separatorWidth,
+  showOuterBorder = true,
   minZoom = 0.5,
   maxZoom = 5,
   maxHeightClassName = 'max-h-[55vh]',
@@ -62,6 +65,12 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
     startDist: 0,
     startCenter: { x: 0, y: 0 },
   })
+  const resizeRef = useRef<{
+    edge: ResizeEdge
+    zoneIndex: number
+    startPoint: { x: number; y: number }
+    startRects: Rect[]
+  } | null>(null)
   const swapRef = useRef<{
     timer: number | null
     fromZone: number | null
@@ -82,7 +91,7 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
 
   useEffect(() => {
     drawCanvas()
-  }, [template, images, stateVersion, selectedZoneIndex, separatorWidth])
+  }, [template, images, stateVersion, selectedZoneIndex, separatorWidth, showOuterBorder])
 
   const loadImages = async () => {
     const newImages = new Map<number, { source: CanvasImageSource; naturalWidth: number; naturalHeight: number }>()
@@ -204,15 +213,17 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
     ctx.fillRect(0, 0, width, height)
 
     const state = stateManager.getState()
+    const effectiveRects = getAllEffectiveRects(template.zones, state.zoneStates)
 
-    template.zones.forEach((zone, index) => {
+    template.zones.forEach((_zone, index) => {
       const zoneState = state.zoneStates[index]
       const img = images.get(zoneState.photoIndex)
+      const rect = effectiveRects[index]
 
-      const zoneX = (zone.x / 100) * width
-      const zoneY = (zone.y / 100) * height
-      const zoneWidth = (zone.width / 100) * width
-      const zoneHeight = (zone.height / 100) * height
+      const zoneX = (rect.x / 100) * width
+      const zoneY = (rect.y / 100) * height
+      const zoneWidth = (rect.width / 100) * width
+      const zoneHeight = (rect.height / 100) * height
 
       ctx.fillStyle = index === selectedZoneIndex ? 'rgba(37, 99, 235, 0.18)' : 'rgba(255, 255, 255, 0.6)'
       ctx.fillRect(zoneX, zoneY, zoneWidth, zoneHeight)
@@ -253,7 +264,24 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
       // never covered by it (previously only the empty-zone case kept it visible).
       ctx.strokeStyle = index === selectedZoneIndex ? '#2563eb' : '#ffffff'
       ctx.lineWidth = index === selectedZoneIndex ? Math.max(separatorWidth + 2, 3 * editScale) : Math.max(1, separatorWidth)
-      ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
+      if (showOuterBorder) {
+        ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
+      } else {
+        // Outer border hidden: only stroke the edges that aren't on the
+        // page's outer boundary (drawing each side separately, since
+        // strokeRect can't selectively skip a side).
+        const edgeEpsilon = 0.5
+        const onLeftEdge = rect.x < edgeEpsilon
+        const onRightEdge = rect.x + rect.width > 100 - edgeEpsilon
+        const onTopEdge = rect.y < edgeEpsilon
+        const onBottomEdge = rect.y + rect.height > 100 - edgeEpsilon
+        ctx.beginPath()
+        if (!onTopEdge) { ctx.moveTo(zoneX, zoneY); ctx.lineTo(zoneX + zoneWidth, zoneY) }
+        if (!onRightEdge) { ctx.moveTo(zoneX + zoneWidth, zoneY); ctx.lineTo(zoneX + zoneWidth, zoneY + zoneHeight) }
+        if (!onBottomEdge) { ctx.moveTo(zoneX + zoneWidth, zoneY + zoneHeight); ctx.lineTo(zoneX, zoneY + zoneHeight) }
+        if (!onLeftEdge) { ctx.moveTo(zoneX, zoneY + zoneHeight); ctx.lineTo(zoneX, zoneY) }
+        ctx.stroke()
+      }
 
       ctx.fillStyle = index === selectedZoneIndex ? '#1d4ed8' : '#6b7280'
       ctx.font = '12px sans-serif'
@@ -264,11 +292,11 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
 
     const swap = swapRef.current
     if (swap.isSwapMode && swap.fromZone !== null) {
-      const zone = template.zones[swap.fromZone]
-      const zoneX = (zone.x / 100) * width
-      const zoneY = (zone.y / 100) * height
-      const zoneWidth = (zone.width / 100) * width
-      const zoneHeight = (zone.height / 100) * height
+      const rect = effectiveRects[swap.fromZone]
+      const zoneX = (rect.x / 100) * width
+      const zoneY = (rect.y / 100) * height
+      const zoneWidth = (rect.width / 100) * width
+      const zoneHeight = (rect.height / 100) * height
       ctx.save()
       ctx.strokeStyle = '#f59e0b'
       ctx.lineWidth = 4 * editScale
@@ -279,14 +307,35 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
 
     const swapTarget = swap.targetZone
     if (swapTarget !== null && swapTarget >= 0) {
-      const zone = template.zones[swapTarget]
-      const zoneX = (zone.x / 100) * width
-      const zoneY = (zone.y / 100) * height
-      const zoneWidth = (zone.width / 100) * width
-      const zoneHeight = (zone.height / 100) * height
+      const rect = effectiveRects[swapTarget]
+      const zoneX = (rect.x / 100) * width
+      const zoneY = (rect.y / 100) * height
+      const zoneWidth = (rect.width / 100) * width
+      const zoneHeight = (rect.height / 100) * height
       ctx.strokeStyle = '#10b981'
       ctx.lineWidth = 4 * editScale
       ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
+    }
+
+    // Resize handles - small draggable squares at the midpoint of each edge
+    // of the selected zone that's shared with a neighbor. Skipped in swap
+    // mode (long-press) so the two gestures never fight over the same drag.
+    if (selectedZoneIndex !== null && !swap.isSwapMode) {
+      const handles = getResizeHandles(effectiveRects, selectedZoneIndex)
+      const handleSize = 18 * editScale
+      handles.forEach((handle) => {
+        const hx = (handle.x / 100) * width
+        const hy = (handle.y / 100) * height
+        ctx.save()
+        ctx.fillStyle = '#2563eb'
+        ctx.strokeStyle = '#ffffff'
+        ctx.lineWidth = 2 * editScale
+        ctx.beginPath()
+        ctx.arc(hx, hy, handleSize / 2, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.stroke()
+        ctx.restore()
+      })
     }
   }
 
@@ -299,16 +348,19 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
     return { x, y }
   }
 
-  const hitTestZone = (point: { x: number; y: number }) => {
+  const getEffectiveRects = () => getAllEffectiveRects(template.zones, stateManager.getState().zoneStates)
+
+  const hitTestZone = (point: { x: number; y: number }, rects?: Rect[]) => {
     const canvas = canvasRef.current
     if (!canvas) return -1
     const width = canvas.width
     const height = canvas.height
-    return template.zones.findIndex((zone) => {
-      const zoneX = (zone.x / 100) * width
-      const zoneY = (zone.y / 100) * height
-      const zoneWidth = (zone.width / 100) * width
-      const zoneHeight = (zone.height / 100) * height
+    const list = rects || getEffectiveRects()
+    return list.findIndex((rect) => {
+      const zoneX = (rect.x / 100) * width
+      const zoneY = (rect.y / 100) * height
+      const zoneWidth = (rect.width / 100) * width
+      const zoneHeight = (rect.height / 100) * height
       return (
         point.x >= zoneX &&
         point.x <= zoneX + zoneWidth &&
@@ -318,11 +370,50 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
     })
   }
 
+  // editScale converts a desired on-screen pixel size to canvas units - see
+  // the comment in drawCanvas. Duplicated here (not read from drawCanvas's
+  // local scope) since hit-testing needs it outside the render pass too.
+  const getEditScale = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return 1
+    return canvas.width / (canvas.clientWidth || canvas.width)
+  }
+
+  const hitTestHandle = (point: { x: number; y: number }, rects: Rect[]) => {
+    if (selectedZoneIndex === null) return null
+    const canvas = canvasRef.current
+    if (!canvas) return null
+    const width = canvas.width
+    const height = canvas.height
+    const editScale = getEditScale()
+    const radius = (18 * editScale) / 2 + 10 * editScale // generous touch target beyond the drawn dot
+    const handles = getResizeHandles(rects, selectedZoneIndex)
+    return handles.find((handle) => {
+      const hx = (handle.x / 100) * width
+      const hy = (handle.y / 100) * height
+      return Math.hypot(point.x - hx, point.y - hy) <= radius
+    }) || null
+  }
+
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const point = getCanvasPoint(e)
     if (!point) return
 
-    const zoneIndex = hitTestZone(point)
+    const rects = getEffectiveRects()
+    const handle = pointersRef.current.size === 0 ? hitTestHandle(point, rects) : null
+    if (handle && selectedZoneIndex !== null) {
+      resizeRef.current = {
+        edge: handle.edge,
+        zoneIndex: selectedZoneIndex,
+        startPoint: point,
+        startRects: rects,
+      }
+      pointersRef.current.set(e.pointerId, point)
+      ;(e.target as HTMLCanvasElement).setPointerCapture(e.pointerId)
+      return
+    }
+
+    const zoneIndex = hitTestZone(point, rects)
     if (zoneIndex < 0) return
 
     moveCandidateRef.current = {
@@ -394,6 +485,25 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
     if (!pointers.has(e.pointerId)) return
     pointers.set(e.pointerId, { x: point.x, y: point.y })
 
+    const resize = resizeRef.current
+    if (resize) {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const isVertical = resize.edge === 'left' || resize.edge === 'right'
+      const deltaPx = isVertical ? point.x - resize.startPoint.x : point.y - resize.startPoint.y
+      const deltaPct = (deltaPx / (isVertical ? canvas.width : canvas.height)) * 100
+      const nextRects = resizeEdge(resize.startRects, resize.zoneIndex, resize.edge, deltaPct)
+      nextRects.forEach((rect, i) => {
+        const original = resize.startRects[i]
+        if (rect.x !== original.x || rect.y !== original.y || rect.width !== original.width || rect.height !== original.height) {
+          stateManager.updateZoneRect(i, rect)
+        }
+      })
+      onStateChange()
+      drawCanvas()
+      return
+    }
+
     if (moveCandidateRef.current && !moveCandidateRef.current.moved) {
       const dx = point.x - moveCandidateRef.current.start.x
       const dy = point.y - moveCandidateRef.current.start.y
@@ -460,6 +570,11 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
     const pointers = pointersRef.current
     if (!pointers.has(e.pointerId)) return
     pointers.delete(e.pointerId)
+
+    if (resizeRef.current) {
+      resizeRef.current = null
+      return
+    }
 
     const swap = swapRef.current
     if (swap.timer) {
@@ -550,19 +665,20 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
       ctx.fillRect(0, 0, width, height)
 
       const state = stateManager.getState()
+      const effectiveRects = getAllEffectiveRects(template.zones, state.zoneStates)
 
       // Sequential and awaited (not Promise.all) so at most one full-
       // resolution bitmap is decoded at a time, regardless of zone count -
       // this is the same crash this function exists to avoid re-introducing.
       for (let index = 0; index < template.zones.length; index++) {
-        const zone = template.zones[index]
+        const rect = effectiveRects[index]
         const zoneState = state.zoneStates[index]
         const file = zoneState.photoIndex >= 0 ? state.photos[zoneState.photoIndex] : undefined
 
-        const zoneX = (zone.x / 100) * width
-        const zoneY = (zone.y / 100) * height
-        const zoneWidth = (zone.width / 100) * width
-        const zoneHeight = (zone.height / 100) * height
+        const zoneX = (rect.x / 100) * width
+        const zoneY = (rect.y / 100) * height
+        const zoneWidth = (rect.width / 100) * width
+        const zoneHeight = (rect.height / 100) * height
 
         ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
         ctx.fillRect(zoneX, zoneY, zoneWidth, zoneHeight)
@@ -598,15 +714,30 @@ export const AssemblyCanvas = forwardRef<AssemblyCanvasHandle, AssemblyCanvasPro
         // Matches drawCanvas's non-selected/non-swap styling - this export
         // never has a "selected zone" or "swap mode" concept of its own.
         // Deliberately no zone-index number here (unlike the interactive
-        // editor) - it's an editing aid, not part of the final saved photo.
+        // editor). Unlike the selection/swap highlighting, this border IS
+        // part of the final saved photo (it's the collage separator).
         ctx.strokeStyle = '#ffffff'
         ctx.lineWidth = Math.max(1, separatorWidth)
-        ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
+        if (showOuterBorder) {
+          ctx.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
+        } else {
+          const edgeEpsilon = 0.5
+          const onLeftEdge = rect.x < edgeEpsilon
+          const onRightEdge = rect.x + rect.width > 100 - edgeEpsilon
+          const onTopEdge = rect.y < edgeEpsilon
+          const onBottomEdge = rect.y + rect.height > 100 - edgeEpsilon
+          ctx.beginPath()
+          if (!onTopEdge) { ctx.moveTo(zoneX, zoneY); ctx.lineTo(zoneX + zoneWidth, zoneY) }
+          if (!onRightEdge) { ctx.moveTo(zoneX + zoneWidth, zoneY); ctx.lineTo(zoneX + zoneWidth, zoneY + zoneHeight) }
+          if (!onBottomEdge) { ctx.moveTo(zoneX + zoneWidth, zoneY + zoneHeight); ctx.lineTo(zoneX, zoneY + zoneHeight) }
+          if (!onLeftEdge) { ctx.moveTo(zoneX, zoneY + zoneHeight); ctx.lineTo(zoneX, zoneY) }
+          ctx.stroke()
+        }
       }
 
       return exportCanvas
     },
-  }), [template, stateManager, separatorWidth, canvasWidth, canvasHeight])
+  }), [template, stateManager, separatorWidth, showOuterBorder, canvasWidth, canvasHeight])
 
   return (
     <div className="w-full bg-gray-100 rounded-lg overflow-hidden">

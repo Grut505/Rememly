@@ -17,6 +17,7 @@ import { ArticleStatus } from '../../api/types'
 import { useImageLoader } from '../../hooks/useImageLoader'
 import { FamileoPosterModal } from '../../ui/FamileoPosterModal'
 import { formatDateTimeFull } from '../../utils/date'
+import { configApi } from '../../api/config'
 
 interface FamileoImportData {
   text: string
@@ -24,6 +25,16 @@ interface FamileoImportData {
   author: string
   imageBase64: string
   imageMimeType: string
+}
+
+interface AssemblyReturnData {
+  fromAssembly: true
+  assembledPhotoBase64: string
+  assemblyState: object
+  lastPhotoDate?: string
+  texte: string
+  dateModification: string
+  articleStatus: ArticleStatus
 }
 
 export function ArticleEditor() {
@@ -46,6 +57,8 @@ export function ArticleEditor() {
   const [showFamileoPoster, setShowFamileoPoster] = useState(false)
   const [articleStatus, setArticleStatus] = useState<ArticleStatus>('DRAFT')
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [assemblyStateData, setAssemblyStateData] = useState<object | undefined>(undefined)
+  const [autoDateFromPhoto, setAutoDateFromPhoto] = useState(true)
 
   const initialSnapshotRef = useRef<{
     texte: string
@@ -93,7 +106,69 @@ export function ArticleEditor() {
     }
   }, [location.state])
 
+  // Coming back from Photo Assembly: it no longer saves the article itself,
+  // it hands the assembled photo back here so the user can still review/edit
+  // text, date and status before saving - restore the text/date/status it
+  // carried over too, since they reflect anything the user had already typed
+  // before opening Assembly (loadArticle, below, is skipped in this case so
+  // it can't clobber this with the server's stale copy).
   useEffect(() => {
+    const state = location.state as AssemblyReturnData | null
+    if (!state?.fromAssembly) return
+
+    setTexte(state.texte)
+    setDateModification(state.dateModification)
+    setArticleStatus(state.articleStatus)
+    setAssemblyStateData(state.assemblyState)
+
+    if (state.lastPhotoDate && !isEditMode && autoDateFromPhoto) {
+      setDateModification(state.lastPhotoDate)
+    }
+
+    // loadArticle() is skipped for this mount (see the effect below) to
+    // avoid a stale-server-data race against the fresher values above -
+    // reconstruct just the snapshot/reference fields it would have set, from
+    // the already-loaded store cache.
+    if (isEditMode && id) {
+      const cached = articles.find((a) => a.id === id)
+      if (cached) {
+        setArticleImageUrl(cached.image_url || '')
+        setArticleImageFileId(cached.image_file_id || '')
+        initialSnapshotRef.current = {
+          texte: cached.texte || '',
+          dateModification: cached.date,
+          photoFile: null,
+          articleStatus: cached.status || 'ACTIVE',
+        }
+      }
+    }
+
+    const dataUrl = `data:image/jpeg;base64,${state.assembledPhotoBase64}`
+    setPreviewUrl(dataUrl)
+    fetch(dataUrl)
+      .then((res) => res.blob())
+      .then((blob) => {
+        setPhotoFile(new File([blob], 'assembled.jpg', { type: 'image/jpeg' }))
+      })
+
+    window.history.replaceState({}, document.title)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
+
+  useEffect(() => {
+    configApi.get('auto_date_from_photo')
+      .then((result) => setAutoDateFromPhoto(result.value !== 'false'))
+      .catch(() => setAutoDateFromPhoto(true))
+  }, [])
+
+  useEffect(() => {
+    const fromAssembly = (location.state as AssemblyReturnData | null)?.fromAssembly
+    // Coming back from Assembly is handled entirely by the effect above
+    // (which restores the real texte/date/status/snapshot) - loadArticle
+    // would otherwise race it with the server's stale copy (see that
+    // effect's comment), and a blank snapshot here would wrongly reset the
+    // unsaved-changes baseline.
+    if (fromAssembly) return
     if (isEditMode) {
       loadArticle()
     } else {
@@ -183,7 +258,7 @@ export function ArticleEditor() {
           texte,
           photoFile || undefined,
           dateModification,
-          undefined, // assemblyState
+          assemblyStateData,
           undefined, // fullPage
           newStatus
         )
@@ -195,9 +270,9 @@ export function ArticleEditor() {
           texte,
           photoFile,
           dateModification,
-          undefined,
-          undefined,
-          undefined,
+          undefined, // famileoPostId
+          assemblyStateData,
+          undefined, // fullPage
           articleStatus
         )
         showToast('Article created', 'success')

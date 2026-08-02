@@ -14,6 +14,7 @@ export function TemplateSelector({
 }: TemplateSelectorProps) {
   const [activeCount, setActiveCount] = useState<number | 'all'>('all')
   const [activeRatio, setActiveRatio] = useState<string | 'all'>('all')
+  const [activeOrientation, setActiveOrientation] = useState<'landscape' | 'portrait' | 'square' | 'all'>('all')
 
   const ratioPresets = [
     { label: '1:1', value: 1 },
@@ -36,13 +37,22 @@ export function TemplateSelector({
   const FAMILEO_RATIO_LABELS = ['1:1.44', '1:0.54']
   const isFamileoRatio = (ratio: number) => FAMILEO_RATIO_LABELS.includes(getRatioLabel(ratio))
 
+  const getOrientation = (ratio: number): 'landscape' | 'portrait' | 'square' => {
+    if (ratio > 1.05) return 'landscape'
+    if (ratio < 0.95) return 'portrait'
+    return 'square'
+  }
+
   const counts = useMemo(
     () => Array.from(new Set(layouts.map((layout) => layout.zones.length))).sort((a, b) => a - b),
     [layouts]
   )
 
   const ratios = useMemo(() => {
-    const labels = Array.from(new Set(layouts.map((layout) => getRatioLabel(layout.aspectRatio))))
+    const relevant = activeOrientation === 'all'
+      ? layouts
+      : layouts.filter((layout) => getOrientation(layout.aspectRatio) === activeOrientation)
+    const labels = Array.from(new Set(relevant.map((layout) => getRatioLabel(layout.aspectRatio))))
     const presetOrder = ratioPresets.map((preset) => preset.label)
     return labels.sort((a, b) => {
       const aIndex = presetOrder.indexOf(a)
@@ -52,26 +62,67 @@ export function TemplateSelector({
       if (bIndex === -1) return -1
       return aIndex - bIndex
     })
-  }, [layouts])
+  }, [layouts, activeOrientation])
+
+  const handleOrientationChange = (orientation: typeof activeOrientation) => {
+    setActiveOrientation(orientation)
+    // Drop a specific ratio selection that no longer matches the chosen
+    // orientation, rather than silently showing an empty grid.
+    if (activeRatio !== 'all' && orientation !== 'all') {
+      const preset = ratioPresets.find((p) => p.label === activeRatio)
+      if (!preset || getOrientation(preset.value) !== orientation) {
+        setActiveRatio('all')
+      }
+    }
+  }
 
   const visibleLayouts = useMemo(() => {
     return layouts.filter((layout) => {
       const countMatch = activeCount === 'all' || layout.zones.length === activeCount
       const ratioMatch = activeRatio === 'all' || getRatioLabel(layout.aspectRatio) === activeRatio
-      return countMatch && ratioMatch
+      const orientationMatch = activeOrientation === 'all' || getOrientation(layout.aspectRatio) === activeOrientation
+      return countMatch && ratioMatch && orientationMatch
     })
-  }, [activeCount, activeRatio, layouts])
+  }, [activeCount, activeRatio, activeOrientation, layouts])
+
+  const orientationOptions: Array<{ value: typeof activeOrientation; label: string }> = [
+    { value: 'all', label: 'Toutes' },
+    { value: 'landscape', label: 'Paysage' },
+    { value: 'portrait', label: 'Portrait' },
+    { value: 'square', label: 'Carré' },
+  ]
 
   return (
-    <div className="p-4 flex flex-col gap-4 h-[70vh] sm:h-[70vh]">
+    <div className="p-4 flex flex-col gap-3 h-[70vh] sm:h-[70vh]">
       <div>
-        <h3 className="text-sm font-medium text-gray-700 mb-2">
+        <h3 className="text-xs font-medium text-gray-700 mb-1.5">
+          Orientation
+        </h3>
+        <div className="flex gap-1.5 overflow-x-auto flex-nowrap pb-0.5 -mx-1 px-1">
+          {orientationOptions.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => handleOrientationChange(option.value)}
+              className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                activeOrientation === option.value
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-xs font-medium text-gray-700 mb-1.5">
           Ratio
         </h3>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-1.5 overflow-x-auto flex-nowrap pb-0.5 -mx-1 px-1">
           <button
             onClick={() => setActiveRatio('all')}
-            className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+            className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
               activeRatio === 'all'
                 ? 'bg-primary-600 text-white border-primary-600'
                 : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
@@ -86,7 +137,7 @@ export function TemplateSelector({
                 key={ratio}
                 onClick={() => setActiveRatio(ratio)}
                 title={famileo ? 'Compatible Famileo postcard format' : undefined}
-                className={`px-3 py-1.5 rounded-full text-sm border transition-colors flex items-center gap-1 ${
+                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors flex items-center gap-1 ${
                   activeRatio === ratio
                     ? 'bg-primary-600 text-white border-primary-600'
                     : famileo
@@ -101,20 +152,20 @@ export function TemplateSelector({
           })}
         </div>
         {ratios.some((ratio) => FAMILEO_RATIO_LABELS.includes(ratio)) && (
-          <p className="text-xs text-purple-700 mt-1.5 flex items-center gap-1">
-            <span aria-hidden="true">✉️</span> 1:1.44 and 1:0.54 are Famileo-compatible postcard formats
+          <p className="text-xs text-purple-700 mt-1 flex items-center gap-1">
+            <span aria-hidden="true">✉️</span> Famileo-compatible postcard formats
           </p>
         )}
       </div>
 
       <div>
-        <h3 className="text-sm font-medium text-gray-700 mb-2">
+        <h3 className="text-xs font-medium text-gray-700 mb-1.5">
           Nombre de photos
         </h3>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-1.5 overflow-x-auto flex-nowrap pb-0.5 -mx-1 px-1">
           <button
             onClick={() => setActiveCount('all')}
-            className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+            className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
               activeCount === 'all'
                 ? 'bg-primary-600 text-white border-primary-600'
                 : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
@@ -126,7 +177,7 @@ export function TemplateSelector({
             <button
               key={count}
               onClick={() => setActiveCount(count)}
-              className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+              className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
                 activeCount === count
                   ? 'bg-primary-600 text-white border-primary-600'
                   : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'

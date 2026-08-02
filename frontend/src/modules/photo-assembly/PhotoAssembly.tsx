@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../../ui/ConfirmDialog'
 import { CONSTANTS } from '../../utils/constants'
 import { getPhotoDate } from '../../utils/exifDate'
 import { Slider } from '../../ui/Slider'
+import { getEffectiveRect } from './zoneGeometry'
 
 function isMobileDevice(): boolean {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -40,6 +41,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   const [stateVersion, setStateVersion] = useState(0)
   const [isLayoutModalOpen, setIsLayoutModalOpen] = useState(false)
   const [separatorWidth, setSeparatorWidth] = useState(4)
+  const [showOuterBorder, setShowOuterBorder] = useState(true)
   const [pendingZoneIndex, setPendingZoneIndex] = useState<number | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showAddPhotoMenu, setShowAddPhotoMenu] = useState(false)
@@ -89,7 +91,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
     })
   }
 
-  const handleTemplateSelect = (template: LayoutTemplate) => {
+  const handleTemplateSelect = async (template: LayoutTemplate) => {
     const previousTemplate = selectedTemplate
     const previousState = stateManager.getState()
     const mapping = buildZoneMapping(previousTemplate, template)
@@ -103,6 +105,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
         rotation: 0,
       }))
 
+    const carriedOverZones: number[] = []
     mapping.forEach((oldIndex, newIndex) => {
       if (oldIndex >= 0 && previousState.zoneStates[oldIndex]) {
         const previousZone = previousState.zoneStates[oldIndex]
@@ -113,11 +116,39 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
           y: previousZone.y,
           rotation: previousZone.rotation ?? 0,
         }
+        carriedOverZones.push(newIndex)
       }
     })
 
+    const newManager = StateManager.fromState(template.id, previousState.photos, newZoneStates)
+
+    // A carried-over photo's zoom/position was computed to cover the OLD
+    // zone's shape - the new template's zone for it is very likely a
+    // different size/aspect ratio, so keeping that zoom as-is can leave gaps
+    // or an oddly cropped/zoomed-looking result ("stretch" complaints were
+    // actually this, not literal non-uniform scaling). Re-fit (cover) each
+    // carried-over zone against its new dimensions before this becomes the
+    // active state, so the switch always looks clean.
+    const { width: canvasWidth, height: canvasHeight } = getCanvasSize(template)
+    await Promise.all(carriedOverZones.map(async (newIndex) => {
+      const photo = newManager.getPhotoForZone(newIndex)
+      const zone = template.zones[newIndex]
+      if (!photo || !zone) return
+      const dims = await getPhotoDimensions(photo)
+      if (!dims.width || !dims.height) return
+      const rotation = newManager.getState().zoneStates[newIndex].rotation || 0
+      const isRotated = Math.abs(rotation % 180) === 90
+      const imgWidth = isRotated ? dims.height : dims.width
+      const imgHeight = isRotated ? dims.width : dims.height
+      const zoneWidth = (zone.width / 100) * canvasWidth
+      const zoneHeight = (zone.height / 100) * canvasHeight
+      const scale = Math.max(zoneWidth / imgWidth, zoneHeight / imgHeight)
+      const nextZoom = Math.min(8, Math.max(0.5, scale))
+      newManager.updateZoneTransform(newIndex, { zoom: nextZoom, x: 0, y: 0 })
+    }))
+
     setSelectedTemplate(template)
-    setStateManager(StateManager.fromState(template.id, previousState.photos, newZoneStates))
+    setStateManager(newManager)
     setSelectedZoneIndex(null)
     setCanvasKey((k) => k + 1)
     setStateVersion((v) => v + 1)
@@ -153,20 +184,31 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
       setSelectedZoneIndex(pendingZoneIndex)
       setPendingZoneIndex(null)
     } else {
+      // Fill empty zones first (in order), then - since "Add multiple" means
+      // "place these photos", not "top up whatever's left" - replace already-
+      // occupied zones (also in order) with any remaining files, rather than
+      // silently dropping them once every zone already has a photo.
+      const occupiedZoneIndices = state.zoneStates
+        .map((zone, index) => (zone.photoIndex >= 0 ? index : null))
+        .filter((index): index is number => index !== null)
+      const targetZoneIndices = [...emptyZoneIndices, ...occupiedZoneIndices]
+
       let assigned = 0
-      emptyZoneIndices.forEach((zoneIndex, idx) => {
+      let replaced = 0
+      targetZoneIndices.forEach((zoneIndex, idx) => {
         const file = files[idx]
         if (!file) return
+        if (idx >= emptyZoneIndices.length) replaced += 1
         const photoIndex = stateManager.addPhoto(file)
         stateManager.assignPhotoToZone(photoIndex, zoneIndex)
         trackPhotoDate(file)
         zonesToFit.push(zoneIndex)
         assigned += 1
       })
-      if (assigned === 0) {
-        showToast('All zones are already filled', 'info')
-      } else if (files.length > assigned) {
-        showToast(`${files.length - assigned} photo(s) skipped (zones full)`, 'info')
+      if (files.length > assigned) {
+        showToast(`${files.length - assigned} photo(s) skipped (not enough zones)`, 'info')
+      } else if (replaced > 0) {
+        showToast(`${replaced} existing photo(s) replaced`, 'info')
       }
     }
 
@@ -334,8 +376,9 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
     if (!zone) return
 
     const { width: canvasWidth, height: canvasHeight } = getCanvasSize(template)
-    const zoneWidth = (zone.width / 100) * canvasWidth
-    const zoneHeight = (zone.height / 100) * canvasHeight
+    const rect = getEffectiveRect(zone, stateManager.getState().zoneStates[zoneIndex])
+    const zoneWidth = (rect.width / 100) * canvasWidth
+    const zoneHeight = (rect.height / 100) * canvasHeight
 
     const zoneState = stateManager.getState().zoneStates[zoneIndex]
     const rotation = zoneState.rotation || 0
@@ -365,8 +408,9 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
     if (!zone) return
 
     const { width: canvasWidth, height: canvasHeight } = getCanvasSize(template)
-    const zoneWidth = (zone.width / 100) * canvasWidth
-    const zoneHeight = (zone.height / 100) * canvasHeight
+    const rect = getEffectiveRect(zone, stateManager.getState().zoneStates[zoneIndex])
+    const zoneWidth = (rect.width / 100) * canvasWidth
+    const zoneHeight = (rect.height / 100) * canvasHeight
 
     const zoneState = stateManager.getState().zoneStates[zoneIndex]
     const rotation = zoneState.rotation || 0
@@ -396,8 +440,9 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
     if (!zone) return
 
     const { width: canvasWidth, height: canvasHeight } = getCanvasSize(template)
-    const zoneWidth = (zone.width / 100) * canvasWidth
-    const zoneHeight = (zone.height / 100) * canvasHeight
+    const rect = getEffectiveRect(zone, stateManager.getState().zoneStates[zoneIndex])
+    const zoneWidth = (rect.width / 100) * canvasWidth
+    const zoneHeight = (rect.height / 100) * canvasHeight
 
     const zoneState = stateManager.getState().zoneStates[zoneIndex]
     const rotation = zoneState.rotation || 0
@@ -427,8 +472,9 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
     if (!zone) return
 
     const { width: canvasWidth, height: canvasHeight } = getCanvasSize(template)
-    const zoneWidth = (zone.width / 100) * canvasWidth
-    const zoneHeight = (zone.height / 100) * canvasHeight
+    const rect = getEffectiveRect(zone, stateManager.getState().zoneStates[zoneIndex])
+    const zoneWidth = (rect.width / 100) * canvasWidth
+    const zoneHeight = (rect.height / 100) * canvasHeight
 
     const zoneState = stateManager.getState().zoneStates[zoneIndex]
     const rotation = zoneState.rotation || 0
@@ -546,10 +592,22 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
           onChange={setSeparatorWidth}
           className="mt-2 max-w-xs"
         />
+        <label className="mt-2 flex items-center gap-2 text-sm text-gray-600 cursor-pointer touch-manipulation w-fit">
+          <input
+            type="checkbox"
+            checked={showOuterBorder}
+            onChange={(e) => setShowOuterBorder(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          Show outer border
+        </label>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto pb-6">
+      {/* Extra bottom padding when a zone is selected so the fixed
+          ZoneController bar (icons + zoom slider + close/revert, ~11rem)
+          never covers content like the "Add multiple" button. */}
+      <div className={`flex-1 overflow-y-auto ${selectedZoneIndex !== null ? 'pb-44' : 'pb-6'}`}>
         <div className="p-4 max-w-3xl mx-auto w-full">
           <AssemblyCanvas
             ref={assemblyCanvasRef}
@@ -561,6 +619,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
             onStateChange={() => setStateVersion((v) => v + 1)}
             stateVersion={stateVersion}
             separatorWidth={separatorWidth}
+            showOuterBorder={showOuterBorder}
           />
           {(selectedTemplate?.zones.length ?? 0) > 1 && (
             <div className="flex justify-center mt-3">
@@ -600,6 +659,7 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
         const zoneState = stateManager.getState().zoneStates[fineAdjustZoneIndex]
         if (!photo || !zone) return null
         const { width: canvasWidth, height: canvasHeight } = getCanvasSize(selectedTemplate)
+        const rect = getEffectiveRect(zone, zoneState)
         return (
           <ZoneFineEditor
             photo={photo}
@@ -607,8 +667,8 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
             x={zoneState.x}
             y={zoneState.y}
             rotation={zoneState.rotation || 0}
-            realZoneWidthPx={(zone.width / 100) * canvasWidth}
-            realZoneHeightPx={(zone.height / 100) * canvasHeight}
+            realZoneWidthPx={(rect.width / 100) * canvasWidth}
+            realZoneHeightPx={(rect.height / 100) * canvasHeight}
             onApply={handleFineAdjustApply}
             onClose={() => setFineAdjustZoneIndex(null)}
           />

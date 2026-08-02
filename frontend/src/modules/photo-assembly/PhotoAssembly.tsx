@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { LAYOUTS, LayoutTemplate } from './layoutRegistry'
+import { DEFAULT_LAYOUT, LayoutTemplate } from './layoutRegistry'
 import { StateManager } from './StateManager'
 import { TemplateSelector } from './TemplateSelector'
 import { AssemblyCanvas, AssemblyCanvasHandle } from './AssemblyCanvas'
@@ -32,9 +32,9 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   const photoDimRef = useRef<Map<File, { width: number; height: number }>>(new Map())
   const isMobile = isMobileDevice()
 
-  const [selectedTemplate, setSelectedTemplate] = useState<LayoutTemplate>(LAYOUTS[0])
+  const [selectedTemplate, setSelectedTemplate] = useState<LayoutTemplate>(DEFAULT_LAYOUT)
   const [stateManager, setStateManager] = useState<StateManager>(
-    () => new StateManager(LAYOUTS[0].id, LAYOUTS[0].zones.length)
+    () => new StateManager(DEFAULT_LAYOUT.id, DEFAULT_LAYOUT.zones.length)
   )
   const [selectedZoneIndex, setSelectedZoneIndex] = useState<number | null>(null)
   const [canvasKey, setCanvasKey] = useState(0)
@@ -518,11 +518,6 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
   }
 
   const handleValidate = async () => {
-    if (!stateManager.isComplete()) {
-      showToast('Please fill all zones', 'error')
-      return
-    }
-
     try {
       window.dispatchEvent(new CustomEvent('photo-assembly-validating', { detail: { loading: true } }))
       // Re-render at full resolution from the original photo files, rather
@@ -792,7 +787,6 @@ export function PhotoAssembly({ onComplete, onCancel }: PhotoAssemblyProps) {
         <TemplateSelector
           selectedTemplateId={selectedTemplate.id}
           onSelect={handleTemplateSelect}
-          layouts={LAYOUTS}
         />
       </Modal>
 

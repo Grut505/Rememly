@@ -1,0 +1,54 @@
+{
+  "id": "pinwheel-7-2x3",
+  "name": "Pinwheel 7 (2x3)",
+  "aspectRatio": 0.6667,
+  "zones": [
+    {
+      "x": 25,
+      "y": 25,
+      "width": 50,
+      "height": 50
+    },
+    {
+      "x": 25,
+      "y": 0,
+      "width": 50,
+      "height": 25
+    },
+    {
+      "x": 25,
+      "y": 75,
+      "width": 50,
+      "height": 25
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "width": 25,
+      "height": 50
+    },
+    {
+      "x": 0,
+      "y": 50,
+      "width": 25,
+      "height": 50
+    },
+    {
+      "x": 75,
+      "y": 0,
+      "width": 25,
+      "height": 50
+    },
+    {
+      "x": 75,
+      "y": 50,
+      "width": 25,
+      "height": 50
+    }
+  ],
+  "tags": [
+    "pinwheel",
+    "7-photos",
+    "2x3"
+  ]
+}

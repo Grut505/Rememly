@@ -1,20 +1,30 @@
-import { useMemo, useState } from 'react'
-import { LayoutTemplate } from './layoutRegistry'
+import { useEffect, useMemo, useState } from 'react'
+import { LayoutTemplate, loadAllLayouts } from './layoutRegistry'
 
 interface TemplateSelectorProps {
   selectedTemplateId: string
   onSelect: (template: LayoutTemplate) => void
-  layouts: LayoutTemplate[]
 }
 
 export function TemplateSelector({
   selectedTemplateId,
   onSelect,
-  layouts,
 }: TemplateSelectorProps) {
+  const [layouts, setLayouts] = useState<LayoutTemplate[] | null>(null)
   const [activeCount, setActiveCount] = useState<number | 'all'>('all')
   const [activeRatio, setActiveRatio] = useState<string | 'all'>('all')
   const [activeOrientation, setActiveOrientation] = useState<'landscape' | 'portrait' | 'square' | 'all'>('all')
+  const [filtersExpanded, setFiltersExpanded] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    loadAllLayouts().then((loaded) => {
+      if (!cancelled) setLayouts(loaded)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const ratioPresets = [
     { label: '1:1', value: 1 },
@@ -44,14 +54,15 @@ export function TemplateSelector({
   }
 
   const counts = useMemo(
-    () => Array.from(new Set(layouts.map((layout) => layout.zones.length))).sort((a, b) => a - b),
+    () => Array.from(new Set((layouts || []).map((layout) => layout.zones.length))).sort((a, b) => a - b),
     [layouts]
   )
 
   const ratios = useMemo(() => {
+    const all = layouts || []
     const relevant = activeOrientation === 'all'
-      ? layouts
-      : layouts.filter((layout) => getOrientation(layout.aspectRatio) === activeOrientation)
+      ? all
+      : all.filter((layout) => getOrientation(layout.aspectRatio) === activeOrientation)
     const labels = Array.from(new Set(relevant.map((layout) => getRatioLabel(layout.aspectRatio))))
     const presetOrder = ratioPresets.map((preset) => preset.label)
     return labels.sort((a, b) => {
@@ -77,7 +88,7 @@ export function TemplateSelector({
   }
 
   const visibleLayouts = useMemo(() => {
-    return layouts.filter((layout) => {
+    return (layouts || []).filter((layout) => {
       const countMatch = activeCount === 'all' || layout.zones.length === activeCount
       const ratioMatch = activeRatio === 'all' || getRatioLabel(layout.aspectRatio) === activeRatio
       const orientationMatch = activeOrientation === 'all' || getOrientation(layout.aspectRatio) === activeOrientation
@@ -93,110 +104,130 @@ export function TemplateSelector({
   ]
 
   return (
-    <div className="p-4 flex flex-col gap-3 h-[70vh] sm:h-[70vh]">
-      <div>
-        <h3 className="text-xs font-medium text-gray-700 mb-1.5">
-          Orientation
-        </h3>
-        <div className="flex gap-1.5 overflow-x-auto flex-nowrap pb-0.5 -mx-1 px-1">
-          {orientationOptions.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => handleOrientationChange(option.value)}
-              className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
-                activeOrientation === option.value
-                  ? 'bg-primary-600 text-white border-primary-600'
-                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="p-4 flex flex-col gap-2 h-[70vh] sm:h-[70vh]">
+      <button
+        type="button"
+        onClick={() => setFiltersExpanded((prev) => !prev)}
+        className="flex items-center justify-between text-xs font-medium text-gray-700 py-1"
+      >
+        Filtres
+        <svg
+          className={`w-4 h-4 text-gray-500 transition-transform ${filtersExpanded ? 'rotate-180' : ''}`}
+          fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path d="M19 9l-7 7-7-7"></path>
+        </svg>
+      </button>
 
-      <div>
-        <h3 className="text-xs font-medium text-gray-700 mb-1.5">
-          Ratio
-        </h3>
-        <div className="flex gap-1.5 overflow-x-auto flex-nowrap pb-0.5 -mx-1 px-1">
-          <button
-            onClick={() => setActiveRatio('all')}
-            className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
-              activeRatio === 'all'
-                ? 'bg-primary-600 text-white border-primary-600'
-                : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-            }`}
-          >
-            Tous
-          </button>
-          {ratios.map((ratio) => {
-            const famileo = FAMILEO_RATIO_LABELS.includes(ratio)
-            return (
+      {filtersExpanded && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <h3 className="flex-shrink-0 w-20 text-xs font-medium text-gray-700">
+              Orientation
+            </h3>
+            <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto flex-nowrap pb-0.5">
+              {orientationOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => handleOrientationChange(option.value)}
+                  className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                    activeOrientation === option.value
+                      ? 'bg-primary-600 text-white border-primary-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <h3 className="flex-shrink-0 w-20 text-xs font-medium text-gray-700">
+              Ratio
+            </h3>
+            <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto flex-nowrap pb-0.5">
               <button
-                key={ratio}
-                onClick={() => setActiveRatio(ratio)}
-                title={famileo ? 'Compatible Famileo postcard format' : undefined}
-                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors flex items-center gap-1 ${
-                  activeRatio === ratio
+                onClick={() => setActiveRatio('all')}
+                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                  activeRatio === 'all'
                     ? 'bg-primary-600 text-white border-primary-600'
-                    : famileo
-                    ? 'bg-purple-50 text-purple-700 border-purple-300 hover:border-purple-400'
                     : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                 }`}
               >
-                {ratio}
-                {famileo && <span aria-hidden="true">✉️</span>}
+                Tous
               </button>
-            )
-          })}
-        </div>
-        {ratios.some((ratio) => FAMILEO_RATIO_LABELS.includes(ratio)) && (
-          <p className="text-xs text-purple-700 mt-1 flex items-center gap-1">
-            <span aria-hidden="true">✉️</span> Famileo-compatible postcard formats
-          </p>
-        )}
-      </div>
+              {ratios.map((ratio) => {
+                const famileo = FAMILEO_RATIO_LABELS.includes(ratio)
+                return (
+                  <button
+                    key={ratio}
+                    onClick={() => setActiveRatio(ratio)}
+                    title={famileo ? 'Compatible Famileo postcard format' : undefined}
+                    className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors flex items-center gap-1 ${
+                      activeRatio === ratio
+                        ? 'bg-primary-600 text-white border-primary-600'
+                        : famileo
+                        ? 'bg-purple-50 text-purple-700 border-purple-300 hover:border-purple-400'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    {ratio}
+                    {famileo && <span aria-hidden="true">✉️</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
-      <div>
-        <h3 className="text-xs font-medium text-gray-700 mb-1.5">
-          Nombre de photos
-        </h3>
-        <div className="flex gap-1.5 overflow-x-auto flex-nowrap pb-0.5 -mx-1 px-1">
-          <button
-            onClick={() => setActiveCount('all')}
-            className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
-              activeCount === 'all'
-                ? 'bg-primary-600 text-white border-primary-600'
-                : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-            }`}
-          >
-            Toutes
-          </button>
-          {counts.map((count) => (
-            <button
-              key={count}
-              onClick={() => setActiveCount(count)}
-              className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
-                activeCount === count
-                  ? 'bg-primary-600 text-white border-primary-600'
-                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-              }`}
-            >
-              {count}
-            </button>
-          ))}
+          <div className="flex items-center gap-2">
+            <h3 className="flex-shrink-0 w-20 text-xs font-medium text-gray-700">
+              Photos
+            </h3>
+            <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto flex-nowrap pb-0.5">
+              <button
+                onClick={() => setActiveCount('all')}
+                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                  activeCount === 'all'
+                    ? 'bg-primary-600 text-white border-primary-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                }`}
+              >
+                Toutes
+              </button>
+              {counts.map((count) => (
+                <button
+                  key={count}
+                  onClick={() => setActiveCount(count)}
+                  className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                    activeCount === count
+                      ? 'bg-primary-600 text-white border-primary-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  {count}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto pr-1 flex-1">
+      {layouts === null && (
+        <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
+          Loading layouts...
+        </div>
+      )}
+
+      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 overflow-y-auto pr-1 flex-1 content-start">
         {visibleLayouts.map((template) => {
           const famileo = isFamileoRatio(template.aspectRatio)
           return (
             <button
               key={template.id}
               onClick={() => onSelect(template)}
-              className={`border-2 rounded-xl p-2 text-left transition-colors touch-manipulation relative ${
+              title={template.name}
+              className={`border-2 rounded-lg p-1 transition-colors touch-manipulation relative ${
                 template.id === selectedTemplateId
                   ? 'border-primary-600 bg-primary-50'
                   : famileo
@@ -206,13 +237,14 @@ export function TemplateSelector({
             >
               {famileo && (
                 <span
-                  className="absolute top-1 right-1 z-10 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-purple-600 text-white text-[10px] font-medium"
+                  className="absolute top-0.5 right-0.5 z-10 text-[9px]"
                   title="Compatible Famileo postcard format"
+                  aria-hidden="true"
                 >
-                  ✉️ Famileo
+                  ✉️
                 </span>
               )}
-              <div className="w-full bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+              <div className="w-full bg-gray-100 rounded overflow-hidden border border-gray-200">
                 <div
                   className="relative w-full"
                   style={{ aspectRatio: `${template.aspectRatio}` }}
@@ -229,14 +261,6 @@ export function TemplateSelector({
                       }}
                     />
                   ))}
-                </div>
-              </div>
-              <div className="mt-2">
-                <div className="text-xs font-semibold text-gray-800 truncate">
-                  {template.name}
-                </div>
-                <div className="text-[11px] text-gray-500">
-                  {template.zones.length} photos
                 </div>
               </div>
             </button>

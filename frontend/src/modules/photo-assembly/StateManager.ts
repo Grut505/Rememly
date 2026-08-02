@@ -102,10 +102,6 @@ export class StateManager {
     return null
   }
 
-  isComplete(): boolean {
-    return this.state.zoneStates.every((zone) => zone.photoIndex >= 0)
-  }
-
   serialize(): object {
     return {
       templateId: this.state.templateId,

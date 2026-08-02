@@ -500,7 +500,7 @@ export function ArticleEditor() {
 
       {/* Content */}
       <div className="flex-1 p-4 space-y-6 pb-28">
-        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+        <div className="flex flex-row gap-2 items-end">
           <div className="flex-1 min-w-0">
             <DateTimeInput value={dateModification} onChange={setDateModification} />
           </div>

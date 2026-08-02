@@ -51,6 +51,11 @@ export function ZoneController({
 
   const handleReset = () => {
     stateManager.updateZoneTransform(zoneIndex, { zoom: 1, x: 0, y: 0, rotation: 0 })
+    // Also drop any drag-resize override on the zone's own shape, back to
+    // the template's original rect - Revert previously only touched the
+    // photo's zoom/pan/rotation inside the zone, leaving a resized block
+    // untouched even though the button doesn't distinguish the two.
+    stateManager.updateZoneRect(zoneIndex, undefined)
     setZoom(1)
     setRotation(0)
     onUpdate()
@@ -215,7 +220,7 @@ export function ZoneController({
           <button
             onClick={handleReset}
             className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium"
-            title="Revert this zone's zoom, position and rotation"
+            title="Revert this zone's zoom, position, rotation and any resize"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <path d="M9 14 4 9l5-5"></path>

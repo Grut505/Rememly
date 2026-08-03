@@ -1,12 +1,16 @@
+import { useEffect, useRef } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 
 export function UpdatePrompt() {
+  const registrationRef = useRef<ServiceWorkerRegistration | null>(null)
+
   const {
     needRefresh: [needRefresh],
     updateServiceWorker,
   } = useRegisterSW({
     onRegistered(r) {
       console.log('SW Registered:', r)
+      registrationRef.current = r || null
       // Check for updates every 30 seconds
       if (r) {
         setInterval(() => {
@@ -18,6 +22,25 @@ export function UpdatePrompt() {
       console.log('SW registration error', error)
     },
   })
+
+  useEffect(() => {
+    // Mobile PWAs get suspended in the background, and the 30s interval
+    // above is paused along with them - reopening the app can otherwise sit
+    // on a stale build for a long time since nothing forces a check until
+    // that timer happens to fire again. Force one immediately whenever the
+    // app comes back to the foreground instead of waiting on the interval.
+    const checkForUpdate = () => {
+      if (document.visibilityState === 'visible') {
+        registrationRef.current?.update()
+      }
+    }
+    document.addEventListener('visibilitychange', checkForUpdate)
+    window.addEventListener('focus', checkForUpdate)
+    return () => {
+      document.removeEventListener('visibilitychange', checkForUpdate)
+      window.removeEventListener('focus', checkForUpdate)
+    }
+  }, [])
 
   if (!needRefresh) return null
 
